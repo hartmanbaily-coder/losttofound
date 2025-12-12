@@ -1,36 +1,16 @@
 // src/app/billing/page.tsx
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
 
 type Plan = "free" | "plus";
 
-/**
- * Outer component: just provides Suspense for useSearchParams().
- */
 export default function BillingPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-brand-bg text-white px-4 py-6 flex items-center justify-center">
-          <p className="text-sm text-neutral-300">
-            Loading your billing details…
-          </p>
-        </div>
-      }
-    >
-      <BillingPageInner />
-    </Suspense>
-  );
-}
-
-function BillingPageInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [user, setUser] = useState<User | null>(null);
   const [plan, setPlan] = useState<Plan>("free");
@@ -81,11 +61,13 @@ function BillingPageInner() {
     };
   }, [router]);
 
-  // Handle status from Stripe redirect
+  // Handle status from Stripe redirect using window.location.search
   useEffect(() => {
     if (!user) return;
+    if (typeof window === "undefined") return;
 
-    const status = searchParams.get("status");
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
     if (!status) return;
 
     if (status === "success") {
@@ -123,7 +105,7 @@ function BillingPageInner() {
     } else if (status === "cancelled") {
       setStatusMessage("Checkout was cancelled. You remain on the Free plan.");
     }
-  }, [user, searchParams]);
+  }, [user]);
 
   const handleUpgrade = async () => {
     if (!user) return;

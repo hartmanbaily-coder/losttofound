@@ -4,7 +4,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function POST(req: Request) {
   try {
-    const { userId } = await req.json();
+    const body = await req.json().catch(() => null);
+    const userId = (body as { userId?: string } | null)?.userId;
 
     if (!userId) {
       return NextResponse.json(
@@ -60,12 +61,13 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true });
-  } catch (err) {
+    return NextResponse.json({ ok: true, plan: "plus" });
+  } catch (err: unknown) {
     console.error("mark-plus error:", err);
-    return NextResponse.json(
-      { error: "Unexpected error updating plan." },
-      { status: 500 }
-    );
+    const message =
+      err instanceof Error
+        ? err.message
+        : "Unexpected error updating plan.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
