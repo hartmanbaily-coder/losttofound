@@ -1,7 +1,7 @@
 // src/app/billing/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
@@ -9,7 +9,26 @@ import Image from "next/image";
 
 type Plan = "free" | "plus";
 
+/**
+ * Outer component: just provides Suspense for useSearchParams().
+ */
 export default function BillingPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-brand-bg text-white px-4 py-6 flex items-center justify-center">
+          <p className="text-sm text-neutral-300">
+            Loading your billing details…
+          </p>
+        </div>
+      }
+    >
+      <BillingPageInner />
+    </Suspense>
+  );
+}
+
+function BillingPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -309,7 +328,9 @@ export default function BillingPage() {
                       disabled={loadingUpgrade}
                       className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-medium text-black hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      {loadingUpgrade ? "Opening Stripe..." : "Upgrade with Stripe"}
+                      {loadingUpgrade
+                        ? "Opening Stripe..."
+                        : "Upgrade with Stripe"}
                     </button>
                   )}
                 </div>
