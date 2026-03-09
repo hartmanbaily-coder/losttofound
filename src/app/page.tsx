@@ -94,9 +94,8 @@ export default function HomePage() {
             Everything included
           </h2>
           <p className="text-sm text-neutral-200">
-            LostToFound includes the full dashboard without plan upgrades.
-            Create pet profiles, share links, and track finder reports in one
-            place.
+            LostToFound includes the full dashboard at no cost. Create pet
+            profiles, share links, and track finder reports in one place.
           </p>
           <ul className="list-disc list-inside space-y-1 text-sm text-neutral-300">
             <li>Unlimited pets on one household account.</li>

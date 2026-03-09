@@ -1,6 +1,3 @@
-// src/app/listhaus/page.tsx
-import Link from "next/link";
-
 export default function ListhausPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-emerald-900 text-neutral-100 px-4 py-10">
@@ -18,7 +15,7 @@ export default function ListhausPage() {
           </h2>
           <p className="mb-3 text-sm text-neutral-200">
             Listhaus focuses on local style listings with simple tools and a
-            subscription that keeps out bots and spam. It aims to feel quieter
+            lightweight membership model that keeps out bots and spam. It aims to feel quieter
             than the large social media markets and to give more control back to
             individual sellers.
           </p>
@@ -45,8 +42,8 @@ export default function ListhausPage() {
           </div>
 
           <p className="mt-3 text-xs text-neutral-400">
-            Listhaus runs on its own account system and billing. Your
-            LostToFound login and subscription do not carry over.
+            Listhaus runs on its own account system. Your LostToFound login
+            does not carry over.
           </p>
         </section>
       </div>
