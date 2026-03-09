@@ -1,0 +1,73 @@
+name: Deploy LostToFound
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: losttofound-production-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '\r\n' | xargs)"
+          PORT="$(printf '%s' "${DEPLOY_PORT:-22}" | tr -d '\r\n' | xargs)"
+          test -n "$HOST"
+          test -n "$DEPLOY_SSH_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${PORT:-22}" "$HOST" >> ~/.ssh/known_hosts
+
+      - name: Update /opt/losttofound checkout
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          LOSTTOFOUND_PATH: ${{ secrets.LOSTTOFOUND_PATH }}
+        run: |
+          HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '\r\n' | xargs)"
+          PORT="$(printf '%s' "${DEPLOY_PORT:-22}" | tr -d '\r\n' | xargs)"
+          USER="$(printf '%s' "$DEPLOY_USER" | tr -d '\r\n' | xargs)"
+          REMOTE_REPO_PATH="$(printf '%s' "${LOSTTOFOUND_PATH:-/opt/losttofound}" | tr -d '\r\n')"
+          test -n "$USER"
+          test -n "$REMOTE_REPO_PATH"
+          ssh -p "${PORT:-22}" "${USER}@${HOST}" "\
+            if [ ! -d '${REMOTE_REPO_PATH}/.git' ]; then \
+              git clone 'https://github.com/hartmanbaily-coder/losttofound.git' '${REMOTE_REPO_PATH}'; \
+            fi && \
+            cd '${REMOTE_REPO_PATH}' && \
+            git fetch origin main && \
+            git checkout main && \
+            git pull --ff-only origin main"
+
+      - name: Rebuild LostToFound service
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          COMPOSE_PROJECT_NAME: ${{ secrets.COMPOSE_PROJECT_NAME }}
+          STACK_PATH: ${{ secrets.STACK_PATH }}
+        run: |
+          HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '\r\n' | xargs)"
+          PORT="$(printf '%s' "${DEPLOY_PORT:-22}" | tr -d '\r\n' | xargs)"
+          USER="$(printf '%s' "$DEPLOY_USER" | tr -d '\r\n' | xargs)"
+          REMOTE_STACK_PATH="$(printf '%s' "${STACK_PATH:-/opt/listhaus}" | tr -d '\r\n')"
+          test -n "$USER"
+          test -n "$REMOTE_STACK_PATH"
+          ssh -p "${PORT:-22}" "${USER}@${HOST}" "\
+            cd '${REMOTE_STACK_PATH}' && \
+            COMPOSE_PROJECT_NAME='${COMPOSE_PROJECT_NAME:-listhaus}' docker compose up -d --build losttofound caddy && \
+            docker compose ps"
