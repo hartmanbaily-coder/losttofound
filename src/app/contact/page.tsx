@@ -16,7 +16,7 @@ export default function ContactPage() {
             Email
           </h2>
           <p className="mb-3 text-sm text-neutral-200">
-            For questions about the site, billing, bugs, or ideas for new
+            For questions about the site, account access, bugs, or ideas for new
             features you can email:
           </p>
           <p className="mb-4 text-sm">

@@ -16,7 +16,6 @@ export default function SiteHeader() {
 
   useEffect(() => {
     let cancelled = false;
-    setCheckingUser(true);
 
     // Initial load
     const loadUser = async () => {
@@ -57,7 +56,6 @@ export default function SiteHeader() {
   const isAuthed = !!user;
   const onDashboard = pathname?.startsWith("/dashboard") ?? false;
   const onLost = pathname === "/lost";
-  const onBilling = pathname === "/billing";
 
   return (
     <header className="border-b border-neutral-900/80 bg-black/40 backdrop-blur-sm">
@@ -113,15 +111,6 @@ export default function SiteHeader() {
                 }`}
               >
                 Lost pets
-              </Link>
-
-              <Link
-                href="/billing"
-                className={`text-neutral-300 hover:text-emerald-300 transition-colors ${
-                  onBilling ? "underline underline-offset-4" : ""
-                }`}
-              >
-                Billing
               </Link>
 
               <button

@@ -35,8 +35,8 @@ export default function HomePage() {
               people report that they have your pet or just saw your pet.
             </p>
             <p className="text-sm md:text-base text-neutral-300">
-              Start with one free pet profile. Add optional QR tags and a Plus
-              plan later if you need unlimited pets and more tools.
+              Every account includes unlimited pet profiles, travel mode, lost
+              poster tools, and the full sightings timeline.
             </p>
           </div>
 
@@ -88,22 +88,22 @@ export default function HomePage() {
           </ol>
         </section>
 
-        {/* Free vs Plus */}
+        {/* Included features */}
         <section className="rounded-2xl border border-brand-border bg-black/45 px-4 py-4 text-sm text-neutral-200 space-y-2 shadow-xl backdrop-blur-sm">
           <h2 className="text-sm font-semibold text-neutral-100">
-            Free now, Plus when you need it
+            Everything included
           </h2>
           <p className="text-sm text-neutral-200">
-            The core tools stay free for a single pet: a profile, public page,
-            and basic sightings. Upgrade your household to Plus when you need
-            unlimited pets and deeper tools.
+            LostToFound includes the full dashboard without plan upgrades.
+            Create pet profiles, share links, and track finder reports in one
+            place.
           </p>
           <ul className="list-disc list-inside space-y-1 text-sm text-neutral-300">
-            <li>Unlimited pets on one household account with Plus.</li>
-            <li>Full sightings history for every pet on Plus.</li>
+            <li>Unlimited pets on one household account.</li>
+            <li>Full sightings history for every pet.</li>
             <li>Travel mode tools for trips.</li>
-            <li>Lost poster generator coming later.</li>
-            <li>Extra contact options coming later.</li>
+            <li>Lost poster generator.</li>
+            <li>Extra contact options per pet.</li>
           </ul>
           <p className="text-xs text-neutral-400 mt-2">
             You can also order QR tags from LostToFound if you want a physical

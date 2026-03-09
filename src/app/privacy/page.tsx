@@ -24,7 +24,7 @@ export default function PrivacyPage() {
           <p>
             When you create an account LostToFound stores your email address
             so you can sign in and so the system can send you messages that
-            relate to your pets and your plan.
+            relate to your pets and account activity.
           </p>
           <p>
             When you add a pet LostToFound stores the pet name, status, photos,
@@ -62,12 +62,7 @@ export default function PrivacyPage() {
           <p>
             LostToFound uses Supabase for sign in, database storage, and file
             storage. Access rules are set so that each signed in user can only
-            see their own pets, messages, and billing details.
-          </p>
-          <p>
-            Payments are handled by Stripe. Stripe stores card details and
-            billing information and shares back only the data that is needed
-            to know whether your household has an active Plus plan.
+            see their own pets and messages.
           </p>
         </section>
 

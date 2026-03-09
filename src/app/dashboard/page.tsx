@@ -8,7 +8,6 @@ import { supabase } from "@/lib/supabaseClient";
 import QRCode from "react-qr-code";
 
 type PetStatus = "home" | "lost" | "found";
-type Plan = "free" | "plus";
 
 interface Pet {
   id: string;
@@ -61,7 +60,6 @@ function slugify(name: string) {
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [plan, setPlan] = useState<Plan>("free");
   const [pets, setPets] = useState<Pet[]>([]);
   const [finderMessages, setFinderMessages] = useState<FinderMessage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -91,7 +89,7 @@ export default function DashboardPage() {
     };
   }, [router]);
 
-  // Load plan, pets, and finder messages
+  // Load pets and finder messages
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -100,22 +98,7 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
 
-      // 1) Plan from user_profiles
-      const { data: profile, error: profileError } = await supabase
-        .from("user_profiles")
-        .select("plan")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!cancelled) {
-        if (profileError) {
-          console.error("Error loading user profile:", profileError);
-        } else if (profile && profile.plan) {
-          setPlan((profile.plan as Plan) ?? "free");
-        }
-      }
-
-      // 2) Pets
+      // 1) Pets
       const { data: petData, error: petsError } = await supabase
         .from("pets")
         .select(
@@ -155,7 +138,7 @@ export default function DashboardPage() {
       const typedPets = (petData as Pet[]) ?? [];
       setPets(typedPets);
 
-      // 3) Finder messages for these pets
+      // 2) Finder messages for these pets
       if (typedPets.length > 0) {
         const petIds = typedPets.map((p) => p.id);
 
@@ -191,14 +174,6 @@ export default function DashboardPage() {
     if (!user) return;
     if (!newName.trim()) {
       setError("Pet name is required.");
-      return;
-    }
-
-    // Free plan: one pet max
-    if (plan === "free" && pets.length >= 1) {
-      setError(
-        "The Free plan is limited to one pet. Upgrade to Plus to add more pets."
-      );
       return;
     }
 
@@ -244,9 +219,11 @@ export default function DashboardPage() {
       setPets((prev) => [...prev, data as Pet]);
       setNewName("");
       setNewDescription("");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message ?? "Could not add pet. Please try again.");
+      const message =
+        err instanceof Error ? err.message : "Could not add pet. Please try again.";
+      setError(message);
     } finally {
       setSaving(false);
     }
@@ -364,7 +341,7 @@ export default function DashboardPage() {
             : p
         )
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError("Something went wrong while uploading photos.");
     } finally {
@@ -396,7 +373,7 @@ export default function DashboardPage() {
       setPets((prev) =>
         prev.map((p) => (p.id === petId ? { ...p, [field]: null } : p))
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError("Something went wrong while deleting the photo.");
     }
@@ -424,7 +401,6 @@ export default function DashboardPage() {
   };
 
   const handleSaveContacts = async (petId: string) => {
-    if (plan !== "plus") return;
     const pet = pets.find((p) => p.id === petId);
     if (!pet) return;
 
@@ -445,7 +421,7 @@ export default function DashboardPage() {
         console.error("Error saving contacts:", updateError);
         setError("Could not save contacts. Please try again.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError("Something went wrong while saving contacts.");
     }
@@ -461,7 +437,7 @@ export default function DashboardPage() {
         p.id === petId
           ? {
               ...p,
-              [field]: value as any,
+              [field]: value as Pet[TravelField],
             }
           : p
       )
@@ -469,7 +445,6 @@ export default function DashboardPage() {
   };
 
   const handleSaveTravelSettings = async (petId: string) => {
-    if (plan !== "plus") return;
     const pet = pets.find((p) => p.id === petId);
     if (!pet) return;
 
@@ -494,7 +469,7 @@ export default function DashboardPage() {
         console.error("Error saving travel settings:", updateError);
         setError("Could not save travel mode. Please try again.");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setError("Something went wrong while saving travel mode.");
     }
@@ -544,26 +519,19 @@ export default function DashboardPage() {
           </button>
         </header>
 
-        {/* Current plan banner */}
+        {/* Dashboard tips */}
         <section className="rounded-2xl border border-brand-border bg-black/45 px-4 py-3 space-y-3 shadow-xl backdrop-blur-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1">
               <p className="text-sm">
-                <span className="mr-2 text-neutral-200">Current plan:</span>
-                <span
-                  className={`inline-flex items-center rounded-full px-3 py-0.5 text-xs font-semibold border ${
-                    plan === "plus"
-                      ? "bg-emerald-500/20 text-emerald-200 border-emerald-500/60"
-                      : "bg-emerald-500/15 text-emerald-300 border-emerald-500/50"
-                  }`}
-                >
-                  {plan === "plus" ? "Plus" : "Free"}
+                <span className="mr-2 text-neutral-200">Access:</span>
+                <span className="inline-flex items-center rounded-full px-3 py-0.5 text-xs font-semibold border bg-emerald-500/20 text-emerald-200 border-emerald-500/60">
+                  All dashboard features unlocked
                 </span>
               </p>
               <p className="text-xs text-neutral-300">
-                {plan === "plus"
-                  ? "You can add unlimited pets, use travel mode, and open lost posters for each pet."
-                  : "Free covers one pet. Plus unlocks unlimited pets, travel mode, lost posters, and extra contact fields."}
+                Add unlimited pets, use travel mode, open lost posters, and
+                save extra contact fields for each profile.
               </p>
               <p className="text-[11px] text-neutral-400">
                 Public pet pages never show your email, phone, or exact address.
@@ -579,12 +547,6 @@ export default function DashboardPage() {
           </p>
 
           <div className="flex flex-wrap gap-2 justify-start sm:justify-end pt-1">
-            <button
-              onClick={() => router.push("/billing")}
-              className="inline-flex items-center justify-center rounded-full bg-emerald-500 px-4 py-2 text-xs font-medium text-black hover:bg-emerald-400 transition"
-            >
-              {plan === "plus" ? "Open billing" : "See Plus plan"}
-            </button>
             <button
               onClick={() => router.push("/lost")}
               className="inline-flex items-center justify-center rounded-full border border-emerald-500/70 px-4 py-2 text-xs font-medium text-emerald-200 hover:bg-emerald-500/10 transition"
@@ -641,13 +603,6 @@ export default function DashboardPage() {
                 />
               </div>
             </div>
-
-            {plan === "free" && (
-              <p className="text-[11px] text-amber-200 bg-amber-900/30 border border-amber-600/60 rounded-md px-3 py-2">
-                The Free plan is limited to one pet. Upgrade to Plus to add
-                more pets, use travel mode, and generate lost posters.
-              </p>
-            )}
 
             {error && (
               <p className="text-sm text-red-400 bg-red-950/40 border border-red-700 rounded-md px-3 py-2">
@@ -764,14 +719,12 @@ export default function DashboardPage() {
                         >
                           Mark FOUND
                         </button>
-                        {plan === "plus" && (
-                          <button
-                            onClick={() => router.push(`/poster/${pet.slug}`)}
-                            className="text-xs px-3 py-1 rounded-lg border border-brand-border hover:border-brand-accent hover:text-brand-accent transition"
-                          >
-                            Open lost poster
-                          </button>
-                        )}
+                        <button
+                          onClick={() => router.push(`/poster/${pet.slug}`)}
+                          className="text-xs px-3 py-1 rounded-lg border border-brand-border hover:border-brand-accent hover:text-brand-accent transition"
+                        >
+                          Open lost poster
+                        </button>
                       </div>
                     </div>
 
@@ -842,17 +795,12 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Contact options (Plus feature) */}
+                    {/* Contact options */}
                     <div className="mt-2 rounded-lg border border-brand-border/70 bg-black/45 px-3 py-2 space-y-2">
                       <div className="flex items-center justify-between">
                         <h3 className="text-xs font-semibold text-neutral-200">
                           Contact options
                         </h3>
-                        {plan !== "plus" && (
-                          <span className="text-[10px] text-neutral-500">
-                            Upgrade to Plus to edit
-                          </span>
-                        )}
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
                         <div>
@@ -869,8 +817,7 @@ export default function DashboardPage() {
                                 e.target.value
                               )
                             }
-                            disabled={plan !== "plus"}
-                            className="w-full rounded-md border border-brand-border bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-brand-accent disabled:opacity-60"
+                            className="w-full rounded-md border border-brand-border bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-brand-accent"
                             placeholder="you@example.com"
                           />
                         </div>
@@ -888,8 +835,7 @@ export default function DashboardPage() {
                                 e.target.value
                               )
                             }
-                            disabled={plan !== "plus"}
-                            className="w-full rounded-md border border-brand-border bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-brand-accent disabled:opacity-60"
+                            className="w-full rounded-md border border-brand-border bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-brand-accent"
                             placeholder="backup@example.com"
                           />
                         </div>
@@ -907,8 +853,7 @@ export default function DashboardPage() {
                                 e.target.value
                               )
                             }
-                            disabled={plan !== "plus"}
-                            className="w-full rounded-md border border-brand-border bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-brand-accent disabled:opacity-60"
+                            className="w-full rounded-md border border-brand-border bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-brand-accent"
                             placeholder="Main phone"
                           />
                         </div>
@@ -926,21 +871,18 @@ export default function DashboardPage() {
                                 e.target.value
                               )
                             }
-                            disabled={plan !== "plus"}
-                            className="w-full rounded-md border border-brand-border bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-brand-accent disabled:opacity-60"
+                            className="w-full rounded-md border border-brand-border bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-brand-accent"
                             placeholder="Backup phone"
                           />
                         </div>
                       </div>
-                      {plan === "plus" && (
-                        <button
-                          type="button"
-                          onClick={() => handleSaveContacts(pet.id)}
-                          className="mt-1 inline-flex items-center rounded-full bg-brand-accent px-3 py-1.5 text-[11px] font-medium text-black hover:bg-emerald-400 transition"
-                        >
-                          Save contacts
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleSaveContacts(pet.id)}
+                        className="mt-1 inline-flex items-center rounded-full bg-brand-accent px-3 py-1.5 text-[11px] font-medium text-black hover:bg-emerald-400 transition"
+                      >
+                        Save contacts
+                      </button>
                       <p className="text-[10px] text-neutral-500 mt-1">
                         These contacts are stored with this pet and never shown
                         on the public page. They are for your own records and
@@ -948,35 +890,29 @@ export default function DashboardPage() {
                       </p>
                     </div>
 
-                    {/* Travel mode (Plus feature) */}
+                    {/* Travel mode */}
                     <div className="mt-2 rounded-lg border border-sky-700/60 bg-sky-950/35 px-3 py-2 space-y-2">
                       <div className="flex items-center justify-between">
                         <h3 className="text-xs font-semibold text-neutral-200">
                           Travel mode
                         </h3>
-                        {plan !== "plus" ? (
-                          <span className="text-[10px] text-neutral-500">
-                            Plus plan feature
+                        <label className="inline-flex items-center gap-2 text-[11px] text-neutral-200">
+                          <input
+                            type="checkbox"
+                            className="h-3 w-3 rounded border border-sky-500 bg-black/60"
+                            checked={!!pet.is_travel_mode}
+                            onChange={(e) =>
+                              handleTravelFieldChange(
+                                pet.id,
+                                "is_travel_mode",
+                                e.target.checked
+                              )
+                            }
+                          />
+                          <span>
+                            Travel mode {pet.is_travel_mode ? "on" : "off"}
                           </span>
-                        ) : (
-                          <label className="inline-flex items-center gap-2 text-[11px] text-neutral-200">
-                            <input
-                              type="checkbox"
-                              className="h-3 w-3 rounded border border-sky-500 bg-black/60"
-                              checked={!!pet.is_travel_mode}
-                              onChange={(e) =>
-                                handleTravelFieldChange(
-                                  pet.id,
-                                  "is_travel_mode",
-                                  e.target.checked
-                                )
-                              }
-                            />
-                            <span>
-                              Travel mode {pet.is_travel_mode ? "on" : "off"}
-                            </span>
-                          </label>
-                        )}
+                        </label>
                       </div>
                       <p className="text-[10px] text-neutral-400">
                         When you are away from home, switch this on and set the
@@ -999,8 +935,7 @@ export default function DashboardPage() {
                                 e.target.value
                               )
                             }
-                            disabled={plan !== "plus"}
-                            className="w-full rounded-md border border-sky-700 bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60"
+                            className="w-full rounded-md border border-sky-700 bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500"
                             placeholder="Boise"
                           />
                         </div>
@@ -1018,8 +953,7 @@ export default function DashboardPage() {
                                 e.target.value
                               )
                             }
-                            disabled={plan !== "plus"}
-                            className="w-full rounded-md border border-sky-700 bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60"
+                            className="w-full rounded-md border border-sky-700 bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500"
                             placeholder="Idaho"
                           />
                         </div>
@@ -1044,8 +978,7 @@ export default function DashboardPage() {
                                   : null
                               )
                             }
-                            disabled={plan !== "plus"}
-                            className="w-full rounded-md border border-sky-700 bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60"
+                            className="w-full rounded-md border border-sky-700 bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500"
                             placeholder="10"
                           />
                         </div>
@@ -1064,29 +997,19 @@ export default function DashboardPage() {
                               e.target.value
                             )
                           }
-                          disabled={plan !== "plus"}
                           rows={2}
-                          className="w-full rounded-md border border-sky-700 bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60 resize-none"
+                          className="w-full rounded-md border border-sky-700 bg-black/40 px-2 py-1.5 text-xs text-neutral-100 outline-none focus:ring-2 focus:ring-sky-500 resize-none"
                           placeholder="Staying at the Oakwood RV park near the south entrance."
                         />
                       </div>
 
-                      {plan === "plus" && (
-                        <button
-                          type="button"
-                          onClick={() => handleSaveTravelSettings(pet.id)}
-                          className="mt-1 inline-flex items-center rounded-full bg-sky-500 px-3 py-1.5 text-[11px] font-medium text-black hover:bg-sky-400 transition"
-                        >
-                          Save travel settings
-                        </button>
-                      )}
-                      {plan !== "plus" && (
-                        <p className="text-[10px] text-neutral-500 mt-1">
-                          Travel mode is part of the Plus household plan. It is
-                          designed for road trips, camping, and travel days so
-                          your pet profile matches where you are staying.
-                        </p>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleSaveTravelSettings(pet.id)}
+                        className="mt-1 inline-flex items-center rounded-full bg-sky-500 px-3 py-1.5 text-[11px] font-medium text-black hover:bg-sky-400 transition"
+                      >
+                        Save travel settings
+                      </button>
                     </div>
 
                     {/* QR block */}
