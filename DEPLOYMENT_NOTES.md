@@ -1,0 +1,176 @@
+# Deployment Notes
+
+## Domains
+
+Production domain: `losttofound.org`
+
+Suggested staging subdomain: `staging-losttofound.org`
+
+## HTTPS
+
+HTTPS is required before production use. Do not serve authenticated pages, evidence downloads, or generated reports over plain HTTP.
+
+Enable HSTS only after HTTPS is verified end-to-end. The app currently sends:
+
+```text
+Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+```
+
+Review whether `includeSubDomains` and `preload` are appropriate for all `losttofound.org` subdomains before final production launch.
+
+## DNS Setup
+
+- Point `losttofound.org` only to the active hosting provider.
+- Verify ownership in the hosting provider dashboard.
+- Use a separate staging host for staging.
+- Avoid sharing auth cookies across sibling subdomains.
+- Remove stale CNAME, A, AAAA, or provider verification records immediately when changing hosting providers.
+
+Dangling DNS records can create subdomain takeover risk.
+
+## Cookies
+
+Production auth cookies must be:
+
+- Host-only for `losttofound.org`
+- Not scoped to `.losttofound.org`
+- Secure
+- HttpOnly
+- SameSite=Lax or SameSite=Strict
+- Preferably `__Host-` prefixed where compatible
+
+## Environment Variables
+
+Use deployment platform secret storage. Do not commit:
+
+- Database URLs with credentials
+- Auth secrets
+- Supabase service role keys
+- Storage credentials
+- Email provider secrets
+- Malware scanning credentials
+- Production tokens
+
+Rotate exposed credentials immediately.
+
+Before production deploy, use `.env.production.example` as the source checklist and configure the GitHub Actions/host secrets used by `.github/workflows/deploy.yml`:
+
+- `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_RECORDS_HOST`
+- `NEXT_PUBLIC_RECORDS_STORAGE_MODE`
+- `RECORDS_STORAGE_MODE`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `EXPECTED_SUPABASE_PROJECT_REF`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_MFA_POLICY`
+- `RECORDS_ENFORCE_MFA`
+- `SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED`
+- `SUPABASE_PASSWORD_MIN_LENGTH`
+- `SUPABASE_PASSWORD_REAUTH_ENABLED`
+- `SUPABASE_CURRENT_PASSWORD_REQUIRED`
+- `AUTH_SECRET`
+- `RECORDS_EVIDENCE_BUCKET`
+- `EVIDENCE_MAX_FILE_BYTES`
+- `MALWARE_SCAN_PROVIDER`
+- `MALWARE_SCANNER_TESTED_AT`
+- `CLAMAV_HOST`, `CLAMAV_PORT`, and `CLAMAV_TIMEOUT_MS` when using ClamAV/clamd
+- `MALWARE_SCAN_ENDPOINT` and `MALWARE_SCAN_API_KEY` when using an HTTP/webhook scanner
+- `EDGE_RATE_LIMITING_ENABLED`
+- `EDGE_RATE_LIMITING_PROVIDER`
+- `EDGE_WAF_ENABLED`
+- `EDGE_WAF_PROVIDER`
+- `SECURITY_MONITORING_ENABLED`
+- `SECURITY_EVENT_SINK`
+- `SECURITY_EVENT_WEBHOOK_URL` and `SECURITY_EVENT_WEBHOOK_TOKEN` when using a webhook sink
+- `SECURITY_LOG_HASH_SALT`
+- `AUDIT_LOG_REVIEW_ENABLED`
+- `BACKUP_RESTORE_TESTED_AT`
+- `TWO_USER_ISOLATION_TESTED_AT`
+- `DATA_RETENTION_POLICY_APPROVED`
+- `INCIDENT_RESPONSE_PLAN_APPROVED`
+- `LEGAL_REVIEW_APPROVED`
+- `PRIVACY_POLICY_URL`
+- `VENDOR_SECURITY_REVIEW_APPROVED`
+- `SECURITY_CONTACT_EMAIL`
+
+The deploy workflow runs `npm run check:production` and will fail if these are missing or unsafe.
+
+When Supabase is intentionally saved for last, run `npm run check:pre-supabase` first. That mode still checks host, secret strength, edge controls, monitoring, malware scanning, privacy/legal approvals, and other non-Supabase gates, while deferring the final Supabase Auth, storage, restore, and isolation checks.
+
+Set `EXPECTED_SUPABASE_PROJECT_REF=cieuilbpnwuvnrxrlczj` in production. The readiness check rejects the older staging/mixed-use Supabase project so records traffic cannot accidentally launch against `adhnoiicwfvppzenwcgv`.
+
+Run `npm run verify:env-template` before deploy to confirm the committed production template still points at `losttofound.org` and the clean records Supabase project without containing real secrets.
+
+Run `npm run verify:headers` against the local or deployed app to confirm CSP, HSTS, frame blocking, referrer policy, content-type sniffing protection, and browser permissions policy are present. Non-local production URLs must use HTTPS.
+
+Run `npm run verify:malware` against the real production scanner before setting `MALWARE_SCANNER_TESTED_AT`. Run `npm run check:live` against the deployed HTTPS app before pointing production traffic at it.
+
+Run `npm run verify:security-events` after configuring `SECURITY_EVENT_SINK`. For webhook sinks, the script sends a synthetic sanitized event and requires a successful HTTPS response. For platform/SIEM sinks, confirm the emitted event appears in the monitoring tool before marking monitoring complete.
+
+Run a backup restore drill, save the non-sensitive evidence artifact at ignored path `ops/backup-restore-evidence.json`, and run `npm run verify:backup-restore` before setting `BACKUP_RESTORE_TESTED_AT`.
+
+For production records, both storage mode variables must be set to `supabase`. Local/demo mode is intentionally blocked by the production readiness check.
+
+Do not enable `RECORDS_ALLOW_BEARER_AUTH` in production. Records API authentication should use the server-managed HttpOnly cookies set by `/api/records/auth/login`.
+
+## Database and Backups
+
+Production data should use encrypted database connections, encryption at rest, encrypted backups, protected backup access, retention limits, and restoration testing.
+
+Document the deletion process and how backups age out after account or case deletion.
+
+The production Supabase/Postgres schema is in `database/supabase/production_schema.sql` and has been applied to production project `cieuilbpnwuvnrxrlczj` (`losttofound-records-production`) at `https://cieuilbpnwuvnrxrlczj.supabase.co`.
+
+Applied production records migration:
+
+- `20260617182822_create_records_production_schema`
+
+The older Supabase project `adhnoiicwfvppzenwcgv` remains staging/mixed-use. It has these records migrations, but its legacy lost-pet public tables and public bucket mean it should not be used for records production traffic:
+
+- `20260616005239_create_records_production_schema`
+- `20260616005410_harden_records_direct_table_access`
+- `20260616005828_tune_records_indexes_and_profile_policies`
+
+The records tables are intentionally server-mediated: do not grant direct `anon` or `authenticated` table access unless a browser-side data path is separately designed and reviewed. Before production launch, verify RLS/storage behavior with two different authenticated test users and confirm backup restore procedures.
+
+See `PRIVACY_SECURITY_READINESS.md` for the required two-user isolation test and privacy/security launch gates. See `SUPABASE_LIVE_VERIFICATION.md` for the latest live Supabase project notes and `npm run verify:isolation` usage.
+See `DATA_RETENTION_DELETION_RUNBOOK.md` for the deletion, retention, backup-aging, and legal-hold model to finalize before accepting real records.
+See `EDGE_SECURITY_RULES.md` for WAF and rate-limit targets.
+
+## Object Storage
+
+Evidence storage must be private:
+
+- No public buckets
+- No anonymous share links
+- Authenticated server-mediated upload, download, and delete only
+- Malware scanning before storage
+- No raw storage paths in logs, reports, or client-visible URLs
+
+The current app stores evidence files only through authenticated server routes. Uploads are validated, scanned, hashed, and then written to the private `records-evidence` bucket under an authenticated user/case path. Downloads stream through the app route after ownership and clean-scan checks; raw Supabase object URLs are not exposed to the browser.
+
+## Logging
+
+Do not log sensitive custody, child support, court, child, health, school, payment, note, evidence, file, agency, or reference details.
+
+Email subjects and bodies must be generic.
+
+## Production Readiness Checklist
+
+- Server-side auth configured
+- Auth and write route rate limits configured
+- Edge rate limits and WAF configured
+- Production env template verified
+- Security headers verified
+- Supabase MFA and password hardening configured
+- Server-side authorization tests passing
+- Private evidence storage configured
+- Malware scanning provider configured
+- Security monitoring and audit review configured
+- Monitoring/alerting runbook approved
+- Dependency and secret scanning enabled
+- Backups encrypted and restorable
+- Retention/deletion and incident response runbooks approved
+- Incident response contact configured
+- DNS records checked for dangling provider references

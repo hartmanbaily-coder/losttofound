@@ -1,0 +1,621 @@
+import type {
+  CalendarEvent,
+  ChildSupportPayment,
+  CustodyDayAssignment,
+  CustodyExchangeRule,
+  DateNote,
+  DateRange,
+  EvidenceItem,
+  ExchangeLog,
+  ExpenseItem,
+  ExpectedExchangeEvent,
+  RecordsDataset,
+} from "./types";
+
+export const generatedReportForbiddenTerms = [
+  "violation",
+  "contempt",
+  "proof",
+  "abuse",
+  "illegal",
+  "noncompliance",
+];
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+export function toUtcDate(date: string) {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+export function toDateString(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+export function addDays(date: string, days: number) {
+  const next = toUtcDate(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return toDateString(next);
+}
+
+export function combineDateTime(date: string, time: string) {
+  return `${date}T${time}:00.000Z`;
+}
+
+export function minutesBetween(orderedAt: string, actualAt?: string | null) {
+  if (!actualAt) return null;
+  return Math.round((new Date(actualAt).getTime() - new Date(orderedAt).getTime()) / 60_000);
+}
+
+export function daysBetween(from: string, to?: string) {
+  if (!to) return null;
+  return Math.round((toUtcDate(to).getTime() - toUtcDate(from).getTime()) / MS_PER_DAY);
+}
+
+export function isWithinDateRange(date: string, range: DateRange) {
+  return date >= range.from && date <= range.to;
+}
+
+export function getIsoDateFromDateTime(value: string) {
+  return value.slice(0, 10);
+}
+
+export function getMonthKey(date: string) {
+  return date.slice(0, 7);
+}
+
+export function formatMoney(value: number, currency = "USD") {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+export function assertOwnedRecord(
+  record: { userId: string; caseId?: string },
+  userId: string,
+  caseId?: string
+) {
+  if (record.userId !== userId) {
+    throw new Error("Record is not owned by the authenticated user.");
+  }
+
+  if (caseId && record.caseId && record.caseId !== caseId) {
+    throw new Error("Record does not belong to the selected custody matter.");
+  }
+
+  return record;
+}
+
+export function filterOwnedCaseRecords<T extends { userId: string; caseId: string }>(
+  records: T[],
+  userId: string,
+  caseId: string
+) {
+  return records.filter((record) => record.userId === userId && record.caseId === caseId);
+}
+
+export function buildCustodyDayMap(assignments: CustodyDayAssignment[], range: DateRange) {
+  const map = new Map<string, CustodyDayAssignment>();
+  for (const assignment of assignments) {
+    if (isWithinDateRange(assignment.date, range)) {
+      map.set(assignment.date, assignment);
+    }
+  }
+  return map;
+}
+
+export function generateExpectedExchangeEvents(
+  rules: CustodyExchangeRule[],
+  range: DateRange
+): ExpectedExchangeEvent[] {
+  const events: ExpectedExchangeEvent[] = [];
+
+  for (const rule of rules) {
+    let cursor = range.from > rule.effectiveStartDate ? range.from : rule.effectiveStartDate;
+    const ruleEnd = rule.effectiveEndDate && rule.effectiveEndDate < range.to ? rule.effectiveEndDate : range.to;
+
+    while (cursor <= ruleEnd) {
+      const day = toUtcDate(cursor).getUTCDay();
+      if (day === rule.dayOfWeek) {
+        events.push({
+          id: `expected-${rule.id}-${cursor}`,
+          caseId: rule.caseId,
+          userId: rule.userId,
+          custodyExchangeRuleId: rule.id,
+          orderedExchangeAt: combineDateTime(cursor, rule.orderedExchangeTime),
+          direction: rule.direction,
+          location: rule.location,
+          ruleName: rule.ruleName,
+        });
+      }
+      cursor = addDays(cursor, 1);
+    }
+  }
+
+  return events.sort((a, b) => a.orderedExchangeAt.localeCompare(b.orderedExchangeAt));
+}
+
+export function calculateExchangeTiming(log: ExchangeLog) {
+  const minutesEarlyOrLate = minutesBetween(log.orderedExchangeAt, log.actualExchangeAt);
+  return {
+    minutesEarlyOrLate,
+    isLate: log.status === "completed_late" || (minutesEarlyOrLate ?? 0) > 0,
+    isMissed: log.status === "missed",
+    isEarly: log.status === "completed_early" || (minutesEarlyOrLate ?? 0) < 0,
+  };
+}
+
+export function calculateExchangeStats(
+  exchangeLogs: ExchangeLog[],
+  expectedEvents: ExpectedExchangeEvent[],
+  range: DateRange
+) {
+  const logs = exchangeLogs.filter((log) =>
+    isWithinDateRange(getIsoDateFromDateTime(log.orderedExchangeAt), range)
+  );
+  const scheduled = expectedEvents.filter((event) =>
+    isWithinDateRange(getIsoDateFromDateTime(event.orderedExchangeAt), range)
+  );
+  const lateDurations = logs
+    .map(calculateExchangeTiming)
+    .filter((timing) => timing.isLate && timing.minutesEarlyOrLate !== null)
+    .map((timing) => Math.max(0, timing.minutesEarlyOrLate || 0));
+
+  const lateCount = logs.filter((log) => calculateExchangeTiming(log).isLate).length;
+  const missedCount = logs.filter((log) => log.status === "missed").length;
+  const refusedCount = logs.filter((log) => log.status === "refused").length;
+  const completedOnTimeCount = logs.filter((log) => log.status === "completed_on_time").length;
+  const completedEarlyCount = logs.filter((log) => log.status === "completed_early").length;
+  const completedLateCount = logs.filter((log) => log.status === "completed_late").length;
+  const completedCount = completedOnTimeCount + completedEarlyCount + completedLateCount;
+  const scheduledCount = Math.max(scheduled.length, logs.length);
+
+  return {
+    scheduledCount,
+    loggedCount: logs.length,
+    completedCount,
+    completedOnTimeCount,
+    completedEarlyCount,
+    lateCount,
+    missedCount,
+    refusedCount,
+    averageLatenessMinutes:
+      lateDurations.length > 0
+        ? Math.round(lateDurations.reduce((sum, value) => sum + value, 0) / lateDurations.length)
+        : 0,
+    longestLatenessMinutes: lateDurations.length > 0 ? Math.max(...lateDurations) : 0,
+    comparisonPercentage:
+      scheduledCount > 0 ? Math.round((completedCount / scheduledCount) * 100) : 0,
+  };
+}
+
+export function exchangeChartRows(logs: ExchangeLog[], range: DateRange) {
+  return logs
+    .filter((log) => isWithinDateRange(getIsoDateFromDateTime(log.orderedExchangeAt), range))
+    .map((log) => {
+      const timing = calculateExchangeTiming(log);
+      return {
+        date: getIsoDateFromDateTime(log.orderedExchangeAt),
+        orderedMinute: new Date(log.orderedExchangeAt).getUTCHours() * 60 + new Date(log.orderedExchangeAt).getUTCMinutes(),
+        actualMinute: log.actualExchangeAt
+          ? new Date(log.actualExchangeAt).getUTCHours() * 60 + new Date(log.actualExchangeAt).getUTCMinutes()
+          : null,
+        minutesEarlyOrLate: timing.minutesEarlyOrLate ?? 0,
+        status: log.status,
+      };
+    });
+}
+
+export function calculateChildSupportStats(payments: ChildSupportPayment[], range: DateRange) {
+  const rows = payments.filter((payment) => isWithinDateRange(payment.dueDate, range));
+  const totalDue = rows.reduce((sum, payment) => sum + payment.amountDue, 0);
+  const totalPaid = rows.reduce((sum, payment) => sum + payment.amountPaid, 0);
+  const lateDays = rows
+    .map((payment) => daysBetween(payment.dueDate, payment.paymentDate))
+    .filter((value): value is number => value !== null && value > 0);
+
+  return {
+    paymentCount: rows.length,
+    totalDue,
+    totalPaid,
+    unpaidBalance: rows.reduce(
+      (sum, payment) => sum + Math.max(payment.amountDue - payment.amountPaid, 0),
+      0
+    ),
+    unpaidCount: rows.filter((payment) => payment.paymentStatus === "unpaid").length,
+    partialCount: rows.filter((payment) => payment.paymentStatus === "partial").length,
+    lateCount: rows.filter(
+      (payment) =>
+        payment.paymentStatus === "late" ||
+        ((daysBetween(payment.dueDate, payment.paymentDate) ?? 0) > 0 &&
+          payment.paymentStatus === "paid")
+    ).length,
+    averageDaysLate:
+      lateDays.length > 0
+        ? Math.round(lateDays.reduce((sum, value) => sum + value, 0) / lateDays.length)
+        : 0,
+  };
+}
+
+export function childSupportChartRows(payments: ChildSupportPayment[], range: DateRange) {
+  const monthly = new Map<string, { month: string; amountDue: number; amountPaid: number; unpaidBalance: number }>();
+  for (const payment of payments.filter((item) => isWithinDateRange(item.dueDate, range))) {
+    const month = getMonthKey(payment.dueDate);
+    const current = monthly.get(month) || { month, amountDue: 0, amountPaid: 0, unpaidBalance: 0 };
+    current.amountDue += payment.amountDue;
+    current.amountPaid += payment.amountPaid;
+    current.unpaidBalance += Math.max(payment.amountDue - payment.amountPaid, 0);
+    monthly.set(month, current);
+  }
+  return Array.from(monthly.values()).sort((a, b) => a.month.localeCompare(b.month));
+}
+
+export function calculateExpenseStats(expenses: ExpenseItem[], range: DateRange) {
+  const rows = expenses.filter((expense) => isWithinDateRange(expense.expenseDate, range));
+  const totalExpenses = rows.reduce((sum, expense) => sum + expense.amount, 0);
+  const reimbursementRequested = rows
+    .filter((expense) => expense.reimbursementRequested)
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  const reimbursementReceived = rows.reduce((sum, expense) => sum + (expense.amountReimbursed || 0), 0);
+
+  const byCategory = new Map<string, number>();
+  for (const expense of rows) {
+    byCategory.set(expense.category, (byCategory.get(expense.category) || 0) + expense.amount);
+  }
+
+  return {
+    expenseCount: rows.length,
+    totalExpenses,
+    reimbursementRequested,
+    reimbursementReceived,
+    unpaidReimbursement: Math.max(reimbursementRequested - reimbursementReceived, 0),
+    byCategory: Array.from(byCategory, ([category, amount]) => ({ category, amount })).sort((a, b) =>
+      a.category.localeCompare(b.category)
+    ),
+  };
+}
+
+function timeFromIso(value?: string | null) {
+  return value ? value.slice(11, 16) : undefined;
+}
+
+function buildSortAt(date: string, time?: string) {
+  return `${date}T${time || "00:00"}:00.000Z`;
+}
+
+function joinParts(parts: Array<string | undefined | null | false>) {
+  return parts.filter(Boolean).join(" | ");
+}
+
+function exchangeSeverity(status: ExchangeLog["status"]): CalendarEvent["severity"] {
+  if (status === "missed" || status === "refused") return "critical";
+  if (status === "completed_late" || status === "canceled" || status === "modified_by_agreement") {
+    return "attention";
+  }
+  if (status === "completed_on_time" || status === "completed_early") return "positive";
+  return "neutral";
+}
+
+function paymentSeverity(payment: ChildSupportPayment): CalendarEvent["severity"] {
+  if (payment.paymentStatus === "unpaid" || payment.paymentStatus === "disputed") return "critical";
+  if (payment.paymentStatus === "partial" || payment.paymentStatus === "late" || payment.paymentStatus === "unknown") {
+    return "attention";
+  }
+  if (payment.paymentStatus === "paid") return "positive";
+  return "neutral";
+}
+
+function expenseSeverity(expense: ExpenseItem): CalendarEvent["severity"] {
+  if (expense.reimbursementStatus === "disputed") return "critical";
+  if (
+    expense.reimbursementStatus === "requested" ||
+    expense.reimbursementStatus === "partially_reimbursed" ||
+    expense.reimbursementStatus === "unpaid"
+  ) {
+    return "attention";
+  }
+  if (expense.reimbursementStatus === "reimbursed") return "positive";
+  return "neutral";
+}
+
+function noteSeverity(note: DateNote): CalendarEvent["severity"] {
+  if (note.category === "safety") return "critical";
+  if (
+    note.category === "exchange" ||
+    note.category === "child_support" ||
+    note.category === "schedule_change" ||
+    note.category === "court"
+  ) {
+    return "attention";
+  }
+  return "neutral";
+}
+
+export function buildCalendarEvents(
+  dataset: RecordsDataset,
+  userId: string,
+  caseId: string,
+  range: DateRange
+): CalendarEvent[] {
+  const rules = filterOwnedCaseRecords(dataset.exchangeRules, userId, caseId);
+  const expected = generateExpectedExchangeEvents(rules, range);
+  const custodyDayAssignments = filterOwnedCaseRecords(dataset.custodyDayAssignments, userId, caseId);
+  const exchangeLogs = filterOwnedCaseRecords(dataset.exchangeLogs, userId, caseId);
+  const notes = filterOwnedCaseRecords(dataset.dateNotes, userId, caseId);
+  const evidenceItems = filterOwnedCaseRecords(dataset.evidenceItems, userId, caseId);
+  const payments = filterOwnedCaseRecords(dataset.childSupportPayments, userId, caseId);
+  const expenses = filterOwnedCaseRecords(dataset.expenseItems, userId, caseId);
+
+  const events: CalendarEvent[] = [
+    ...custodyDayAssignments.map((assignment) => ({
+      id: `custody-day-${assignment.id}`,
+      caseId,
+      date: assignment.date,
+      time: assignment.startsAt || assignment.exchangeTime,
+      sortAt: buildSortAt(assignment.date, assignment.startsAt || assignment.exchangeTime),
+      type: "custody_day" as const,
+      title: `Custody day: ${assignment.caregiverLabel}`,
+      detail: joinParts([
+        assignment.startsAt && assignment.endsAt ? `${assignment.startsAt}-${assignment.endsAt}` : undefined,
+        assignment.exchangeTime ? `Exchange at ${assignment.exchangeTime}` : undefined,
+        assignment.exchangeDirection ? assignment.exchangeDirection.replaceAll("_", " ") : undefined,
+        assignment.exchangeLocation,
+      ]),
+      summary: joinParts([
+        `Caregiver: ${assignment.caregiverLabel}`,
+        assignment.exchangeLocation ? `Location: ${assignment.exchangeLocation}` : undefined,
+      ]),
+      body: assignment.notes,
+      tags: [assignment.caregiverLabel, assignment.exchangeDirection?.replaceAll("_", " ")].filter(
+        Boolean
+      ) as string[],
+      severity: "neutral" as const,
+      sourceLabel: "Custody calendar",
+      relatedIds: [assignment.id],
+    })),
+    ...expected.map((event) => ({
+      id: event.id,
+      caseId,
+      date: getIsoDateFromDateTime(event.orderedExchangeAt),
+      time: timeFromIso(event.orderedExchangeAt),
+      sortAt: event.orderedExchangeAt,
+      type: "scheduled_exchange" as const,
+      title: `Scheduled exchange: ${event.ruleName}`,
+      detail: joinParts([
+        timeFromIso(event.orderedExchangeAt) ? `Ordered time ${timeFromIso(event.orderedExchangeAt)}` : undefined,
+        event.direction.replaceAll("_", " "),
+        event.location,
+      ]),
+      summary: joinParts([`Rule: ${event.ruleName}`, event.location ? `Location: ${event.location}` : undefined]),
+      tags: ["scheduled exchange", event.direction.replaceAll("_", " ")],
+      severity: "neutral" as const,
+      sourceLabel: "Exchange schedule",
+      relatedIds: [event.custodyExchangeRuleId],
+    })),
+    ...exchangeLogs.map((log) => {
+      const timing = calculateExchangeTiming(log);
+      const orderedDate = getIsoDateFromDateTime(log.orderedExchangeAt);
+      const actualDate = log.actualExchangeAt ? getIsoDateFromDateTime(log.actualExchangeAt) : orderedDate;
+      const actualTime = timeFromIso(log.actualExchangeAt);
+      const orderedTime = timeFromIso(log.orderedExchangeAt);
+      const timingLabel =
+        timing.minutesEarlyOrLate === null
+          ? undefined
+          : timing.minutesEarlyOrLate === 0
+            ? "Recorded at ordered time"
+            : timing.minutesEarlyOrLate > 0
+              ? `${timing.minutesEarlyOrLate} minutes after ordered time`
+              : `${Math.abs(timing.minutesEarlyOrLate)} minutes before ordered time`;
+
+      return {
+        id: `log-${log.id}`,
+        caseId,
+        date: actualDate,
+        time: actualTime || orderedTime,
+        sortAt: log.actualExchangeAt || log.orderedExchangeAt,
+        type: "logged_exchange" as const,
+        title: `Logged exchange: ${labelExchangeStatus(log.status)}`,
+        detail: joinParts([
+          orderedTime ? `Ordered ${orderedDate} ${orderedTime}` : undefined,
+          actualTime ? `Actual ${actualDate} ${actualTime}` : "No actual time recorded",
+          timingLabel,
+          log.location,
+        ]),
+        summary: joinParts([
+          `Status: ${labelExchangeStatus(log.status)}`,
+          log.direction.replaceAll("_", " "),
+          log.reasonGiven ? `Reason given: ${log.reasonGiven}` : undefined,
+        ]),
+        body: joinParts([log.notes, log.witnesses ? `Witnesses: ${log.witnesses}` : undefined]),
+        tags: log.tags,
+        severity: exchangeSeverity(log.status),
+        sourceLabel: "Exchange log",
+        relatedIds: [log.id, log.custodyExchangeRuleId].filter(Boolean) as string[],
+      };
+    }),
+    ...payments.map((payment) => ({
+      id: `payment-due-${payment.id}`,
+      caseId,
+      date: payment.dueDate,
+      sortAt: buildSortAt(payment.dueDate),
+      type: "child_support_due" as const,
+      title: `Child support due: ${formatMoney(payment.amountDue)}`,
+      detail: joinParts([
+        `Status: ${labelPaymentStatus(payment.paymentStatus)}`,
+        `Marked paid: ${formatMoney(payment.amountPaid)}`,
+      ]),
+      summary: joinParts([
+        `Due: ${formatMoney(payment.amountDue)}`,
+        `Method: ${payment.paymentMethod.replaceAll("_", " ")}`,
+        payment.paymentDate ? `Payment date: ${payment.paymentDate}` : undefined,
+      ]),
+      body: payment.notes,
+      tags: ["child support", labelPaymentStatus(payment.paymentStatus)],
+      severity: paymentSeverity(payment),
+      sourceLabel: "Child support",
+      relatedIds: [payment.id, payment.childSupportOrderId],
+    })),
+    ...payments
+      .filter((payment) => payment.paymentDate)
+      .map((payment) => ({
+        id: `payment-paid-${payment.id}`,
+        caseId,
+        date: payment.paymentDate || payment.dueDate,
+        sortAt: buildSortAt(payment.paymentDate || payment.dueDate),
+        type: "child_support_paid" as const,
+        title: `Payment record: ${formatMoney(payment.amountPaid)}`,
+        detail: joinParts([
+          `Status: ${labelPaymentStatus(payment.paymentStatus)}`,
+          `Due ${payment.dueDate}`,
+          `Method: ${payment.paymentMethod.replaceAll("_", " ")}`,
+        ]),
+        summary: `Based on records entered in this app. Amount marked paid: ${formatMoney(payment.amountPaid)}.`,
+        body: payment.notes,
+        tags: ["payment record", labelPaymentStatus(payment.paymentStatus)],
+        severity: paymentSeverity(payment),
+        sourceLabel: "Child support",
+        relatedIds: [payment.id, payment.childSupportOrderId],
+      })),
+    ...notes.map((note) => ({
+      id: `note-${note.id}`,
+      caseId,
+      date: note.noteDate,
+      time: note.noteTime,
+      sortAt: buildSortAt(note.noteDate, note.noteTime),
+      type: "custody_note" as const,
+      title: note.title,
+      detail: labelNoteCategory(note.category),
+      summary: note.includeInReports ? "Selected for reports" : "Not selected for reports",
+      body: note.body,
+      tags: note.tags,
+      severity: noteSeverity(note),
+      sourceLabel: "Date note",
+      relatedIds: [
+        note.id,
+        note.relatedExchangeId,
+        note.relatedChildSupportPaymentId,
+        note.relatedExpenseId,
+      ].filter(Boolean) as string[],
+    })),
+    ...evidenceItems
+      .filter((item) => item.evidenceDate)
+      .map((item) => ({
+        id: `evidence-${item.id}`,
+        caseId,
+        date: item.evidenceDate || item.uploadedAt.slice(0, 10),
+        time: timeFromIso(item.uploadedAt),
+        sortAt: item.evidenceDate ? buildSortAt(item.evidenceDate, timeFromIso(item.uploadedAt)) : item.uploadedAt,
+        type: "evidence_item" as const,
+        title: `Evidence item: ${item.originalFileName}`,
+        detail: item.description,
+        summary: joinParts([
+          `File type: ${item.fileType}`,
+          `Scan: ${item.malwareScanStatus || "pending"}`,
+          item.includeInReports ? "Selected for reports" : "Not selected for reports",
+        ]),
+        body: item.description,
+        tags: item.tags,
+        severity:
+          item.malwareScanStatus === "blocked" || item.malwareScanStatus === "failed"
+            ? ("attention" as const)
+            : ("neutral" as const),
+        sourceLabel: "Evidence",
+        relatedIds: [
+          item.id,
+          item.relatedExchangeId,
+          item.relatedNoteId,
+          item.relatedChildSupportPaymentId,
+          item.relatedExpenseId,
+        ].filter(Boolean) as string[],
+      })),
+    ...expenses.map((expense) => ({
+      id: `expense-${expense.id}`,
+      caseId,
+      date: expense.expenseDate,
+      sortAt: buildSortAt(expense.expenseDate),
+      type: "expense_item" as const,
+      title: `Expense: ${expense.description}`,
+      detail: joinParts([
+        formatMoney(expense.amount, expense.currency),
+        expense.category,
+        `Reimbursement: ${expense.reimbursementStatus.replaceAll("_", " ")}`,
+      ]),
+      summary: joinParts([
+        `Paid by: ${expense.paidByLabel}`,
+        expense.reimbursementRequested ? "Reimbursement requested" : "No reimbursement requested",
+        expense.reimbursementDueDate ? `Due date: ${expense.reimbursementDueDate}` : undefined,
+        expense.amountReimbursed ? `Amount reimbursed: ${formatMoney(expense.amountReimbursed, expense.currency)}` : undefined,
+      ]),
+      body: expense.notes,
+      tags: [expense.category, expense.reimbursementStatus.replaceAll("_", " ")],
+      severity: expenseSeverity(expense),
+      sourceLabel: "Expense",
+      relatedIds: [expense.id],
+    })),
+  ];
+
+  return events
+    .filter((event) => isWithinDateRange(event.date, range))
+    .sort(
+      (a, b) =>
+        (a.sortAt || buildSortAt(a.date, a.time)).localeCompare(b.sortAt || buildSortAt(b.date, b.time)) ||
+        a.title.localeCompare(b.title)
+    );
+}
+
+export function buildNeutralExchangeSummary(
+  range: DateRange,
+  scheduledCount: number,
+  lateCount: number,
+  averageLatenessMinutes: number,
+  missedCount: number
+) {
+  return `From ${range.from} to ${range.to}, ${scheduledCount} exchanges were scheduled. ${lateCount} were completed late. Average delay was ${averageLatenessMinutes} minutes. ${missedCount} exchange${missedCount === 1 ? " was" : "s were"} marked missed.`;
+}
+
+export function buildNeutralChildSupportSummary(
+  range: DateRange,
+  stats: ReturnType<typeof calculateChildSupportStats>
+) {
+  return `Based on records entered in this app, ${stats.paymentCount} child support payments were due between ${range.from} and ${range.to}. ${stats.totalPaid === 0 ? "No payments were marked paid" : `${formatMoney(stats.totalPaid)} was marked paid`}. ${stats.partialCount} payments were marked partial, and ${stats.unpaidCount} payments were marked unpaid.`;
+}
+
+export function buildEvidenceIndex(items: EvidenceItem[], range: DateRange) {
+  return items
+    .filter((item) => item.includeInReports)
+    .filter((item) => !item.evidenceDate || isWithinDateRange(item.evidenceDate, range))
+    .map((item, index) => ({
+      index: index + 1,
+      fileName: item.originalFileName,
+      evidenceDate: item.evidenceDate || "",
+      description: item.description || "",
+      tags: item.tags.join(", "),
+      scanStatus: item.malwareScanStatus || "pending",
+      storageStatus: item.storagePath ? "private stored file" : "metadata only",
+    }));
+}
+
+export function containsForbiddenGeneratedTerm(text: string) {
+  const lower = text.toLowerCase();
+  return generatedReportForbiddenTerms.some((term) => lower.includes(term));
+}
+
+export function labelExchangeStatus(status: ExchangeLog["status"]) {
+  return status
+    .replace("completed_", "completed ")
+    .replaceAll("_", " ");
+}
+
+export function labelPaymentStatus(status: ChildSupportPayment["paymentStatus"]) {
+  return status.replaceAll("_", " ");
+}
+
+export function labelNoteCategory(category: DateNote["category"]) {
+  return category.replaceAll("_", " ");
+}
+
+export function labelEventType(type: CalendarEvent["type"]) {
+  return type.replaceAll("_", " ");
+}

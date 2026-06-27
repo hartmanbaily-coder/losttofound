@@ -1,0 +1,27 @@
+{
+  "testedAt": "2026-06-17T00:00:00.000Z",
+  "projectRef": "cieuilbpnwuvnrxrlczj",
+  "restoreSource": "Supabase production backup snapshot identifier or backup job id",
+  "restoreTarget": "Isolated non-production restore target with synthetic or approved test data only",
+  "validatedBy": "Name or role of reviewer",
+  "restoredRecordCount": 0,
+  "validationSummary": "Restore completed, app connected to restored target, records tables/storage metadata inspected, no production traffic pointed at restored environment.",
+  "validationChecks": [
+    {
+      "label": "Restored database is reachable in an isolated environment",
+      "passed": true
+    },
+    {
+      "label": "Records tables and RLS policies are present after restore",
+      "passed": true
+    },
+    {
+      "label": "Private evidence bucket metadata is present and not public",
+      "passed": true
+    },
+    {
+      "label": "No real user data was copied into an unapproved environment",
+      "passed": true
+    }
+  ]
+}

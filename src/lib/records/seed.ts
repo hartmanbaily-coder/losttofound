@@ -1,0 +1,479 @@
+import type { RecordsDataset } from "./types";
+
+const now = "2026-06-15T12:00:00.000Z";
+
+export const demoUserId = "user-demo-parent-a";
+export const demoCaseId = "case-demo-parenting-plan";
+
+function buildDemoCustodyDayAssignments() {
+  const days: RecordsDataset["custodyDayAssignments"] = [];
+  const start = new Date("2026-05-01T00:00:00.000Z");
+  const labels = ["Parent A", "Parent B"];
+  const colors = ["#0f766e", "#2563eb"];
+
+  for (let index = 0; index < 46; index += 1) {
+    const current = new Date(start);
+    current.setUTCDate(start.getUTCDate() + index);
+    const date = current.toISOString().slice(0, 10);
+    const block = Math.floor(index / 3) % 2;
+    const isFridayExchange = current.getUTCDay() === 5;
+    const isSundayExchange = current.getUTCDay() === 0;
+
+    days.push({
+      id: `custody-day-${date}`,
+      caseId: demoCaseId,
+      userId: demoUserId,
+      date,
+      caregiverLabel: labels[block],
+      color: colors[block],
+      startsAt: "00:00",
+      endsAt: "23:59",
+      exchangeTime: isFridayExchange || isSundayExchange ? "18:00" : undefined,
+      exchangeDirection: isFridayExchange
+        ? "other_parent_to_me"
+        : isSundayExchange
+          ? "me_to_other_parent"
+          : undefined,
+      exchangeLocation: isFridayExchange || isSundayExchange ? "Community center entrance" : undefined,
+      notes: "Synthetic custody schedule color block.",
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  return days;
+}
+
+export function createRecordsSeed(): RecordsDataset {
+  return {
+    users: [
+      {
+        id: "profile-demo-parent-a",
+        userId: demoUserId,
+        displayName: "Parent A",
+        email: "parent-a@example.test",
+        timezone: "America/Anchorage",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "profile-demo-parent-b",
+        userId: "user-demo-parent-b",
+        displayName: "Parent B",
+        email: "parent-b@example.test",
+        timezone: "America/Anchorage",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    matters: [
+      {
+        id: demoCaseId,
+        userId: demoUserId,
+        caseName: "Parenting Plan Records",
+        courtOrOrderNickname: "Current order",
+        courtName: "Court label withheld",
+        orderDate: "2026-01-15",
+        effectiveStartDate: "2026-02-01",
+        childDisplayLabels: ["Child 1", "Child 2"],
+        userRoleLabel: "Parent A",
+        otherParentLabel: "Parent B",
+        defaultExchangeLocation: "Community center entrance",
+        timezone: "America/Anchorage",
+        notes: "Synthetic demo matter using privacy-friendly labels.",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "case-other-user",
+        userId: "user-demo-parent-b",
+        caseName: "Other User Private Matter",
+        childDisplayLabels: ["Child 1"],
+        userRoleLabel: "Parent B",
+        otherParentLabel: "Parent A",
+        timezone: "America/Anchorage",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    exchangeRules: [
+      {
+        id: "rule-friday-evening",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        ruleName: "Friday evening exchange",
+        dayOfWeek: 5,
+        orderedExchangeTime: "18:00",
+        direction: "other_parent_to_me",
+        location: "Community center entrance",
+        effectiveStartDate: "2026-02-01",
+        orderProvisionNotes: "Order comparison uses the weekly Friday 6:00 PM expectation.",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "rule-sunday-evening",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        ruleName: "Sunday evening exchange",
+        dayOfWeek: 0,
+        orderedExchangeTime: "18:00",
+        direction: "me_to_other_parent",
+        location: "Community center entrance",
+        effectiveStartDate: "2026-02-01",
+        orderProvisionNotes: "Order comparison uses the weekly Sunday 6:00 PM expectation.",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    scheduleExceptions: [
+      {
+        id: "exception-2026-05-24",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        exceptionDate: "2026-05-24",
+        custodyExchangeRuleId: "rule-sunday-evening",
+        orderedExchangeTime: "19:00",
+        status: "rescheduled",
+        notes: "Documented schedule change by agreement.",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    custodyDayAssignments: buildDemoCustodyDayAssignments(),
+    exchangeLogs: [
+      {
+        id: "exchange-2026-05-01",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        custodyExchangeRuleId: "rule-friday-evening",
+        orderedExchangeAt: "2026-05-01T18:00:00.000Z",
+        actualExchangeAt: "2026-05-01T18:00:00.000Z",
+        direction: "other_parent_to_me",
+        status: "completed_on_time",
+        location: "Community center entrance",
+        notes: "Exchange recorded at the ordered time.",
+        tags: ["routine"],
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "exchange-2026-05-08",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        custodyExchangeRuleId: "rule-friday-evening",
+        orderedExchangeAt: "2026-05-08T18:00:00.000Z",
+        actualExchangeAt: "2026-05-08T18:32:00.000Z",
+        direction: "other_parent_to_me",
+        status: "completed_late",
+        location: "Community center entrance",
+        reasonGiven: "Traffic was mentioned.",
+        notes: "Recorded arrival at 6:32 PM.",
+        tags: ["late exchange"],
+        witnesses: "Parent A",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "exchange-2026-05-15",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        custodyExchangeRuleId: "rule-friday-evening",
+        orderedExchangeAt: "2026-05-15T18:00:00.000Z",
+        actualExchangeAt: null,
+        direction: "other_parent_to_me",
+        status: "missed",
+        location: "Community center entrance",
+        notes: "Exchange was marked missed in the app record.",
+        tags: ["missed exchange"],
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "exchange-2026-05-22",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        custodyExchangeRuleId: "rule-friday-evening",
+        orderedExchangeAt: "2026-05-22T18:00:00.000Z",
+        actualExchangeAt: "2026-05-22T17:52:00.000Z",
+        direction: "other_parent_to_me",
+        status: "completed_early",
+        location: "Community center entrance",
+        notes: "Exchange recorded eight minutes early.",
+        tags: ["early exchange"],
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "exchange-other-user",
+        caseId: "case-other-user",
+        userId: "user-demo-parent-b",
+        orderedExchangeAt: "2026-05-10T18:00:00.000Z",
+        actualExchangeAt: "2026-05-10T18:05:00.000Z",
+        direction: "me_to_other_parent",
+        status: "completed_late",
+        tags: [],
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    dateNotes: [
+      {
+        id: "note-school-2026-05-05",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        noteDate: "2026-05-05",
+        noteTime: "16:30",
+        category: "school",
+        title: "School pickup note",
+        body: "Documented pickup time and after-school item transfer.",
+        tags: ["school", "child item"],
+        includeInReports: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "note-support-2026-05-10",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        noteDate: "2026-05-10",
+        category: "child_support",
+        title: "Payment portal reviewed",
+        body: "Reviewed state portal and recorded the displayed status for the due date.",
+        tags: ["payment record"],
+        includeInReports: true,
+        relatedChildSupportPaymentId: "support-payment-2026-05-01",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    evidenceItems: [
+      {
+        id: "evidence-portal-2026-05-10",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        relatedChildSupportPaymentId: "support-payment-2026-05-01",
+        originalFileName: "demo-payment-portal-screenshot.png",
+        storedFileName: "evidence-portal-2026-05-10.png",
+        fileType: "image/png",
+        fileSize: 414_000,
+        uploadedAt: "2026-05-10T20:15:00.000Z",
+        evidenceDate: "2026-05-10",
+        description: "Synthetic state portal screenshot record.",
+        tags: ["child support", "payment record"],
+        includeInReports: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "evidence-exchange-2026-05-08",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        relatedExchangeId: "exchange-2026-05-08",
+        originalFileName: "demo-exchange-note.pdf",
+        storedFileName: "evidence-exchange-2026-05-08.pdf",
+        fileType: "application/pdf",
+        fileSize: 188_000,
+        uploadedAt: "2026-05-08T20:05:00.000Z",
+        evidenceDate: "2026-05-08",
+        description: "Synthetic document attached to the exchange record.",
+        tags: ["exchange"],
+        includeInReports: true,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    childSupportOrders: [
+      {
+        id: "support-order-current",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        orderNickname: "Current support order",
+        orderedAmount: 450,
+        currency: "USD",
+        paymentFrequency: "monthly",
+        dueDayOrSchedule: "1st day of each month",
+        effectiveStartDate: "2026-02-01",
+        payerLabel: "Parent B",
+        recipientLabel: "Parent A",
+        paymentMethodExpected: "State agency",
+        agencyOrCaseNumber: "Withheld in demo",
+        notes: "Synthetic support order details for MVP testing only.",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    childSupportPayments: [
+      {
+        id: "support-payment-2026-03-01",
+        caseId: demoCaseId,
+        childSupportOrderId: "support-order-current",
+        userId: demoUserId,
+        dueDate: "2026-03-01",
+        amountDue: 450,
+        amountPaid: 450,
+        paymentDate: "2026-03-01",
+        paymentStatus: "paid",
+        paymentMethod: "state_agency",
+        notes: "Marked paid based on user-entered records.",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "support-payment-2026-04-01",
+        caseId: demoCaseId,
+        childSupportOrderId: "support-order-current",
+        userId: demoUserId,
+        dueDate: "2026-04-01",
+        amountDue: 450,
+        amountPaid: 450,
+        paymentDate: "2026-04-04",
+        paymentStatus: "late",
+        paymentMethod: "state_agency",
+        notes: "Marked late based on payment date entered by the user.",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "support-payment-2026-05-01",
+        caseId: demoCaseId,
+        childSupportOrderId: "support-order-current",
+        userId: demoUserId,
+        dueDate: "2026-05-01",
+        amountDue: 450,
+        amountPaid: 200,
+        paymentDate: "2026-05-10",
+        paymentStatus: "partial",
+        paymentMethod: "state_agency",
+        referenceNumber: "redacted-demo-reference",
+        notes: "Payment marked partial in user-entered records.",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "support-payment-2026-06-01",
+        caseId: demoCaseId,
+        childSupportOrderId: "support-order-current",
+        userId: demoUserId,
+        dueDate: "2026-06-01",
+        amountDue: 450,
+        amountPaid: 0,
+        paymentStatus: "unpaid",
+        paymentMethod: "unknown",
+        notes: "Payment marked unpaid based only on records entered in this app.",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    expenseItems: [
+      {
+        id: "expense-school-2026-05-03",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        expenseDate: "2026-05-03",
+        category: "school",
+        description: "School supply receipt",
+        amount: 84.22,
+        currency: "USD",
+        paidByLabel: "Parent A",
+        reimbursementRequested: true,
+        reimbursementDueDate: "2026-05-20",
+        amountReimbursed: 0,
+        reimbursementStatus: "requested",
+        notes: "Receipt recorded for reimbursement tracking.",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: "expense-medical-2026-05-12",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        expenseDate: "2026-05-12",
+        category: "medical",
+        description: "Co-pay receipt",
+        amount: 35,
+        currency: "USD",
+        paidByLabel: "Parent A",
+        reimbursementRequested: true,
+        reimbursementDueDate: "2026-05-26",
+        amountReimbursed: 17.5,
+        reimbursementDate: "2026-05-22",
+        reimbursementStatus: "partially_reimbursed",
+        notes: "Partial reimbursement recorded.",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
+    auditLogs: [
+      {
+        id: "audit-login-demo",
+        userId: demoUserId,
+        action: "login",
+        entityType: "session",
+        entityId: "session-demo",
+        timestamp: now,
+        metadataSummary: "Demo user login recorded without sensitive details.",
+      },
+      {
+        id: "audit-export-demo",
+        userId: demoUserId,
+        caseId: demoCaseId,
+        action: "exported",
+        entityType: "report",
+        entityId: "report-preview-demo",
+        timestamp: now,
+        metadataSummary: "Report preview generated for selected date range.",
+      },
+    ],
+  };
+}
+
+export function createRecordsSeedForUser(userId: string, email: string): RecordsDataset {
+  const seed = createRecordsSeed();
+  const displayName = email.split("@")[0]?.replace(/[._-]+/g, " ") || "Records user";
+
+  return {
+    users: seed.users
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({
+        ...item,
+        id: `profile-${userId}`,
+        userId,
+        displayName,
+        email,
+      })),
+    matters: seed.matters
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({ ...item, userId })),
+    exchangeRules: seed.exchangeRules
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({ ...item, userId })),
+    scheduleExceptions: seed.scheduleExceptions
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({ ...item, userId })),
+    custodyDayAssignments: seed.custodyDayAssignments
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({ ...item, userId })),
+    exchangeLogs: seed.exchangeLogs
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({ ...item, userId })),
+    dateNotes: seed.dateNotes
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({ ...item, userId })),
+    evidenceItems: seed.evidenceItems
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({ ...item, userId, malwareScanStatus: "pending" })),
+    childSupportOrders: seed.childSupportOrders
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({ ...item, userId })),
+    childSupportPayments: seed.childSupportPayments
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({ ...item, userId })),
+    expenseItems: seed.expenseItems
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({ ...item, userId })),
+    auditLogs: seed.auditLogs
+      .filter((item) => item.userId === demoUserId)
+      .map((item) => ({ ...item, userId })),
+  };
+}

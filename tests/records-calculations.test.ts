@@ -1,0 +1,241 @@
+import { describe, expect, it } from "vitest";
+import {
+  assertOwnedRecord,
+  buildCalendarEvents,
+  buildCustodyDayMap,
+  buildEvidenceIndex,
+  buildNeutralExchangeSummary,
+  calculateChildSupportStats,
+  calculateExchangeStats,
+  calculateExchangeTiming,
+  calculateExpenseStats,
+  containsForbiddenGeneratedTerm,
+  filterOwnedCaseRecords,
+  generateExpectedExchangeEvents,
+} from "@/lib/records/calculations";
+import { createRecordsSeed, demoCaseId, demoUserId } from "@/lib/records/seed";
+import { buildReportPreview, rowsToCsv } from "@/lib/records/reports";
+import { validateEvidenceFile } from "@/lib/records/validation";
+
+const range = { from: "2026-05-01", to: "2026-05-31" };
+
+describe("records calculations", () => {
+  it("calculates late, early, and missed exchange timing", () => {
+    const dataset = createRecordsSeed();
+    const late = dataset.exchangeLogs.find((log) => log.id === "exchange-2026-05-08");
+    const early = dataset.exchangeLogs.find((log) => log.id === "exchange-2026-05-22");
+    const missed = dataset.exchangeLogs.find((log) => log.id === "exchange-2026-05-15");
+
+    expect(late && calculateExchangeTiming(late)).toMatchObject({
+      minutesEarlyOrLate: 32,
+      isLate: true,
+      isMissed: false,
+    });
+    expect(early && calculateExchangeTiming(early)).toMatchObject({
+      minutesEarlyOrLate: -8,
+      isEarly: true,
+    });
+    expect(missed && calculateExchangeTiming(missed)).toMatchObject({
+      minutesEarlyOrLate: null,
+      isMissed: true,
+    });
+  });
+
+  it("generates recurring expected exchanges and range statistics", () => {
+    const dataset = createRecordsSeed();
+    const rules = filterOwnedCaseRecords(dataset.exchangeRules, demoUserId, demoCaseId);
+    const expected = generateExpectedExchangeEvents(rules, range);
+    const logs = filterOwnedCaseRecords(dataset.exchangeLogs, demoUserId, demoCaseId);
+    const stats = calculateExchangeStats(logs, expected, range);
+
+    expect(expected.length).toBeGreaterThanOrEqual(8);
+    expect(stats.lateCount).toBe(1);
+    expect(stats.missedCount).toBe(1);
+    expect(stats.averageLatenessMinutes).toBe(32);
+    expect(stats.longestLatenessMinutes).toBe(32);
+  });
+
+  it("calculates child support due, paid, partial, unpaid, and late metrics", () => {
+    const dataset = createRecordsSeed();
+    const payments = filterOwnedCaseRecords(dataset.childSupportPayments, demoUserId, demoCaseId);
+    const stats = calculateChildSupportStats(payments, { from: "2026-03-01", to: "2026-06-30" });
+
+    expect(stats.totalDue).toBe(1800);
+    expect(stats.totalPaid).toBe(1100);
+    expect(stats.unpaidBalance).toBe(700);
+    expect(stats.partialCount).toBe(1);
+    expect(stats.unpaidCount).toBe(1);
+    expect(stats.lateCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("calculates expense reimbursement totals by date range", () => {
+    const dataset = createRecordsSeed();
+    const expenses = filterOwnedCaseRecords(dataset.expenseItems, demoUserId, demoCaseId);
+    const stats = calculateExpenseStats(expenses, range);
+
+    expect(stats.totalExpenses).toBeCloseTo(119.22);
+    expect(stats.reimbursementRequested).toBeCloseTo(119.22);
+    expect(stats.reimbursementReceived).toBeCloseTo(17.5);
+    expect(stats.unpaidReimbursement).toBeCloseTo(101.72);
+    expect(stats.byCategory.map((row) => row.category)).toContain("school");
+  });
+
+  it("maps color-coded custody days into calendar events", () => {
+    const dataset = createRecordsSeed();
+    const assignments = filterOwnedCaseRecords(dataset.custodyDayAssignments, demoUserId, demoCaseId);
+    const dayMap = buildCustodyDayMap(assignments, range);
+    const events = buildCalendarEvents(dataset, demoUserId, demoCaseId, range);
+
+    expect(dayMap.get("2026-05-01")).toMatchObject({
+      caregiverLabel: "Parent A",
+      color: "#0f766e",
+      exchangeTime: "18:00",
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        date: "2026-05-01",
+        type: "custody_day",
+        title: "Custody day: Parent A",
+      })
+    );
+  });
+
+  it("builds a detailed court timeline from calendar, exchanges, notes, evidence, support, and expenses", () => {
+    const dataset = createRecordsSeed();
+    const events = buildCalendarEvents(dataset, demoUserId, demoCaseId, range);
+    const lateExchange = events.find((event) => event.id === "log-exchange-2026-05-08");
+    const schoolNote = events.find((event) => event.id === "note-note-school-2026-05-05");
+    const evidence = events.find((event) => event.id === "evidence-evidence-exchange-2026-05-08");
+    const supportDue = events.find((event) => event.id === "payment-due-support-payment-2026-05-01");
+    const expense = events.find((event) => event.id === "expense-expense-school-2026-05-03");
+
+    expect(lateExchange).toMatchObject({
+      date: "2026-05-08",
+      time: "18:32",
+      type: "logged_exchange",
+      severity: "attention",
+      sourceLabel: "Exchange log",
+    });
+    expect(lateExchange?.detail).toContain("32 minutes after ordered time");
+    expect(lateExchange?.body).toContain("Recorded arrival at 6:32 PM.");
+    expect(schoolNote).toMatchObject({
+      time: "16:30",
+      body: "Documented pickup time and after-school item transfer.",
+      sourceLabel: "Date note",
+    });
+    expect(evidence).toMatchObject({ type: "evidence_item", sourceLabel: "Evidence" });
+    expect(supportDue).toMatchObject({ type: "child_support_due", severity: "attention" });
+    expect(expense).toMatchObject({ type: "expense_item", severity: "attention" });
+  });
+});
+
+describe("privacy and safety helpers", () => {
+  it("filters records by authenticated user and selected case", () => {
+    const dataset = createRecordsSeed();
+    const owned = filterOwnedCaseRecords(dataset.exchangeLogs, demoUserId, demoCaseId);
+
+    expect(owned.every((record) => record.userId === demoUserId)).toBe(true);
+    expect(owned.every((record) => record.caseId === demoCaseId)).toBe(true);
+    expect(owned.find((record) => record.id === "exchange-other-user")).toBeUndefined();
+  });
+
+  it("throws when a user attempts to access another user's record", () => {
+    const dataset = createRecordsSeed();
+    const otherUserRecord = dataset.exchangeLogs.find((record) => record.id === "exchange-other-user");
+
+    expect(() => assertOwnedRecord(otherUserRecord!, demoUserId, demoCaseId)).toThrow(
+      "Record is not owned"
+    );
+  });
+
+  it("validates private evidence file allow-list and blocks executables", () => {
+    expect(
+      validateEvidenceFile({
+        originalFileName: "exchange-note.pdf",
+        fileType: "application/pdf",
+        fileSize: 20_000,
+      })
+    ).toEqual({ ok: true });
+
+    expect(
+      validateEvidenceFile({
+        originalFileName: "script.sh",
+        fileType: "text/plain",
+        fileSize: 100,
+      })
+    ).toMatchObject({ ok: false });
+  });
+
+  it("keeps generated report language neutral", () => {
+    const dataset = createRecordsSeed();
+    const preview = buildReportPreview(dataset, demoUserId, demoCaseId, range, "combined_attorney_summary");
+    const summaryText = preview.summaries.join(" ");
+    const exchangeSummary = buildNeutralExchangeSummary(range, 8, 5, 32, 1);
+
+    expect(containsForbiddenGeneratedTerm(summaryText)).toBe(false);
+    expect(containsForbiddenGeneratedTerm(exchangeSummary)).toBe(false);
+    expect(summaryText).toContain("Based on records entered in this app");
+  });
+
+  it("includes custody schedule rows in combined report exports", () => {
+    const dataset = createRecordsSeed();
+    const preview = buildReportPreview(dataset, demoUserId, demoCaseId, range, "combined_court_packet");
+    const csv = rowsToCsv(preview.rows);
+
+    expect(preview.rows).toContainEqual(
+      expect.objectContaining({
+        section: "custody_schedule",
+        caregiver_label: "Parent A",
+      })
+    );
+    expect(csv.split("\n")[0]).toContain("caregiver_label");
+    expect(csv.split("\n")[0]).toContain("ordered_exchange_time");
+  });
+
+  it("exports incident timeline rows from all dated record sources", () => {
+    const dataset = createRecordsSeed();
+    const preview = buildReportPreview(dataset, demoUserId, demoCaseId, range, "incident_timeline");
+    const csv = rowsToCsv(preview.rows);
+
+    expect(preview.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "logged exchange",
+          source: "Exchange log",
+          title: "Logged exchange: completed late",
+          attention_level: "attention",
+        }),
+        expect.objectContaining({
+          type: "custody day",
+          source: "Custody calendar",
+        }),
+        expect.objectContaining({
+          type: "evidence item",
+          source: "Evidence",
+        }),
+      ])
+    );
+    expect(csv.split("\n")[0]).toContain("attention_level");
+    expect(csv).toContain("Recorded arrival at 6:32 PM.");
+  });
+
+  it("includes evidence scan and storage status without raw storage paths", () => {
+    const dataset = createRecordsSeed();
+    const item = {
+      ...dataset.evidenceItems[0],
+      includeInReports: true,
+      evidenceDate: "2026-05-12",
+      malwareScanStatus: "clean" as const,
+      storagePath: "user_demo/case_demo/evidence_1/evidence_1.pdf",
+      storageBucket: "records-evidence",
+    };
+    const index = buildEvidenceIndex([item], range);
+
+    expect(index[0]).toMatchObject({
+      scanStatus: "clean",
+      storageStatus: "private stored file",
+    });
+    expect(JSON.stringify(index[0])).not.toContain("storagePath");
+    expect(JSON.stringify(index[0])).not.toContain("records-evidence");
+  });
+});

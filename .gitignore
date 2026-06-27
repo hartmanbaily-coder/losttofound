@@ -12,6 +12,9 @@
 
 # testing
 /coverage
+/test-results
+/playwright-report
+/tmp
 
 # next.js
 /.next/
@@ -32,6 +35,13 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+!.env.production.example
+
+# production evidence artifacts
+/ops/backup-restore-evidence.json
+/ops/*-restore-evidence.json
+!/ops/backup-restore-evidence.example.json
 
 # vercel
 .vercel

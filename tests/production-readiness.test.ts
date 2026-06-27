@@ -1,0 +1,207 @@
+import { describe, expect, it } from "vitest";
+import {
+  evaluateProductionReadiness,
+  summarizeReadinessPhases,
+  supabaseFinalCheckIds,
+} from "@/lib/production/readiness";
+
+const readyEnv = {
+  NEXT_PUBLIC_APP_URL: "https://losttofound.org",
+  NEXT_PUBLIC_RECORDS_HOST: "losttofound.org",
+  RECORDS_STORAGE_MODE: "supabase",
+  NEXT_PUBLIC_RECORDS_STORAGE_MODE: "supabase",
+  NEXT_PUBLIC_SUPABASE_URL: "https://project-ref.supabase.co",
+  EXPECTED_SUPABASE_PROJECT_REF: "project-ref",
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: "publishable-key",
+  SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
+  AUTH_SECRET: "12345678901234567890123456789012",
+  SUPABASE_MFA_POLICY: "required",
+  RECORDS_ENFORCE_MFA: "true",
+  SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED: "true",
+  SUPABASE_PASSWORD_MIN_LENGTH: "12",
+  SUPABASE_PASSWORD_REAUTH_ENABLED: "true",
+  SUPABASE_CURRENT_PASSWORD_REQUIRED: "true",
+  RECORDS_EVIDENCE_BUCKET: "records-evidence",
+  MALWARE_SCAN_PROVIDER: "clamav",
+  MALWARE_SCANNER_TESTED_AT: "2026-06-10",
+  SECURITY_CONTACT_EMAIL: "security@losttofound.org",
+  PRIVACY_POLICY_URL: "https://losttofound.org/privacy",
+  SECURITY_EVENT_SINK: "platform",
+  EVIDENCE_MAX_FILE_BYTES: "10485760",
+  EDGE_RATE_LIMITING_ENABLED: "true",
+  EDGE_RATE_LIMITING_PROVIDER: "cloudflare",
+  EDGE_WAF_ENABLED: "true",
+  EDGE_WAF_PROVIDER: "cloudflare",
+  SECURITY_MONITORING_ENABLED: "true",
+  AUDIT_LOG_REVIEW_ENABLED: "true",
+  BACKUP_RESTORE_TESTED_AT: "2026-06-01",
+  TWO_USER_ISOLATION_TESTED_AT: "2026-06-10",
+  DATA_RETENTION_POLICY_APPROVED: "true",
+  INCIDENT_RESPONSE_PLAN_APPROVED: "true",
+  LEGAL_REVIEW_APPROVED: "true",
+  VENDOR_SECURITY_REVIEW_APPROVED: "true",
+};
+
+describe("production readiness", () => {
+  it("blocks missing production records configuration", () => {
+    const report = evaluateProductionReadiness({}, "2026-06-15T00:00:00.000Z");
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("supabase-url");
+    expect(report.blockers.map((item) => item.id)).toContain("records-storage-mode");
+    expect(report.blockers.map((item) => item.id)).toContain("auth-secret");
+    expect(report.blockers.map((item) => item.id)).toContain("malware-provider");
+  });
+
+  it("passes when production blockers are configured", () => {
+    const report = evaluateProductionReadiness(
+      readyEnv,
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.ready).toBe(true);
+    expect(report.blockers).toHaveLength(0);
+  });
+
+  it("allows non-Supabase launch gates to pass while Supabase final work is deferred", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        RECORDS_STORAGE_MODE: "local",
+        NEXT_PUBLIC_RECORDS_STORAGE_MODE: "local",
+        NEXT_PUBLIC_SUPABASE_URL: "",
+        EXPECTED_SUPABASE_PROJECT_REF: "",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "",
+        SUPABASE_SERVICE_ROLE_KEY: "",
+        SUPABASE_MFA_POLICY: "",
+        RECORDS_ENFORCE_MFA: "",
+        SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED: "",
+        SUPABASE_PASSWORD_MIN_LENGTH: "",
+        SUPABASE_PASSWORD_REAUTH_ENABLED: "",
+        SUPABASE_CURRENT_PASSWORD_REQUIRED: "",
+        RECORDS_EVIDENCE_BUCKET: "",
+        BACKUP_RESTORE_TESTED_AT: "",
+        TWO_USER_ISOLATION_TESTED_AT: "",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+    const phases = summarizeReadinessPhases(report);
+
+    expect(report.ready).toBe(false);
+    expect(phases.preSupabaseReady).toBe(true);
+    expect(phases.supabaseFinalReady).toBe(false);
+    expect(phases.supabaseFinalBlockers.map((item) => item.id)).toEqual(
+      expect.arrayContaining(["supabase-url", "two-user-isolation-tested"])
+    );
+  });
+
+  it("documents the checks saved for the Supabase final step", () => {
+    expect(supabaseFinalCheckIds).toEqual(
+      expect.arrayContaining([
+        "supabase-url",
+        "supabase-production-project",
+        "records-mfa-enforced",
+        "records-evidence-bucket",
+        "two-user-isolation-tested",
+      ])
+    );
+  });
+
+  it("blocks HTTP malware scanners without an HTTPS endpoint", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        MALWARE_SCAN_PROVIDER: "http",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("malware-http-endpoint");
+  });
+
+  it("blocks the old staging Supabase project in production readiness", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        NEXT_PUBLIC_SUPABASE_URL: "https://adhnoiicwfvppzenwcgv.supabase.co",
+        EXPECTED_SUPABASE_PROJECT_REF: "cieuilbpnwuvnrxrlczj",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("supabase-production-project");
+  });
+
+  it("blocks Supabase project URLs that do not match the expected production ref", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        NEXT_PUBLIC_SUPABASE_URL: "https://other-project.supabase.co",
+        EXPECTED_SUPABASE_PROJECT_REF: "project-ref",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("supabase-production-project");
+  });
+
+  it("blocks the non-production mock malware scanner", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        MALWARE_SCAN_PROVIDER: "mock-clean",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("malware-provider");
+  });
+
+  it("blocks missing privacy and operational controls", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        SUPABASE_MFA_POLICY: "optional",
+        RECORDS_ENFORCE_MFA: "false",
+        SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED: "false",
+        MALWARE_SCANNER_TESTED_AT: "2026-01-01",
+        EDGE_RATE_LIMITING_ENABLED: "false",
+        EDGE_RATE_LIMITING_PROVIDER: "",
+        EDGE_WAF_PROVIDER: "",
+        SECURITY_MONITORING_ENABLED: "false",
+        SECURITY_EVENT_SINK: "",
+        BACKUP_RESTORE_TESTED_AT: "2025-01-01",
+        TWO_USER_ISOLATION_TESTED_AT: "2026-01-01",
+        DATA_RETENTION_POLICY_APPROVED: "false",
+        INCIDENT_RESPONSE_PLAN_APPROVED: "false",
+        LEGAL_REVIEW_APPROVED: "false",
+        PRIVACY_POLICY_URL: "http://losttofound.org/privacy",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toEqual(
+      expect.arrayContaining([
+        "supabase-mfa-policy",
+        "records-mfa-enforced",
+        "supabase-leaked-passwords",
+        "malware-scanner-tested",
+        "edge-rate-limits",
+        "edge-waf",
+        "security-monitoring",
+        "security-event-sink",
+        "backup-restore-tested",
+        "two-user-isolation-tested",
+        "data-retention-policy",
+        "incident-response-plan",
+        "legal-review",
+        "privacy-policy",
+      ])
+    );
+  });
+});

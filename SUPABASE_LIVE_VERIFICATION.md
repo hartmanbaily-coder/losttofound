@@ -1,0 +1,111 @@
+# Supabase Live Verification
+
+Verification date: 2026-06-17 America/Anchorage
+
+Latest advisor refresh: 2026-06-24 America/Anchorage
+
+Production project: `cieuilbpnwuvnrxrlczj`
+
+Production project URL: `https://cieuilbpnwuvnrxrlczj.supabase.co`
+
+Production project name: `losttofound-records-production`
+
+Production project region: `us-west-1`
+
+Staging/mixed-use project: `adhnoiicwfvppzenwcgv`
+
+Staging/mixed-use project URL: `https://adhnoiicwfvppzenwcgv.supabase.co`
+
+Status from Supabase connector: `ACTIVE_HEALTHY`
+
+Production database: Postgres 17, region `us-west-1`
+
+Recommended launch role: use `cieuilbpnwuvnrxrlczj` for records production. Keep `adhnoiicwfvppzenwcgv` as staging/mixed-use unless the old lost-pet public tables/bucket are isolated or removed.
+
+## Records Schema Checks
+
+Verified through Supabase SQL inspection on production project `cieuilbpnwuvnrxrlczj`:
+
+- All 13 `public.records_*` tables have RLS enabled.
+- No direct `anon` or `authenticated` table privileges remain on `public.records_*`.
+- The `records-evidence` Storage bucket exists.
+- `records-evidence` is private, not public.
+- `records-evidence` file size limit is `10485760` bytes.
+- `records-evidence` MIME allow-list is limited to PDF, PNG, JPEG, HEIC/HEIF, plain text, and CSV.
+- Four Storage policies reference `records-evidence`.
+- Applied production migration: `20260617182822_create_records_production_schema`.
+
+## Retired Non-Records Artifacts
+
+A temporary grant-operations prototype was removed from the application source on
+2026-06-24 America/Anchorage. Any `grant_*` tables, `grant-documents` Storage
+bucket, or grant migrations that still exist in Supabase are not part of the
+Lost to Found Records launch path and should be treated as retired artifacts
+until a separate database cleanup is explicitly approved.
+
+The local `.env.local` file still points at staging project `adhnoiicwfvppzenwcgv` for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. Do not switch only the public URL/key. The server-side `SUPABASE_SERVICE_ROLE_KEY` must also be replaced with the production project service-role key from the Supabase dashboard before running Supabase mode locally or in production.
+
+## Production API Key Guidance
+
+Supabase connector inspection confirmed the production project has an active modern publishable key named `default` and an active legacy anon JWT. Use the `default` `sb_publishable_...` key for `NEXT_PUBLIC_SUPABASE_ANON_KEY` in production host secrets. Do not use or commit the legacy anon JWT for new production deploys, and never expose `SUPABASE_SERVICE_ROLE_KEY` to browser code.
+
+## Supabase Advisor Findings
+
+Production project `cieuilbpnwuvnrxrlczj`:
+
+- Supabase security advisor currently returns no findings.
+- Supabase performance advisor currently returns only unused-index INFO notices, expected before real workload traffic. Do not remove these indexes until production query data exists.
+
+Staging/mixed-use project `adhnoiicwfvppzenwcgv`:
+
+Open project-level findings that still matter if this project is ever considered for production records:
+
+- Supabase Auth leaked-password protection is disabled. This blocks production readiness.
+- Existing non-records tables and buckets from the lost-pet product have public GraphQL/Data API/storage advisories: `finder_messages`, `pets`, `profiles`, `sightings`, `user_profiles`, and public bucket `pet-photos`. They may be intentional for the public lost-pet product, but they must be isolated, reviewed, or moved before this project is treated as a clean production records environment.
+- Recent API logs show traffic against the old `pets` REST endpoint, not records endpoints. That reinforces treating this project as staging for records unless the public lost-pet product is separated.
+
+## Auth Settings Still Requiring Dashboard Verification
+
+The available Supabase connector exposes project, SQL, advisor, log, and Edge Function tools. It does not expose direct Auth configuration mutation for MFA, password minimums, leaked-password protection, or password-change reauthentication.
+
+Before production records launch, verify in the Supabase dashboard and reflect the setting in deployment env:
+
+- `SUPABASE_MFA_POLICY=required`
+- `RECORDS_ENFORCE_MFA=true`
+- `SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED=true`
+- `SUPABASE_PASSWORD_MIN_LENGTH=12` or higher
+- `SUPABASE_PASSWORD_REAUTH_ENABLED=true`
+- `SUPABASE_CURRENT_PASSWORD_REQUIRED=true`
+
+The app now includes a Supabase TOTP MFA login/enrollment flow and production AAL2 enforcement. The Supabase dashboard settings above still need live confirmation before accepting real records.
+
+## Two-User Isolation Verification
+
+Run this against staging or production after the app is deployed with Supabase mode:
+
+```bash
+RECORDS_APP_BASE_URL=https://losttofound.org \
+NEXT_PUBLIC_SUPABASE_URL=https://cieuilbpnwuvnrxrlczj.supabase.co \
+SUPABASE_SERVICE_ROLE_KEY=... \
+RECORDS_EVIDENCE_BUCKET=records-evidence \
+npm run verify:isolation
+```
+
+The verifier creates two temporary confirmed Supabase Auth users, signs both into the records app, saves a synthetic dataset for User A, creates a synthetic private evidence object for User A, confirms User B cannot load/delete/download it, confirms User A can download/delete it, and cleans up the synthetic users, snapshot, and storage object.
+
+If it passes, record the emitted `TWO_USER_ISOLATION_TESTED_AT` value in the deployment environment.
+
+## Malware Scanner Verification
+
+Run this against the real production scanner after `MALWARE_SCAN_PROVIDER` is configured:
+
+```bash
+MALWARE_SCAN_PROVIDER=clamav \
+CLAMAV_HOST=... \
+CLAMAV_PORT=3310 \
+npm run verify:malware
+```
+
+For HTTP/webhook scanners, set `MALWARE_SCAN_ENDPOINT` and `MALWARE_SCAN_API_KEY`. If it passes, record the emitted `MALWARE_SCANNER_TESTED_AT` value in the deployment environment.
+
+Use synthetic data only. Do not use real custody, child, court, school, health, payment, or evidence material for verification.
