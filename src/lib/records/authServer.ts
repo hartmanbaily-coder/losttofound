@@ -181,10 +181,6 @@ export async function getRecordsAuthContext(request: NextRequest) {
 
     if (!error && refreshed?.access_token && user?.id) {
       if (!mfaSatisfied(refreshed.access_token)) return { error: mfaRequiredResponse() };
-      const supabase = await createServerSupabaseSessionClient({
-        accessToken: refreshed.access_token,
-        refreshToken: refreshed.refresh_token,
-      });
 
       return {
         supabase,

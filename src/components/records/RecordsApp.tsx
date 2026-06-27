@@ -22,6 +22,7 @@ import {
 import {
   clearFailedLoginAttempts,
   clearSession,
+  createRecordsTestingAccount,
   createId,
   downloadTextFile,
   nowIso,
@@ -553,34 +554,46 @@ function LoginScreen({
   const [mfaMode, setMfaMode] = useState<"verify" | "enroll" | null>(null);
   const [mfaEnrollment, setMfaEnrollment] = useState<RecordsMfaEnrollment | null>(null);
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
+  const [authIntent, setAuthIntent] = useState<"login" | "create">("login");
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") || "").trim();
     const password = String(formData.get("password") || "");
+    const inviteCode = String(formData.get("inviteCode") || "");
     const adultConfirmed = formData.get("adult") === "on";
     const failedState = readFailedLoginState();
     const isLocked = failedState.lockedUntil > Date.now();
+    const creatingTestingAccount = recordsStorageMode === "supabase" && authIntent === "create";
+    const minimumPasswordLength = creatingTestingAccount ? 12 : 8;
 
     if (isLocked) {
       setError("Too many failed attempts. Try again in a few minutes.");
       return;
     }
 
-    if (!adultConfirmed || !email.includes("@") || password.length < 8) {
+    if (!adultConfirmed || !email.includes("@") || password.length < minimumPasswordLength) {
       const next = recordFailedLoginAttempt();
       setError(
         next.lockedUntil > Date.now()
           ? "Too many failed attempts. This browser is temporarily limited."
-          : "Enter an email, a password with at least 8 characters, and confirm adult use."
+          : `Enter an email, a password with at least ${minimumPasswordLength} characters, and confirm adult use.`
       );
+      return;
+    }
+
+    if (creatingTestingAccount && inviteCode.trim().length < 6) {
+      setError("Enter the testing invite code.");
       return;
     }
 
     setSubmitting(true);
     setError("");
     try {
+      if (creatingTestingAccount) {
+        await createRecordsTestingAccount(email, password, adultConfirmed, inviteCode);
+      }
       const result = await onLogin(email, password, adultConfirmed);
       if (result.status === "mfa_required") {
         setMfaMode("verify");
@@ -655,12 +668,12 @@ function LoginScreen({
 
           <section className="border-t border-slate-200 bg-slate-50 p-6 sm:p-8 lg:border-l lg:border-t-0">
             <h2 className="text-lg font-semibold">
-              {recordsStorageMode === "supabase" ? "Log in" : "Register or log in"}
+              {recordsStorageMode === "supabase" ? "Testing access" : "Register or log in"}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Local mode uses demo authentication. Supabase mode signs in through server-managed
-              HttpOnly cookies. Do not enter real custody, child, court, health, school, or payment
-              details until every go-live gate is complete.
+              HttpOnly cookies. Personal testing can use your own records, but client onboarding
+              and document uploads stay blocked until the remaining safety gates are complete.
             </p>
 
             {mfaMode ? (
@@ -700,6 +713,27 @@ function LoginScreen({
               </form>
             ) : (
               <form onSubmit={onSubmit} className="mt-5 space-y-4">
+                {recordsStorageMode === "supabase" && (
+                  <div className="inline-flex w-full rounded-md border border-slate-200 bg-white p-1">
+                    {[
+                      { value: "login", label: "Sign in" },
+                      { value: "create", label: "Create testing account" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setAuthIntent(option.value as "login" | "create")}
+                        className={`flex-1 rounded px-3 py-2 text-sm font-semibold ${
+                          authIntent === option.value
+                            ? "bg-teal-700 text-white"
+                            : "text-slate-600 hover:bg-slate-100"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <Field label="Email">
                   <input
                     name="email"
@@ -715,12 +749,25 @@ function LoginScreen({
                     type="password"
                     defaultValue={recordsStorageMode === "local" ? "demo-password" : ""}
                     className="input"
-                    autoComplete="current-password"
+                    autoComplete={authIntent === "create" ? "new-password" : "current-password"}
                   />
                 </Field>
+                {recordsStorageMode === "supabase" && authIntent === "create" && (
+                  <Field label="Testing invite code">
+                    <input
+                      name="inviteCode"
+                      type="password"
+                      className="input"
+                      autoComplete="off"
+                    />
+                  </Field>
+                )}
                 <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
                   <input name="adult" type="checkbox" defaultChecked className="mt-1" />
-                  <span>I am an adult user and will use privacy-friendly labels.</span>
+                  <span>
+                    I am an adult user and will use privacy-friendly labels. I will not upload
+                    client documents until uploads are production-ready.
+                  </span>
                 </label>
                 {error && <p className="text-sm font-medium text-red-700">{error}</p>}
                 <button
@@ -728,7 +775,11 @@ function LoginScreen({
                   disabled={submitting}
                   className="h-10 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
                 >
-                  {submitting ? "Signing in..." : "Enter records workspace"}
+                  {submitting
+                    ? authIntent === "create"
+                      ? "Creating account..."
+                      : "Signing in..."
+                    : "Enter records workspace"}
                 </button>
               </form>
             )}

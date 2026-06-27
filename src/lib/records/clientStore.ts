@@ -266,6 +266,28 @@ export async function signInRecordsSession(
   return { status: "signed_in", session: body.session };
 }
 
+export async function createRecordsTestingAccount(
+  email: string,
+  password: string,
+  adultConfirmed: boolean,
+  inviteCode: string
+) {
+  const response = await fetch("/api/records/auth/register", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, adultConfirmed, inviteCode }),
+  });
+
+  const body = (await response.json().catch(() => ({}))) as {
+    error?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(body.error || `Testing account creation failed with ${response.status}.`);
+  }
+}
+
 async function verifyMfaAt(endpoint: string, body: Record<string, string>) {
   const response = await fetch(endpoint, {
     method: "POST",
