@@ -95,8 +95,10 @@ async function mfaResponse(input: {
     return NextResponse.json({ error: "Unable to verify MFA factors." }, { status: 403 });
   }
 
-  const hasVerifiedTotp = factors.data.totp.length > 0;
-  if (hasVerifiedTotp || assurance.data.nextLevel === "aal2") {
+  const totpFactors = factors.data.totp;
+  const hasVerifiedTotp = totpFactors.some((factor) => factor.status === "verified");
+  const hasUnknownStatusTotp = totpFactors.some((factor) => !("status" in factor));
+  if (hasVerifiedTotp || (hasUnknownStatusTotp && assurance.data.nextLevel === "aal2")) {
     const response = NextResponse.json(
       {
         error: "Multi-factor verification required.",
@@ -112,6 +114,21 @@ async function mfaResponse(input: {
       status: 403,
     });
     return response;
+  }
+
+  const unfinishedTotpFactors = totpFactors.filter((factor) => factor.status !== "verified");
+  for (const factor of unfinishedTotpFactors) {
+    const unenrollment = await input.authClient.auth.mfa.unenroll({ factorId: factor.id });
+    if (unenrollment.error) {
+      await recordSecurityEvent({
+        type: "auth_mfa_enrollment_failed",
+        severity: "high",
+        request: input.request,
+        status: 403,
+        detail: "Unable to reset unfinished MFA enrollment.",
+      });
+      return NextResponse.json({ error: "Unable to reset unfinished MFA enrollment." }, { status: 403 });
+    }
   }
 
   const enrollment = await input.authClient.auth.mfa.enroll({
