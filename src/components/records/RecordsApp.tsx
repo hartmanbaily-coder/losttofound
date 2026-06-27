@@ -3315,7 +3315,7 @@ function SettingsView({
       expenseItems: current.expenseItems.filter((item) => item.caseId !== caseId || item.userId !== userId),
     }));
     setSelectedCaseId(selected.matters.find((matter) => matter.id !== caseId)?.id || demoCaseId);
-    flash("Selected case deleted from the demo store.");
+    flash("Selected case deleted.");
   }
 
   function exportData() {
@@ -3472,7 +3472,7 @@ function SettingsView({
               Delete selected case
             </button>
             <button type="button" onClick={resetDemoData} className="btn-secondary">
-              Reset synthetic demo data
+              {recordsStorageMode === "supabase" ? "Clear workspace data" : "Reset synthetic demo data"}
             </button>
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-600">

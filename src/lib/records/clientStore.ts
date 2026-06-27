@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createRecordsSeed, createRecordsSeedForUser, demoCaseId, demoUserId } from "./seed";
+import {
+  createEmptyRecordsDatasetForUser,
+  createRecordsSeed,
+  demoCaseId,
+  demoUserId,
+} from "./seed";
 import type { AuditAction, RecordsDataset } from "./types";
 
 const storageKey = "l2f.records.dataset.v1";
@@ -102,7 +107,7 @@ async function readRemoteDataset(session: RecordsSession) {
   const body = (await response.json()) as { dataset: Partial<RecordsDataset> | null };
   if (body.dataset) return normalizeDataset(body.dataset);
 
-  const initial = createRecordsSeedForUser(session.userId, session.email);
+  const initial = createEmptyRecordsDatasetForUser(session.userId, session.email);
   void persistRemoteDataset(initial);
   return initial;
 }
@@ -177,7 +182,12 @@ export function useRecordsStore() {
   }
 
   function resetDemoData() {
-    const next = createRecordsSeed();
+    const currentProfile =
+      dataset.users.find((user) => user.userId !== demoUserId) || dataset.users[0];
+    const next =
+      recordsStorageMode === "supabase" && currentProfile
+        ? createEmptyRecordsDatasetForUser(currentProfile.userId, currentProfile.email)
+        : createRecordsSeed();
     setDataset(next);
     if (typeof window !== "undefined") {
       if (recordsStorageMode === "supabase") {

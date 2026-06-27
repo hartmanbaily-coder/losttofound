@@ -477,3 +477,33 @@ export function createRecordsSeedForUser(userId: string, email: string): Records
       .map((item) => ({ ...item, userId })),
   };
 }
+
+export function createEmptyRecordsDatasetForUser(userId: string, email: string): RecordsDataset {
+  const createdAt = new Date().toISOString();
+  const displayName = email.split("@")[0]?.replace(/[._-]+/g, " ") || "Records user";
+
+  return {
+    users: [
+      {
+        id: `profile-${userId}`,
+        userId,
+        displayName,
+        email,
+        timezone: "America/Anchorage",
+        createdAt,
+        updatedAt: createdAt,
+      },
+    ],
+    matters: [],
+    exchangeRules: [],
+    scheduleExceptions: [],
+    custodyDayAssignments: [],
+    exchangeLogs: [],
+    dateNotes: [],
+    evidenceItems: [],
+    childSupportOrders: [],
+    childSupportPayments: [],
+    expenseItems: [],
+    auditLogs: [],
+  };
+}
