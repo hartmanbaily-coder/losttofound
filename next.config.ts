@@ -4,6 +4,7 @@ const projectRoot = process.cwd();
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
+  output: "standalone",
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   outputFileTracingRoot: projectRoot,
   turbopack: {

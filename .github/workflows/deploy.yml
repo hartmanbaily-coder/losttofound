@@ -1,17 +1,20 @@
-name: Deploy LostToFound
+name: Validate LostToFound
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
-  group: losttofound-production-deploy
+  group: losttofound-validate-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  validate:
     runs-on: ubuntu-latest
 
     steps:
@@ -36,102 +39,3 @@ jobs:
           npm run security:audit
           npm run verify:env-template
           npm run build
-
-      - name: Verify production records readiness
-        env:
-          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
-          NEXT_PUBLIC_RECORDS_HOST: ${{ secrets.NEXT_PUBLIC_RECORDS_HOST }}
-          NEXT_PUBLIC_RECORDS_STORAGE_MODE: ${{ secrets.NEXT_PUBLIC_RECORDS_STORAGE_MODE }}
-          RECORDS_STORAGE_MODE: ${{ secrets.RECORDS_STORAGE_MODE }}
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          EXPECTED_SUPABASE_PROJECT_REF: ${{ secrets.EXPECTED_SUPABASE_PROJECT_REF }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
-          SUPABASE_MFA_POLICY: ${{ secrets.SUPABASE_MFA_POLICY }}
-          RECORDS_ENFORCE_MFA: ${{ secrets.RECORDS_ENFORCE_MFA }}
-          SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED: ${{ secrets.SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED }}
-          SUPABASE_PASSWORD_MIN_LENGTH: ${{ secrets.SUPABASE_PASSWORD_MIN_LENGTH }}
-          SUPABASE_PASSWORD_REAUTH_ENABLED: ${{ secrets.SUPABASE_PASSWORD_REAUTH_ENABLED }}
-          SUPABASE_CURRENT_PASSWORD_REQUIRED: ${{ secrets.SUPABASE_CURRENT_PASSWORD_REQUIRED }}
-          RECORDS_EVIDENCE_BUCKET: ${{ secrets.RECORDS_EVIDENCE_BUCKET }}
-          MALWARE_SCAN_PROVIDER: ${{ secrets.MALWARE_SCAN_PROVIDER }}
-          MALWARE_SCAN_ENDPOINT: ${{ secrets.MALWARE_SCAN_ENDPOINT }}
-          MALWARE_SCANNER_TESTED_AT: ${{ secrets.MALWARE_SCANNER_TESTED_AT }}
-          EVIDENCE_MAX_FILE_BYTES: ${{ secrets.EVIDENCE_MAX_FILE_BYTES }}
-          EDGE_RATE_LIMITING_ENABLED: ${{ secrets.EDGE_RATE_LIMITING_ENABLED }}
-          EDGE_RATE_LIMITING_PROVIDER: ${{ secrets.EDGE_RATE_LIMITING_PROVIDER }}
-          EDGE_WAF_ENABLED: ${{ secrets.EDGE_WAF_ENABLED }}
-          EDGE_WAF_PROVIDER: ${{ secrets.EDGE_WAF_PROVIDER }}
-          SECURITY_MONITORING_ENABLED: ${{ secrets.SECURITY_MONITORING_ENABLED }}
-          SECURITY_EVENT_SINK: ${{ secrets.SECURITY_EVENT_SINK }}
-          SECURITY_EVENT_WEBHOOK_URL: ${{ secrets.SECURITY_EVENT_WEBHOOK_URL }}
-          AUDIT_LOG_REVIEW_ENABLED: ${{ secrets.AUDIT_LOG_REVIEW_ENABLED }}
-          BACKUP_RESTORE_TESTED_AT: ${{ secrets.BACKUP_RESTORE_TESTED_AT }}
-          TWO_USER_ISOLATION_TESTED_AT: ${{ secrets.TWO_USER_ISOLATION_TESTED_AT }}
-          DATA_RETENTION_POLICY_APPROVED: ${{ secrets.DATA_RETENTION_POLICY_APPROVED }}
-          INCIDENT_RESPONSE_PLAN_APPROVED: ${{ secrets.INCIDENT_RESPONSE_PLAN_APPROVED }}
-          LEGAL_REVIEW_APPROVED: ${{ secrets.LEGAL_REVIEW_APPROVED }}
-          PRIVACY_POLICY_URL: ${{ secrets.PRIVACY_POLICY_URL }}
-          VENDOR_SECURITY_REVIEW_APPROVED: ${{ secrets.VENDOR_SECURITY_REVIEW_APPROVED }}
-          SECURITY_CONTACT_EMAIL: ${{ secrets.SECURITY_CONTACT_EMAIL }}
-        run: |
-          npm run check:pre-supabase
-          npm run check:production
-
-      - name: Configure SSH
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-        run: |
-          HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '\r\n' | xargs)"
-          PORT="$(printf '%s' "${DEPLOY_PORT:-22}" | tr -d '\r\n' | xargs)"
-          test -n "$HOST"
-          test -n "$DEPLOY_SSH_KEY"
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p "${PORT:-22}" "$HOST" >> ~/.ssh/known_hosts
-
-      - name: Update /opt/losttofound checkout
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          LOSTTOFOUND_PATH: ${{ secrets.LOSTTOFOUND_PATH }}
-        run: |
-          HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '\r\n' | xargs)"
-          PORT="$(printf '%s' "${DEPLOY_PORT:-22}" | tr -d '\r\n' | xargs)"
-          USER="$(printf '%s' "$DEPLOY_USER" | tr -d '\r\n' | xargs)"
-          REMOTE_REPO_PATH="$(printf '%s' "${LOSTTOFOUND_PATH:-/opt/losttofound}" | tr -d '\r\n')"
-          test -n "$USER"
-          test -n "$REMOTE_REPO_PATH"
-          ssh -p "${PORT:-22}" "${USER}@${HOST}" "\
-            if [ ! -d '${REMOTE_REPO_PATH}/.git' ]; then \
-              git clone 'https://github.com/hartmanbaily-coder/losttofound.git' '${REMOTE_REPO_PATH}'; \
-            fi && \
-            cd '${REMOTE_REPO_PATH}' && \
-            git fetch origin main && \
-            git checkout main && \
-            git pull --ff-only origin main"
-
-      - name: Rebuild LostToFound service
-        env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          COMPOSE_PROJECT_NAME: ${{ secrets.COMPOSE_PROJECT_NAME }}
-          STACK_PATH: ${{ secrets.STACK_PATH }}
-        run: |
-          HOST="$(printf '%s' "$DEPLOY_HOST" | tr -d '\r\n' | xargs)"
-          PORT="$(printf '%s' "${DEPLOY_PORT:-22}" | tr -d '\r\n' | xargs)"
-          USER="$(printf '%s' "$DEPLOY_USER" | tr -d '\r\n' | xargs)"
-          REMOTE_STACK_PATH="$(printf '%s' "${STACK_PATH:-/opt/listhaus}" | tr -d '\r\n')"
-          test -n "$USER"
-          test -n "$REMOTE_STACK_PATH"
-          ssh -p "${PORT:-22}" "${USER}@${HOST}" "\
-            cd '${REMOTE_STACK_PATH}' && \
-            COMPOSE_PROJECT_NAME='${COMPOSE_PROJECT_NAME:-listhaus}' docker compose up -d --build losttofound caddy && \
-            docker compose ps"
