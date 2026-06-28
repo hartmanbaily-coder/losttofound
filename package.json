@@ -23,7 +23,8 @@
     "verify:malware": "node scripts/verify-malware-scanner.mjs",
     "verify:isolation": "node scripts/verify-two-user-isolation.mjs",
     "verify:security-events": "node scripts/verify-security-event-sink.mjs",
-    "verify:backup-restore": "node scripts/verify-backup-restore-evidence.mjs"
+    "verify:backup-restore": "node scripts/verify-backup-restore-evidence.mjs",
+    "cleanup:retired-grant-bucket": "node scripts/delete-retired-grant-bucket.mjs"
   },
   "dependencies": {
     "@playwright/test": "^1.60.0",

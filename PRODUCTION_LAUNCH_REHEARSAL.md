@@ -1,12 +1,12 @@
 # Production Launch Rehearsal
 
-Rehearsal date: 2026-06-27 America/Anchorage
+Rehearsal date: 2026-06-28 America/Anchorage
 
 ## Decision
 
 Status: `NO-GO for real user records`
 
-Reason: the records application and records-specific Supabase schema are in good MVP shape, and the production Supabase project is active. Live Auth hardening, provider controls, isolation verification, malware verification, backup restore evidence, and legal review are still incomplete.
+Reason: the records application and records-specific Supabase schema are in good MVP shape, and the production Supabase project is active. Live two-user isolation has passed with synthetic data, but Supabase Auth hardening, provider controls, malware verification, backup restore evidence, legal review, and production environment propagation are still incomplete.
 
 ## Supabase Project Split
 
@@ -41,6 +41,7 @@ Evidence from 2026-06-17 production project setup:
 - Supabase performance advisor reports records unused-index INFO notices, expected before real workload traffic.
 - Retired `grant_*` tables, grant helper functions, and grant Storage policies were removed by migration `20260628050702_remove_retired_grant_database_artifacts`.
 - The empty private `grant-documents` bucket remains because Supabase blocks direct SQL deletion from Storage metadata tables; remove it through the Storage API or dashboard.
+- Live two-user isolation passed on 2026-06-28 with synthetic users and evidence; set `TWO_USER_ISOLATION_TESTED_AT=2026-06-28` in the production host environment after deployment wiring is updated.
 
 ## Staging Supabase Posture
 
@@ -94,6 +95,8 @@ Completed in repo/app:
 - Clean records-only production Supabase project created.
 - Production records schema applied and verified.
 - Current `losttofound` source deployed to `https://losttofound.org`; live security headers pass and legacy grant routes return 404.
+- Live two-user isolation verified through the `Verify Live Isolation` workflow and synthetic artifacts cleaned up.
+- Guarded `Cleanup Retired Artifacts` workflow added for deleting the empty retired `grant-documents` Storage bucket through the Storage API.
 
 Still blocked before real user data:
 
@@ -105,7 +108,7 @@ Still blocked before real user data:
   - Invite-only or self-registration policy decided.
 - Configure provider-level WAF, bot controls, and rate limits for auth, dataset, evidence, exports, and writes.
 - Configure security monitoring sink and alert routing.
-- Run and document `npm run verify:isolation` against deployed Supabase mode using synthetic users only.
+- Set `TWO_USER_ISOLATION_TESTED_AT=2026-06-28` in the production host environment so live readiness reflects the passed isolation workflow.
 - Configure real malware scanner and run `npm run verify:malware`.
 - Run and document a backup restore drill.
 - Complete vendor/security review.
@@ -119,12 +122,13 @@ Configure production Supabase Auth hardening in project `cieuilbpnwuvnrxrlczj`, 
 Use this sequence:
 
 1. Enable leaked-password protection in the Supabase dashboard.
-2. Run `npm run verify:isolation` against the deployed app using synthetic users only, or dispatch the `Verify Live Isolation` workflow.
-3. Configure the real malware scanner and run `npm run verify:malware`.
-4. Configure WAF/rate limits and security monitoring.
-5. Run a backup restore drill and record the evidence date.
-6. Run `npm run check:live`.
-7. Complete legal and vendor review before real user data.
+2. Dispatch `Cleanup Retired Artifacts` to remove the empty private `grant-documents` bucket, then verify only `records-evidence` remains for records storage.
+3. Propagate `TWO_USER_ISOLATION_TESTED_AT=2026-06-28` into the production host environment.
+4. Configure the real malware scanner and run `npm run verify:malware`.
+5. Configure WAF/rate limits and security monitoring.
+6. Run a backup restore drill and record the evidence date.
+7. Run `npm run check:live`.
+8. Complete legal and vendor review before real user data.
 
 ## Cutover Rule
 

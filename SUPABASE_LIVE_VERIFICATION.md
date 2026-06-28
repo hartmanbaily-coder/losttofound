@@ -1,8 +1,8 @@
 # Supabase Live Verification
 
-Verification date: 2026-06-17 America/Anchorage
+Verification date: 2026-06-28 America/Anchorage
 
-Latest advisor refresh: 2026-06-27 America/Anchorage
+Latest advisor refresh: 2026-06-28 America/Anchorage
 
 Production project: `cieuilbpnwuvnrxrlczj`
 
@@ -83,6 +83,20 @@ The app now includes a Supabase TOTP MFA login/enrollment flow and production AA
 
 ## Two-User Isolation Verification
 
+Live status: passed against `https://losttofound.org` on 2026-06-28
+America/Anchorage through the GitHub Actions `Verify Live Isolation` workflow.
+The workflow created two synthetic confirmed Supabase Auth users, enrolled MFA,
+verified User B could not load, download, or delete User A evidence, verified
+User A could download and delete the same evidence, and cleaned up the synthetic
+users, snapshot, and storage object. The emitted value was:
+
+```text
+TWO_USER_ISOLATION_TESTED_AT=2026-06-28
+```
+
+The production host environment still needs that value set before the deployed
+readiness API can mark the isolation gate complete.
+
 Run this against staging or production after the app is deployed with Supabase mode:
 
 ```bash
@@ -94,8 +108,6 @@ npm run verify:isolation
 ```
 
 The verifier creates two temporary confirmed Supabase Auth users, signs both into the records app, saves a synthetic dataset for User A, creates a synthetic private evidence object for User A, confirms User B cannot load/delete/download it, confirms User A can download/delete it, and cleans up the synthetic users, snapshot, and storage object.
-
-If it passes, record the emitted `TWO_USER_ISOLATION_TESTED_AT` value in the deployment environment.
 
 A manual GitHub Actions workflow, `Verify Live Isolation`, can run the same check
 against `https://losttofound.org` using the repository `SUPABASE_SERVICE_ROLE_KEY`

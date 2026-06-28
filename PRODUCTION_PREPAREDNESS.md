@@ -29,6 +29,7 @@ Lost to Found Records can run against either the local demo store or the Supabas
 - `scripts/verify-security-event-sink.mjs` emits or delivers a synthetic sanitized security event for monitoring-sink verification.
 - `scripts/verify-backup-restore-evidence.mjs` validates restore-drill evidence before `BACKUP_RESTORE_TESTED_AT` is trusted.
 - `scripts/check-live-readiness.mjs` verifies the deployed `/api/records/readiness` endpoint before traffic cutover.
+- `scripts/delete-retired-grant-bucket.mjs` deletes only the retired private empty `grant-documents` bucket from the production project through the Storage API.
 - `scripts/check-secrets.mjs` scans tracked source files for common committed secret patterns before deploy.
 - `npm run security:audit` runs a high-severity production dependency audit before deploy.
 - `package.json` pins the PostCSS floor at `^8.5.15` and uses an npm override so nested consumers, including Next, resolve to the patched PostCSS line.
@@ -37,6 +38,8 @@ Lost to Found Records can run against either the local demo store or the Supabas
 - `LEGAL_REVIEW_PACKET.md` packages the documents and decisions needed for legal review.
 - `/launch-readiness` renders a production launch cockpit from the same readiness engine as `/api/records/readiness`.
 - `/launch-wizard` separates pre-Supabase work from the final Supabase live-data step.
+- `.github/workflows/live-isolation.yml` verifies two-user isolation against `https://losttofound.org` with synthetic users.
+- `.github/workflows/retired-artifact-cleanup.yml` runs the guarded retired Storage bucket cleanup using the repository service-role secret.
 - `SUPABASE_LIVE_VERIFICATION.md` records the current live Supabase project verification state and open advisor findings.
 - `PRODUCTION_LAUNCH_REHEARSAL.md` records the latest go/no-go rehearsal, current Supabase evidence, and remaining live launch gates.
 - `/privacy` and `/terms` now contain records-specific public drafts that must be reviewed before launch.
@@ -71,6 +74,7 @@ Verified:
 - Supabase performance advisor reports expected records unused-index INFO notices until real query traffic exists.
 - The old staging/mixed-use project still has lost-pet public table/bucket findings and disabled leaked-password protection. Keep it out of production records traffic.
 - Retired `grant_*` tables, grant helper functions, and grant Storage policies have been removed from production. The empty private `grant-documents` bucket remains until removed through the Supabase Storage API or dashboard.
+- Live two-user isolation passed on 2026-06-28 with synthetic users and evidence. Set `TWO_USER_ISOLATION_TESTED_AT=2026-06-28` in production host env so the readiness API reflects the result.
 
 ## Required Before Real User Data
 
@@ -85,7 +89,7 @@ Verified:
 9. Decide whether production is invite-only or self-registration, then configure Supabase Auth accordingly.
 10. Configure MFA policy, leaked-password protection, reset-token settings, password-change reauthentication, and session/device revocation in Supabase Auth.
 11. Set `RECORDS_ENFORCE_MFA=true` after the Supabase TOTP flow is verified in staging.
-12. Manually verify RLS/storage behavior with at least two authenticated test users, including cross-user evidence download/delete denial.
+12. Keep two-user RLS/storage verification current by dispatching `Verify Live Isolation`; the latest passing value is `TWO_USER_ISOLATION_TESTED_AT=2026-06-28`.
 13. Run a restore drill, save `ops/backup-restore-evidence.json`, and run `npm run verify:backup-restore`.
 14. Seed staging with synthetic data only and run end-to-end tests against staging.
 15. Keep `losttofound.org` on the current records build only after `npm run verify:headers` passes; accept real records only after readiness API returns `ready` and `npm run check:live` passes.
@@ -115,4 +119,4 @@ npm run verify:backup-restore
 
 ## Known Remaining Gap
 
-The user-facing records app now has Supabase Auth cookie routes, TOTP MFA enrollment/verification endpoints, production AAL2 enforcement, a Supabase snapshot persistence adapter, server-mediated private evidence upload/download/delete routes, app-level rate-limit fallback, sanitized security event logging, CI secret/dependency scanning, production template/header verifiers, a court-oriented Records Timeline, a launch wizard, and the records schema applied in Supabase. Production launch still requires the remaining non-Supabase owner/provider approvals plus live Supabase Auth dashboard hardening, backup restore verification, two-user RLS/storage verification, production secrets, deployment of the current source to `losttofound.org`, and final deployed readiness before any real custody, child, payment, court, or evidence content is entered.
+The user-facing records app now has Supabase Auth cookie routes, TOTP MFA enrollment/verification endpoints, production AAL2 enforcement, a Supabase snapshot persistence adapter, server-mediated private evidence upload/download/delete routes, app-level rate-limit fallback, sanitized security event logging, CI secret/dependency scanning, production template/header verifiers, a court-oriented Records Timeline, a launch wizard, live two-user isolation verification, and the records schema applied in Supabase. Production launch still requires the remaining non-Supabase owner/provider approvals plus live Supabase Auth dashboard hardening, malware scanning, backup restore verification, production env propagation, and final deployed readiness before any real custody, child, payment, court, or evidence content is entered.
