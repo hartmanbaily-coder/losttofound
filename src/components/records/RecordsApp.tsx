@@ -1,7 +1,6 @@
 "use client";
 
 import type { FormEvent, PointerEvent, ReactNode } from "react";
-import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildCalendarEvents,
@@ -556,6 +555,11 @@ function LoginScreen({
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
   const [authIntent, setAuthIntent] = useState<"login" | "create">("login");
 
+  function qrCodeSrc(qrCode: string) {
+    if (qrCode.startsWith("data:image/")) return qrCode;
+    return `data:image/svg+xml;utf-8,${encodeURIComponent(qrCode)}`;
+  }
+
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -680,12 +684,13 @@ function LoginScreen({
               <form onSubmit={onMfaSubmit} className="mt-5 space-y-4">
                 {mfaMode === "enroll" && mfaEnrollment && (
                   <div className="rounded-md border border-slate-200 bg-white p-4">
-                    <Image
+                    {/* Supabase returns this as a data URL; a plain img avoids Next image SVG/data URL rewriting. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
                       alt="Authenticator QR code"
                       className="mx-auto size-44"
                       height={176}
-                      src={`data:image/svg+xml;utf-8,${encodeURIComponent(mfaEnrollment.qrCode)}`}
-                      unoptimized
+                      src={qrCodeSrc(mfaEnrollment.qrCode)}
                       width={176}
                     />
                     <Field label="Setup key">
