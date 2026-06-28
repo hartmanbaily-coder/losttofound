@@ -6,7 +6,7 @@ Rehearsal date: 2026-06-28 America/Anchorage
 
 Status: `NO-GO for real user records`
 
-Reason: the records application and records-specific Supabase schema are in good MVP shape, and the production Supabase project is active. Live two-user isolation has passed with synthetic data and is reflected in production readiness, but Supabase Auth hardening, provider controls, malware verification, backup restore evidence, and legal review are still incomplete.
+Reason: the records application and records-specific Supabase schema are in good MVP shape, and the production Supabase project is active. Live two-user isolation and malware scanning have passed with synthetic/test payloads and are reflected in production readiness, but Supabase Auth hardening, edge/provider controls, monitoring, backup restore evidence, and legal review are still incomplete.
 
 ## Supabase Project Split
 
@@ -42,6 +42,7 @@ Evidence from 2026-06-17 production project setup:
 - Retired `grant_*` tables, grant helper functions, and grant Storage policies were removed by migration `20260628050702_remove_retired_grant_database_artifacts`.
 - The retired empty private `grant-documents` bucket was removed through the guarded Storage API cleanup workflow.
 - Live two-user isolation passed on 2026-06-28 with synthetic users and evidence, and production readiness now reflects `TWO_USER_ISOLATION_TESTED_AT=2026-06-28`.
+- Internal ClamAV malware scanning is deployed for LostToFound evidence uploads, blocked the EICAR test payload on 2026-06-28, and production readiness now reflects `MALWARE_SCANNER_TESTED_AT=2026-06-28`.
 
 ## Staging Supabase Posture
 
@@ -96,6 +97,7 @@ Completed in repo/app:
 - Production records schema applied and verified.
 - Current `losttofound` source deployed to `https://losttofound.org`; live security headers pass and legacy grant routes return 404.
 - Live two-user isolation verified through the `Verify Live Isolation` workflow and synthetic artifacts cleaned up.
+- Live malware scanning verified through the deployment workflow using a clean payload and the EICAR test payload.
 - Guarded `Cleanup Retired Artifacts` workflow deleted the empty retired `grant-documents` Storage bucket through the Storage API.
 
 Still blocked before real user data:
@@ -108,7 +110,6 @@ Still blocked before real user data:
   - Invite-only or self-registration policy decided.
 - Configure provider-level WAF, bot controls, and rate limits for auth, dataset, evidence, exports, and writes.
 - Configure security monitoring sink and alert routing.
-- Configure real malware scanner and run `npm run verify:malware`.
 - Run and document a backup restore drill.
 - Complete vendor/security review.
 - Complete legal review of privacy, terms, retention/deletion, incident response, and court-report wording.
@@ -122,11 +123,10 @@ Use this sequence:
 
 1. Enable leaked-password protection in the Supabase dashboard.
 2. Re-run Supabase advisors and set `SUPABASE_AUTH_HARDENING_VERIFIED_AT` only after Auth findings are clear.
-3. Configure the real malware scanner and run `npm run verify:malware`.
-4. Configure WAF/rate limits and security monitoring.
-5. Run a backup restore drill and record the evidence date.
-6. Run `npm run check:live`.
-7. Complete legal and vendor review before real user data.
+3. Configure WAF/rate limits and security monitoring.
+4. Run a backup restore drill and record the evidence date.
+5. Run `npm run check:live`.
+6. Complete legal and vendor review before real user data.
 
 ## Cutover Rule
 

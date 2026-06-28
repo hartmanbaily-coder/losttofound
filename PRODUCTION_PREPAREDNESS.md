@@ -42,6 +42,7 @@ Lost to Found Records can run against either the local demo store or the Supabas
 - `.github/workflows/retired-artifact-cleanup.yml` runs the guarded retired Storage bucket cleanup using the repository service-role secret.
 - `SUPABASE_LIVE_VERIFICATION.md` records the current live Supabase project verification state and open advisor findings.
 - `PRODUCTION_LAUNCH_REHEARSAL.md` records the latest go/no-go rehearsal, current Supabase evidence, and remaining live launch gates.
+- The production deployment now runs internal ClamAV scanning for evidence uploads and verified clean/EICAR behavior on 2026-06-28.
 - `/privacy` and `/terms` now contain records-specific public drafts that must be reviewed before launch.
 - `src/lib/records/clientStore.ts` can run in `local` mode or `supabase` mode using `NEXT_PUBLIC_RECORDS_STORAGE_MODE`.
 - The Records Timeline view now merges custody calendar days, scheduled exchanges, logged exchanges, notes, evidence, support, and expenses into expandable court-packet-oriented rows with CSV export.
@@ -76,13 +77,14 @@ Verified:
 - The old staging/mixed-use project still has lost-pet public table/bucket findings and disabled leaked-password protection. Keep it out of production records traffic.
 - Retired `grant_*` tables, grant helper functions, grant Storage policies, and the empty private `grant-documents` bucket have been removed from production.
 - Live two-user isolation passed on 2026-06-28 with synthetic users and evidence, and production readiness now reflects `TWO_USER_ISOLATION_TESTED_AT=2026-06-28`.
+- Live malware scanning passed on 2026-06-28 with clean and EICAR payloads, and production readiness now reflects `MALWARE_SCANNER_TESTED_AT=2026-06-28`.
 
 ## Required Before Real User Data
 
 1. Run `npm run verify:env-template`, `npm run security:secrets`, `npm run lint`, `npm run typecheck`, `npm run test:unit`, and `npm run build`.
 2. Configure edge/WAF rate limits and bot protections for auth, dataset, evidence, exports, and write-heavy routes, then set provider names.
 3. Configure monitoring/alerting for failed logins, MFA failures, evidence access, storage errors, server errors, and readiness failures, then run `npm run verify:security-events`.
-4. Configure and verify the real malware scanning service with `npm run verify:malware`.
+4. Keep malware-scanner verification current; `MALWARE_SCANNER_TESTED_AT` must stay within 30 days before accepting real evidence.
 5. Approve retention/deletion, backup aging, incident response, monitoring/alerting, legal review, and vendor review runbooks.
 6. Run `npm run check:pre-supabase` to confirm all non-Supabase launch gates are clear.
 7. Keep production secrets in the host using project `cieuilbpnwuvnrxrlczj`, and deploy through the existing server path for `losttofound.org`.
@@ -120,4 +122,4 @@ npm run verify:backup-restore
 
 ## Known Remaining Gap
 
-The user-facing records app now has Supabase Auth cookie routes, TOTP MFA enrollment/verification endpoints, production AAL2 enforcement, a Supabase snapshot persistence adapter, server-mediated private evidence upload/download/delete routes, app-level rate-limit fallback, sanitized security event logging, CI secret/dependency scanning, production template/header verifiers, a court-oriented Records Timeline, a launch wizard, live two-user isolation verification reflected in production readiness, and the records schema applied in Supabase. Production launch still requires the remaining non-Supabase owner/provider approvals plus live Supabase Auth dashboard hardening, malware scanning, backup restore verification, and final deployed readiness before any real custody, child, payment, court, or evidence content is entered.
+The user-facing records app now has Supabase Auth cookie routes, TOTP MFA enrollment/verification endpoints, production AAL2 enforcement, a Supabase snapshot persistence adapter, server-mediated private evidence upload/download/delete routes, app-level rate-limit fallback, sanitized security event logging, CI secret/dependency scanning, production template/header verifiers, a court-oriented Records Timeline, a launch wizard, live two-user isolation and malware-scanner verification reflected in production readiness, and the records schema applied in Supabase. Production launch still requires the remaining non-Supabase owner/provider approvals plus live Supabase Auth dashboard hardening, edge WAF/rate limits, monitoring, backup restore verification, and final deployed readiness before any real custody, child, payment, court, or evidence content is entered.

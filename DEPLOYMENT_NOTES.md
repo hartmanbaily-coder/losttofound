@@ -105,7 +105,7 @@ Run `npm run verify:env-template` before deploy to confirm the committed product
 
 Run `npm run verify:headers` against the local or deployed app to confirm CSP, HSTS, frame blocking, referrer policy, content-type sniffing protection, and browser permissions policy are present. Non-local production URLs must use HTTPS.
 
-Run `npm run verify:malware` against the real production scanner before setting `MALWARE_SCANNER_TESTED_AT`. Run `npm run check:live` against the deployed HTTPS app before pointing production traffic at it.
+Run `npm run verify:malware` against the real production scanner before setting `MALWARE_SCANNER_TESTED_AT`. The live deployment verified the internal ClamAV scanner on 2026-06-28 with clean and EICAR payloads. Run `npm run check:live` against the deployed HTTPS app before pointing production traffic at it.
 
 Run `npm run verify:security-events` after configuring `SECURITY_EVENT_SINK`. For webhook sinks, the script sends a synthetic sanitized event and requires a successful HTTPS response. For platform/SIEM sinks, confirm the emitted event appears in the monitoring tool before marking monitoring complete.
 

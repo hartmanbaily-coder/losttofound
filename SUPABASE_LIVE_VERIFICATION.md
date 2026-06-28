@@ -127,4 +127,6 @@ npm run verify:malware
 
 For HTTP/webhook scanners, set `MALWARE_SCAN_ENDPOINT` and `MALWARE_SCAN_API_KEY`. If it passes, record the emitted `MALWARE_SCANNER_TESTED_AT` value in the deployment environment.
 
+Live deployment status: the internal ClamAV scanner for `https://losttofound.org` passed clean/EICAR verification on 2026-06-28, and production readiness now reflects `MALWARE_SCANNER_TESTED_AT=2026-06-28`.
+
 Use synthetic data only. Do not use real custody, child, court, school, health, payment, or evidence material for verification.
