@@ -40,7 +40,7 @@ Evidence from 2026-06-17 production project setup:
 - Supabase security advisor reports `auth_leaked_password_protection` as disabled.
 - Supabase performance advisor reports records unused-index INFO notices, expected before real workload traffic.
 - Retired `grant_*` tables, grant helper functions, and grant Storage policies were removed by migration `20260628050702_remove_retired_grant_database_artifacts`.
-- The empty private `grant-documents` bucket remains because Supabase blocks direct SQL deletion from Storage metadata tables; remove it through the Storage API or dashboard.
+- The retired empty private `grant-documents` bucket was removed through the guarded Storage API cleanup workflow.
 - Live two-user isolation passed on 2026-06-28 with synthetic users and evidence; set `TWO_USER_ISOLATION_TESTED_AT=2026-06-28` in the production host environment after deployment wiring is updated.
 
 ## Staging Supabase Posture
@@ -96,7 +96,7 @@ Completed in repo/app:
 - Production records schema applied and verified.
 - Current `losttofound` source deployed to `https://losttofound.org`; live security headers pass and legacy grant routes return 404.
 - Live two-user isolation verified through the `Verify Live Isolation` workflow and synthetic artifacts cleaned up.
-- Guarded `Cleanup Retired Artifacts` workflow added for deleting the empty retired `grant-documents` Storage bucket through the Storage API.
+- Guarded `Cleanup Retired Artifacts` workflow deleted the empty retired `grant-documents` Storage bucket through the Storage API.
 
 Still blocked before real user data:
 
@@ -122,13 +122,12 @@ Configure production Supabase Auth hardening in project `cieuilbpnwuvnrxrlczj`, 
 Use this sequence:
 
 1. Enable leaked-password protection in the Supabase dashboard.
-2. Dispatch `Cleanup Retired Artifacts` to remove the empty private `grant-documents` bucket, then verify only `records-evidence` remains for records storage.
-3. Propagate `TWO_USER_ISOLATION_TESTED_AT=2026-06-28` into the production host environment.
-4. Configure the real malware scanner and run `npm run verify:malware`.
-5. Configure WAF/rate limits and security monitoring.
-6. Run a backup restore drill and record the evidence date.
-7. Run `npm run check:live`.
-8. Complete legal and vendor review before real user data.
+2. Propagate `TWO_USER_ISOLATION_TESTED_AT=2026-06-28` into the production host environment.
+3. Configure the real malware scanner and run `npm run verify:malware`.
+4. Configure WAF/rate limits and security monitoring.
+5. Run a backup restore drill and record the evidence date.
+6. Run `npm run check:live`.
+7. Complete legal and vendor review before real user data.
 
 ## Cutover Rule
 

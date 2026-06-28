@@ -73,7 +73,7 @@ Verified:
 - Supabase security advisor still reports `auth_leaked_password_protection` as disabled in the production project. This blocks real-record launch until the Supabase Auth dashboard setting is enabled.
 - Supabase performance advisor reports expected records unused-index INFO notices until real query traffic exists.
 - The old staging/mixed-use project still has lost-pet public table/bucket findings and disabled leaked-password protection. Keep it out of production records traffic.
-- Retired `grant_*` tables, grant helper functions, and grant Storage policies have been removed from production. The empty private `grant-documents` bucket remains until removed through the Supabase Storage API or dashboard.
+- Retired `grant_*` tables, grant helper functions, grant Storage policies, and the empty private `grant-documents` bucket have been removed from production.
 - Live two-user isolation passed on 2026-06-28 with synthetic users and evidence. Set `TWO_USER_ISOLATION_TESTED_AT=2026-06-28` in production host env so the readiness API reflects the result.
 
 ## Required Before Real User Data

@@ -41,9 +41,9 @@ Verified through Supabase SQL inspection on production project `cieuilbpnwuvnrxr
 A temporary grant-operations prototype was removed from the application source on
 2026-06-24 America/Anchorage. The retired `grant_*` tables, grant helper
 functions, and grant Storage policies were removed from production by migration
-`20260628050702_remove_retired_grant_database_artifacts`. Supabase blocks direct
-SQL deletion from Storage metadata tables, so the empty private `grant-documents`
-bucket remains until it is removed through the Supabase Storage API or dashboard.
+`20260628050702_remove_retired_grant_database_artifacts`. The empty private
+`grant-documents` bucket was removed through the Supabase Storage API on
+2026-06-28 using the guarded `Cleanup Retired Artifacts` workflow.
 
 The local `.env.local` file still points at staging project `adhnoiicwfvppzenwcgv` for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. Do not switch only the public URL/key. The server-side `SUPABASE_SERVICE_ROLE_KEY` must also be replaced with the production project service-role key from the Supabase dashboard before running Supabase mode locally or in production.
 
