@@ -78,6 +78,7 @@ Before production records launch, verify in the Supabase dashboard and reflect t
 - `SUPABASE_PASSWORD_MIN_LENGTH=12` or higher
 - `SUPABASE_PASSWORD_REAUTH_ENABLED=true`
 - `SUPABASE_CURRENT_PASSWORD_REQUIRED=true`
+- `SUPABASE_AUTH_HARDENING_VERIFIED_AT=<YYYY-MM-DD>` after dashboard settings and Supabase advisors are verified
 
 The app now includes a Supabase TOTP MFA login/enrollment flow and production AAL2 enforcement. The Supabase dashboard settings above still need live confirmation before accepting real records.
 

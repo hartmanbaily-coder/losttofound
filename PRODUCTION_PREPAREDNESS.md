@@ -71,6 +71,7 @@ Verified:
 - No direct `anon` or `authenticated` table privileges remain on `public.records_*`.
 - Private Storage bucket `records-evidence` exists with a 10 MB file limit and restricted MIME types.
 - Supabase security advisor still reports `auth_leaked_password_protection` as disabled in the production project. This blocks real-record launch until the Supabase Auth dashboard setting is enabled.
+- The readiness gate requires `SUPABASE_AUTH_HARDENING_VERIFIED_AT` after dashboard settings and Supabase advisors are checked, so env flags alone cannot mark Auth hardening complete.
 - Supabase performance advisor reports expected records unused-index INFO notices until real query traffic exists.
 - The old staging/mixed-use project still has lost-pet public table/bucket findings and disabled leaked-password protection. Keep it out of production records traffic.
 - Retired `grant_*` tables, grant helper functions, grant Storage policies, and the empty private `grant-documents` bucket have been removed from production.

@@ -122,12 +122,13 @@ Configure production Supabase Auth hardening in project `cieuilbpnwuvnrxrlczj`, 
 Use this sequence:
 
 1. Enable leaked-password protection in the Supabase dashboard.
-2. Propagate `TWO_USER_ISOLATION_TESTED_AT=2026-06-28` into the production host environment.
-3. Configure the real malware scanner and run `npm run verify:malware`.
-4. Configure WAF/rate limits and security monitoring.
-5. Run a backup restore drill and record the evidence date.
-6. Run `npm run check:live`.
-7. Complete legal and vendor review before real user data.
+2. Re-run Supabase advisors and set `SUPABASE_AUTH_HARDENING_VERIFIED_AT` only after Auth findings are clear.
+3. Propagate `TWO_USER_ISOLATION_TESTED_AT=2026-06-28` into the production host environment.
+4. Configure the real malware scanner and run `npm run verify:malware`.
+5. Configure WAF/rate limits and security monitoring.
+6. Run a backup restore drill and record the evidence date.
+7. Run `npm run check:live`.
+8. Complete legal and vendor review before real user data.
 
 ## Cutover Rule
 

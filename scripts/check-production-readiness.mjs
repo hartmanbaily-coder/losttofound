@@ -64,6 +64,7 @@ const supabaseFinalEnvNames = new Set([
   "SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED",
   "SUPABASE_PASSWORD_MIN_LENGTH",
   "SUPABASE_PASSWORD_REAUTH_ENABLED",
+  "SUPABASE_AUTH_HARDENING_VERIFIED_AT",
   "RECORDS_EVIDENCE_BUCKET",
   "BACKUP_RESTORE_TESTED_AT",
   "TWO_USER_ISOLATION_TESTED_AT",
@@ -140,6 +141,11 @@ const checks = [
     isEnabled(process.env.SUPABASE_PASSWORD_REAUTH_ENABLED) &&
       isEnabled(process.env.SUPABASE_CURRENT_PASSWORD_REQUIRED),
     "and SUPABASE_CURRENT_PASSWORD_REQUIRED must both be true",
+  ],
+  [
+    "SUPABASE_AUTH_HARDENING_VERIFIED_AT",
+    isRecentDate(process.env.SUPABASE_AUTH_HARDENING_VERIFIED_AT, 30),
+    "must be an ISO date within the last 30 days after Supabase Auth settings and advisors are verified",
   ],
   ["RECORDS_EVIDENCE_BUCKET", hasValue(process.env.RECORDS_EVIDENCE_BUCKET), "must be the private evidence bucket"],
   [

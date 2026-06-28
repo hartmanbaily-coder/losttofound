@@ -40,6 +40,7 @@ export const supabaseFinalCheckIds = [
   "supabase-leaked-passwords",
   "supabase-password-minimum",
   "supabase-password-reauth",
+  "supabase-auth-hardening-verified",
   "records-evidence-bucket",
   "backup-restore-tested",
   "two-user-isolation-tested",
@@ -272,6 +273,13 @@ export function evaluateProductionReadiness(
         isEnabled(env.SUPABASE_CURRENT_PASSWORD_REQUIRED),
       "blocker",
       "Enable reauthentication and current-password checks for password changes."
+    ),
+    check(
+      "supabase-auth-hardening-verified",
+      "Supabase Auth hardening was verified recently",
+      isRecentDate(env.SUPABASE_AUTH_HARDENING_VERIFIED_AT, generatedAt, 30),
+      "blocker",
+      "Verify Supabase Auth dashboard settings and advisors, then set SUPABASE_AUTH_HARDENING_VERIFIED_AT to the ISO date."
     ),
     check(
       "records-evidence-bucket",

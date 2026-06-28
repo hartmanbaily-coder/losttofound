@@ -26,6 +26,7 @@ These gates are enforced by `src/lib/production/readiness.ts` and `scripts/check
 | Leaked-password protection | `SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED=true` | Required |
 | Strong password minimum | `SUPABASE_PASSWORD_MIN_LENGTH=12` or higher | Required |
 | Password-change reauth | `SUPABASE_PASSWORD_REAUTH_ENABLED=true` and `SUPABASE_CURRENT_PASSWORD_REQUIRED=true` | Required |
+| Supabase Auth verification | `SUPABASE_AUTH_HARDENING_VERIFIED_AT` within 30 days after dashboard settings and advisors are checked | Required |
 | Private evidence bucket | `RECORDS_EVIDENCE_BUCKET=records-evidence` | Required |
 | Malware scanning | Real `MALWARE_SCAN_PROVIDER`; HTTP providers require HTTPS `MALWARE_SCAN_ENDPOINT`; `MALWARE_SCANNER_TESTED_AT` within 30 days | Required |
 | Edge rate limits | `EDGE_RATE_LIMITING_ENABLED=true` and `EDGE_RATE_LIMITING_PROVIDER` set | Required |
