@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
 const requiredEnv = [
@@ -57,6 +57,53 @@ function cookieHeader(response) {
   return setCookies.map((cookie) => cookie.split(";")[0]).join("; ");
 }
 
+function mergeCookieHeaders(...headers) {
+  const cookies = new Map();
+  for (const header of headers) {
+    for (const part of String(header || "").split(";")) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      const separator = trimmed.indexOf("=");
+      if (separator <= 0) continue;
+      cookies.set(trimmed.slice(0, separator), trimmed.slice(separator + 1));
+    }
+  }
+  return [...cookies.entries()].map(([key, value]) => `${key}=${value}`).join("; ");
+}
+
+const base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+function decodeBase32(input) {
+  const normalized = String(input || "").replace(/=+$/g, "").replace(/\s+/g, "").toUpperCase();
+  let bits = "";
+  for (const character of normalized) {
+    const value = base32Alphabet.indexOf(character);
+    if (value === -1) continue;
+    bits += value.toString(2).padStart(5, "0");
+  }
+
+  const bytes = [];
+  for (let offset = 0; offset + 8 <= bits.length; offset += 8) {
+    bytes.push(Number.parseInt(bits.slice(offset, offset + 8), 2));
+  }
+  return Buffer.from(bytes);
+}
+
+function totpCode(secret, timestamp = Date.now()) {
+  const key = decodeBase32(secret);
+  const counter = Math.floor(timestamp / 30_000);
+  const buffer = Buffer.alloc(8);
+  buffer.writeBigUInt64BE(BigInt(counter));
+  const digest = createHmac("sha1", key).update(buffer).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const binary =
+    ((digest[offset] & 0x7f) << 24) |
+    ((digest[offset + 1] & 0xff) << 16) |
+    ((digest[offset + 2] & 0xff) << 8) |
+    (digest[offset + 3] & 0xff);
+  return String(binary % 1_000_000).padStart(6, "0");
+}
+
 async function createTestUser(email) {
   const { data, error } = await supabase.auth.admin.createUser({
     email,
@@ -87,6 +134,35 @@ async function login(email) {
   });
 
   const body = await response.json().catch(() => ({}));
+  if (response.status === 403 && body.mfaEnrollmentRequired && body.enrollment?.factorId && body.enrollment?.secret) {
+    const enrollmentCookies = cookieHeader(response);
+    const verifyResponse = await fetch(`${appBaseUrl}/api/records/auth/mfa/enroll/verify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: enrollmentCookies,
+      },
+      body: JSON.stringify({
+        factorId: body.enrollment.factorId,
+        code: totpCode(body.enrollment.secret),
+      }),
+    });
+    const verifyBody = await verifyResponse.json().catch(() => ({}));
+    if (!verifyResponse.ok) {
+      throw new Error(
+        `Records MFA enrollment failed with ${verifyResponse.status}: ${verifyBody.error || "unknown error"}`
+      );
+    }
+
+    const cookies = mergeCookieHeaders(enrollmentCookies, cookieHeader(verifyResponse));
+    assert(
+      cookies.includes("l2f-records-access") || cookies.includes("__Host-l2f-records-access"),
+      "Records MFA enrollment did not set an access cookie."
+    );
+    assert(verifyBody.session?.userId, "Records MFA enrollment did not return a user id.");
+    return { cookies, userId: verifyBody.session.userId };
+  }
+
   if (!response.ok) {
     throw new Error(
       `Records login failed with ${response.status}: ${body.error || "unknown error"}`

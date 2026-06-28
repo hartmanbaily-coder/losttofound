@@ -6,7 +6,7 @@ Rehearsal date: 2026-06-27 America/Anchorage
 
 Status: `NO-GO for real user records`
 
-Reason: the records application and records-specific Supabase schema are in good MVP shape, and the production Supabase project is active. Live Auth hardening, provider controls, isolation verification, malware verification, backup restore evidence, legal review, retired grant artifact cleanup, and current-source deployment to `losttofound.org` are still incomplete.
+Reason: the records application and records-specific Supabase schema are in good MVP shape, and the production Supabase project is active. Live Auth hardening, provider controls, isolation verification, malware verification, backup restore evidence, and legal review are still incomplete.
 
 ## Supabase Project Split
 
@@ -38,7 +38,9 @@ Evidence from 2026-06-17 production project setup:
 - `records-evidence` MIME allow-list is PDF, PNG, JPEG, HEIC/HEIF, plain text, and CSV.
 - 4 storage policies reference `records-evidence`.
 - Supabase security advisor reports `auth_leaked_password_protection` as disabled.
-- Supabase performance advisor reports unused-index INFO notices, expected before real workload traffic, plus notices on retired `grant_*` tables that still exist in production.
+- Supabase performance advisor reports records unused-index INFO notices, expected before real workload traffic.
+- Retired `grant_*` tables, grant helper functions, and grant Storage policies were removed by migration `20260628050702_remove_retired_grant_database_artifacts`.
+- The empty private `grant-documents` bucket remains because Supabase blocks direct SQL deletion from Storage metadata tables; remove it through the Storage API or dashboard.
 
 ## Staging Supabase Posture
 
@@ -91,6 +93,7 @@ Completed in repo/app:
 - Privacy, terms, retention/deletion, incident response, monitoring, and security docs drafted.
 - Clean records-only production Supabase project created.
 - Production records schema applied and verified.
+- Current `losttofound` source deployed to `https://losttofound.org`; live security headers pass and legacy grant routes return 404.
 
 Still blocked before real user data:
 
@@ -100,9 +103,6 @@ Still blocked before real user data:
   - Password minimum at least 12.
   - Current-password/reauth required for password changes.
   - Invite-only or self-registration policy decided.
-- Deploy the current `losttofound` source to the host serving `losttofound.org`; the live site still needs the stricter CSP without `unsafe-eval`.
-- Configure production secrets in the host.
-- Explicitly clean up retired `grant_*` tables and `grant-documents` bucket after confirming no needed data remains.
 - Configure provider-level WAF, bot controls, and rate limits for auth, dataset, evidence, exports, and writes.
 - Configure security monitoring sink and alert routing.
 - Run and document `npm run verify:isolation` against deployed Supabase mode using synthetic users only.
@@ -114,18 +114,17 @@ Still blocked before real user data:
 
 ## Recommended Next Action
 
-Configure production Supabase Auth hardening in project `cieuilbpnwuvnrxrlczj`, then deploy the current `losttofound` source to the host serving `losttofound.org`.
+Configure production Supabase Auth hardening in project `cieuilbpnwuvnrxrlczj`, then complete the remaining operational launch gates.
 
 Use this sequence:
 
-1. Configure Auth hardening in the Supabase dashboard.
-2. Set production host secrets using `https://cieuilbpnwuvnrxrlczj.supabase.co`.
-3. Deploy the current app in Supabase mode using the production project secrets.
-4. Run `npm run verify:isolation` against the deployed app using synthetic users only.
-5. Configure the real malware scanner and run `npm run verify:malware`.
-6. Run a backup restore drill and record the evidence date.
-7. Run `npm run check:live`.
-8. Complete legal and vendor review before real user data.
+1. Enable leaked-password protection in the Supabase dashboard.
+2. Run `npm run verify:isolation` against the deployed app using synthetic users only, or dispatch the `Verify Live Isolation` workflow.
+3. Configure the real malware scanner and run `npm run verify:malware`.
+4. Configure WAF/rate limits and security monitoring.
+5. Run a backup restore drill and record the evidence date.
+6. Run `npm run check:live`.
+7. Complete legal and vendor review before real user data.
 
 ## Cutover Rule
 

@@ -34,14 +34,16 @@ Verified through Supabase SQL inspection on production project `cieuilbpnwuvnrxr
 - `records-evidence` MIME allow-list is limited to PDF, PNG, JPEG, HEIC/HEIF, plain text, and CSV.
 - Four Storage policies reference `records-evidence`.
 - Applied production migration: `20260617182822_create_records_production_schema`.
+- Applied cleanup migration: `20260628050702_remove_retired_grant_database_artifacts`.
 
 ## Retired Non-Records Artifacts
 
 A temporary grant-operations prototype was removed from the application source on
-2026-06-24 America/Anchorage. Retired `grant_*` tables and the `grant-documents`
-Storage bucket still exist in production with small test/demo row counts. They
-are not part of the Lost to Found Records launch path and should be removed only
-through an explicit cleanup migration.
+2026-06-24 America/Anchorage. The retired `grant_*` tables, grant helper
+functions, and grant Storage policies were removed from production by migration
+`20260628050702_remove_retired_grant_database_artifacts`. Supabase blocks direct
+SQL deletion from Storage metadata tables, so the empty private `grant-documents`
+bucket remains until it is removed through the Supabase Storage API or dashboard.
 
 The local `.env.local` file still points at staging project `adhnoiicwfvppzenwcgv` for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. Do not switch only the public URL/key. The server-side `SUPABASE_SERVICE_ROLE_KEY` must also be replaced with the production project service-role key from the Supabase dashboard before running Supabase mode locally or in production.
 
@@ -54,7 +56,7 @@ Supabase connector inspection confirmed the production project has an active mod
 Production project `cieuilbpnwuvnrxrlczj`:
 
 - Supabase security advisor currently reports `auth_leaked_password_protection` as disabled. This blocks production readiness until the Supabase Auth dashboard control is enabled. Remediation: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
-- Supabase performance advisor currently returns unused-index INFO notices. Records indexes should stay until real workload traffic exists. Additional unused-index notices are expected on retired `grant_*` tables until those retired tables are explicitly removed.
+- Supabase performance advisor currently returns only records unused-index INFO notices. Records indexes should stay until real workload traffic exists.
 
 Staging/mixed-use project `adhnoiicwfvppzenwcgv`:
 
@@ -94,6 +96,10 @@ npm run verify:isolation
 The verifier creates two temporary confirmed Supabase Auth users, signs both into the records app, saves a synthetic dataset for User A, creates a synthetic private evidence object for User A, confirms User B cannot load/delete/download it, confirms User A can download/delete it, and cleans up the synthetic users, snapshot, and storage object.
 
 If it passes, record the emitted `TWO_USER_ISOLATION_TESTED_AT` value in the deployment environment.
+
+A manual GitHub Actions workflow, `Verify Live Isolation`, can run the same check
+against `https://losttofound.org` using the repository `SUPABASE_SERVICE_ROLE_KEY`
+secret without exposing the key locally.
 
 ## Malware Scanner Verification
 

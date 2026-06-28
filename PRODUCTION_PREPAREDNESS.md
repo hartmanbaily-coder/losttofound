@@ -60,6 +60,7 @@ Staging/mixed-use project URL: `https://adhnoiicwfvppzenwcgv.supabase.co`
 Applied production migrations:
 
 - `20260617182822_create_records_production_schema`
+- `20260628050702_remove_retired_grant_database_artifacts`
 
 Verified:
 
@@ -67,9 +68,9 @@ Verified:
 - No direct `anon` or `authenticated` table privileges remain on `public.records_*`.
 - Private Storage bucket `records-evidence` exists with a 10 MB file limit and restricted MIME types.
 - Supabase security advisor still reports `auth_leaked_password_protection` as disabled in the production project. This blocks real-record launch until the Supabase Auth dashboard setting is enabled.
-- Supabase performance advisor reports expected unused-index INFO notices until real query traffic exists, plus notices on retired `grant_*` tables that still exist in production.
+- Supabase performance advisor reports expected records unused-index INFO notices until real query traffic exists.
 - The old staging/mixed-use project still has lost-pet public table/bucket findings and disabled leaked-password protection. Keep it out of production records traffic.
-- Retired `grant_*` tables and the `grant-documents` bucket still exist in the production project with small test/demo row counts. They are not referenced by the current app source and should be removed only through an explicit cleanup migration.
+- Retired `grant_*` tables, grant helper functions, and grant Storage policies have been removed from production. The empty private `grant-documents` bucket remains until removed through the Supabase Storage API or dashboard.
 
 ## Required Before Real User Data
 
@@ -79,7 +80,7 @@ Verified:
 4. Configure and verify the real malware scanning service with `npm run verify:malware`.
 5. Approve retention/deletion, backup aging, incident response, monitoring/alerting, legal review, and vendor review runbooks.
 6. Run `npm run check:pre-supabase` to confirm all non-Supabase launch gates are clear.
-7. Configure production secrets in the host using project `cieuilbpnwuvnrxrlczj`, then confirm the actual deployment path for `losttofound.org`.
+7. Keep production secrets in the host using project `cieuilbpnwuvnrxrlczj`, and deploy through the existing server path for `losttofound.org`.
 8. Set `EXPECTED_SUPABASE_PROJECT_REF=cieuilbpnwuvnrxrlczj` so production readiness fails if secrets point at the old staging project.
 9. Decide whether production is invite-only or self-registration, then configure Supabase Auth accordingly.
 10. Configure MFA policy, leaked-password protection, reset-token settings, password-change reauthentication, and session/device revocation in Supabase Auth.
@@ -87,7 +88,7 @@ Verified:
 12. Manually verify RLS/storage behavior with at least two authenticated test users, including cross-user evidence download/delete denial.
 13. Run a restore drill, save `ops/backup-restore-evidence.json`, and run `npm run verify:backup-restore`.
 14. Seed staging with synthetic data only and run end-to-end tests against staging.
-15. Deploy the current `losttofound` main branch to the host, verify `npm run verify:headers` against `https://losttofound.org`, and point/keep traffic there only after readiness API returns `ready` and `npm run check:live` passes.
+15. Keep `losttofound.org` on the current records build only after `npm run verify:headers` passes; accept real records only after readiness API returns `ready` and `npm run check:live` passes.
 
 ## Verification Commands
 
