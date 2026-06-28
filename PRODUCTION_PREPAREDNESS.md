@@ -75,7 +75,7 @@ Verified:
 - Supabase performance advisor reports expected records unused-index INFO notices until real query traffic exists.
 - The old staging/mixed-use project still has lost-pet public table/bucket findings and disabled leaked-password protection. Keep it out of production records traffic.
 - Retired `grant_*` tables, grant helper functions, grant Storage policies, and the empty private `grant-documents` bucket have been removed from production.
-- Live two-user isolation passed on 2026-06-28 with synthetic users and evidence. Set `TWO_USER_ISOLATION_TESTED_AT=2026-06-28` in production host env so the readiness API reflects the result.
+- Live two-user isolation passed on 2026-06-28 with synthetic users and evidence, and production readiness now reflects `TWO_USER_ISOLATION_TESTED_AT=2026-06-28`.
 
 ## Required Before Real User Data
 
@@ -120,4 +120,4 @@ npm run verify:backup-restore
 
 ## Known Remaining Gap
 
-The user-facing records app now has Supabase Auth cookie routes, TOTP MFA enrollment/verification endpoints, production AAL2 enforcement, a Supabase snapshot persistence adapter, server-mediated private evidence upload/download/delete routes, app-level rate-limit fallback, sanitized security event logging, CI secret/dependency scanning, production template/header verifiers, a court-oriented Records Timeline, a launch wizard, live two-user isolation verification, and the records schema applied in Supabase. Production launch still requires the remaining non-Supabase owner/provider approvals plus live Supabase Auth dashboard hardening, malware scanning, backup restore verification, production env propagation, and final deployed readiness before any real custody, child, payment, court, or evidence content is entered.
+The user-facing records app now has Supabase Auth cookie routes, TOTP MFA enrollment/verification endpoints, production AAL2 enforcement, a Supabase snapshot persistence adapter, server-mediated private evidence upload/download/delete routes, app-level rate-limit fallback, sanitized security event logging, CI secret/dependency scanning, production template/header verifiers, a court-oriented Records Timeline, a launch wizard, live two-user isolation verification reflected in production readiness, and the records schema applied in Supabase. Production launch still requires the remaining non-Supabase owner/provider approvals plus live Supabase Auth dashboard hardening, malware scanning, backup restore verification, and final deployed readiness before any real custody, child, payment, court, or evidence content is entered.

@@ -95,8 +95,8 @@ users, snapshot, and storage object. The emitted value was:
 TWO_USER_ISOLATION_TESTED_AT=2026-06-28
 ```
 
-The production host environment still needs that value set before the deployed
-readiness API can mark the isolation gate complete.
+The production host environment now includes that value, and the deployed
+readiness API marks the isolation gate complete.
 
 Run this against staging or production after the app is deployed with Supabase mode:
 
