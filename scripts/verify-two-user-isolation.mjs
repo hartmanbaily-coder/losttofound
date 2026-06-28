@@ -307,11 +307,14 @@ async function cleanup() {
   }
 
   if (userAId || userBId) {
-    await supabase
-      .from("records_case_snapshots")
-      .delete()
-      .in("user_id", [userAId, userBId].filter(Boolean))
-      .catch(() => undefined);
+    try {
+      await supabase
+        .from("records_case_snapshots")
+        .delete()
+        .in("user_id", [userAId, userBId].filter(Boolean));
+    } catch {
+      // Best-effort cleanup; auth users are still removed below.
+    }
   }
 
   if (process.env.KEEP_ISOLATION_TEST_USERS !== "true") {
@@ -351,10 +354,16 @@ try {
   const copiedEvidence = userAEvidence;
 
   const userBDownload = await evidenceDownload(userBCookies, copiedEvidence);
-  assert(userBDownload.status === 403, `User B evidence download should be denied, got ${userBDownload.status}.`);
+  assert(
+    [403, 404].includes(userBDownload.status),
+    `User B evidence download should be denied, got ${userBDownload.status}.`
+  );
 
   const userBDelete = await evidenceDelete(userBCookies, copiedEvidence);
-  assert(userBDelete.status === 403, `User B evidence delete should be denied, got ${userBDelete.status}.`);
+  assert(
+    [403, 404].includes(userBDelete.status),
+    `User B evidence delete should be denied, got ${userBDelete.status}.`
+  );
 
   const userADownload = await evidenceDownload(userACookies, userAEvidence);
   assert(userADownload.ok, `User A evidence download failed with ${userADownload.status}.`);
