@@ -21,7 +21,6 @@ import {
 import {
   clearFailedLoginAttempts,
   clearSession,
-  createRecordsTestingAccount,
   createId,
   downloadTextFile,
   nowIso,
@@ -553,7 +552,6 @@ function LoginScreen({
   const [mfaMode, setMfaMode] = useState<"verify" | "enroll" | null>(null);
   const [mfaEnrollment, setMfaEnrollment] = useState<RecordsMfaEnrollment | null>(null);
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
-  const [authIntent, setAuthIntent] = useState<"login" | "create">("login");
 
   function qrCodeSrc(qrCode: string) {
     if (qrCode.startsWith("data:image/")) return qrCode;
@@ -565,12 +563,10 @@ function LoginScreen({
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") || "").trim();
     const password = String(formData.get("password") || "");
-    const inviteCode = String(formData.get("inviteCode") || "");
     const adultConfirmed = formData.get("adult") === "on";
     const failedState = readFailedLoginState();
     const isLocked = failedState.lockedUntil > Date.now();
-    const creatingTestingAccount = recordsStorageMode === "supabase" && authIntent === "create";
-    const minimumPasswordLength = creatingTestingAccount ? 12 : 8;
+    const minimumPasswordLength = 12;
 
     if (isLocked) {
       setError("Too many failed attempts. Try again in a few minutes.");
@@ -587,17 +583,9 @@ function LoginScreen({
       return;
     }
 
-    if (creatingTestingAccount && inviteCode.trim().length < 6) {
-      setError("Enter the testing invite code.");
-      return;
-    }
-
     setSubmitting(true);
     setError("");
     try {
-      if (creatingTestingAccount) {
-        await createRecordsTestingAccount(email, password, adultConfirmed, inviteCode);
-      }
       const result = await onLogin(email, password, adultConfirmed);
       if (result.status === "mfa_required") {
         setMfaMode("verify");
@@ -654,9 +642,9 @@ function LoginScreen({
             </div>
 
             <p className="max-w-2xl text-sm leading-6 text-slate-600">
-              Create a private demo account to document court-ordered exchange expectations,
-              recorded exchange outcomes, child support payment records, expenses, date-based
-              notes, evidence metadata, and neutral report exports.
+              Sign in to organize court-ordered exchange expectations, recorded exchange
+              outcomes, child support payment records, expenses, date-based notes, evidence
+              metadata, and neutral report exports.
             </p>
 
             <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
@@ -665,19 +653,18 @@ function LoginScreen({
 
             <div className="grid gap-3 sm:grid-cols-3">
               <StatMini label="Adult users" value="Only" />
-              <StatMini label="Demo data" value="Synthetic" />
+              <StatMini label="Stored records" value="Private" />
               <StatMini label="Public sharing" value="Off" />
             </div>
           </section>
 
           <section className="border-t border-slate-200 bg-slate-50 p-6 sm:p-8 lg:border-l lg:border-t-0">
             <h2 className="text-lg font-semibold">
-              {recordsStorageMode === "supabase" ? "Testing access" : "Register or log in"}
+              {recordsStorageMode === "supabase" ? "Secure sign in" : "Local demo access"}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Local mode uses demo authentication. Supabase mode signs in through server-managed
-              HttpOnly cookies. Personal testing can use your own records, but client onboarding
-              and document uploads stay blocked until the remaining safety gates are complete.
+              Supabase mode signs in through server-managed HttpOnly cookies and requires
+              authenticator verification. Local mode is limited to development demo data.
             </p>
 
             {mfaMode ? (
@@ -718,27 +705,6 @@ function LoginScreen({
               </form>
             ) : (
               <form onSubmit={onSubmit} className="mt-5 space-y-4">
-                {recordsStorageMode === "supabase" && (
-                  <div className="inline-flex w-full rounded-md border border-slate-200 bg-white p-1">
-                    {[
-                      { value: "login", label: "Sign in" },
-                      { value: "create", label: "Create testing account" },
-                    ].map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        onClick={() => setAuthIntent(option.value as "login" | "create")}
-                        className={`flex-1 rounded px-3 py-2 text-sm font-semibold ${
-                          authIntent === option.value
-                            ? "bg-teal-700 text-white"
-                            : "text-slate-600 hover:bg-slate-100"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
                 <Field label="Email">
                   <input
                     name="email"
@@ -754,19 +720,9 @@ function LoginScreen({
                     type="password"
                     defaultValue={recordsStorageMode === "local" ? "demo-password" : ""}
                     className="input"
-                    autoComplete={authIntent === "create" ? "new-password" : "current-password"}
+                    autoComplete="current-password"
                   />
                 </Field>
-                {recordsStorageMode === "supabase" && authIntent === "create" && (
-                  <Field label="Testing invite code">
-                    <input
-                      name="inviteCode"
-                      type="password"
-                      className="input"
-                      autoComplete="off"
-                    />
-                  </Field>
-                )}
                 <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
                   <input name="adult" type="checkbox" defaultChecked className="mt-1" />
                   <span>
@@ -780,11 +736,7 @@ function LoginScreen({
                   disabled={submitting}
                   className="h-10 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
                 >
-                  {submitting
-                    ? authIntent === "create"
-                      ? "Creating account..."
-                      : "Signing in..."
-                    : "Enter records workspace"}
+                  {submitting ? "Signing in..." : "Enter records workspace"}
                 </button>
               </form>
             )}
