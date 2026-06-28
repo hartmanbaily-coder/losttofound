@@ -20,6 +20,7 @@
     "check:live": "node scripts/check-live-readiness.mjs",
     "verify:env-template": "node scripts/verify-production-env-template.mjs",
     "verify:headers": "node scripts/verify-security-headers.mjs",
+    "verify:edge-controls": "node scripts/verify-edge-controls.mjs",
     "verify:malware": "node scripts/verify-malware-scanner.mjs",
     "verify:isolation": "node scripts/verify-two-user-isolation.mjs",
     "verify:security-events": "node scripts/verify-security-event-sink.mjs",

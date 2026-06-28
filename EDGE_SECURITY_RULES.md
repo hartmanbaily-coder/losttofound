@@ -2,6 +2,8 @@
 
 Use these as the starting production rule set for the hosting/CDN/WAF provider. Apply them at `losttofound.org` before setting `EDGE_RATE_LIMITING_ENABLED=true` or `EDGE_WAF_ENABLED=true`.
 
+Current status from 2026-06-28: `losttofound.org` is still using GoDaddy nameservers (`ns65.domaincontrol.com`, `ns66.domaincontrol.com`) and live traffic is served directly by Caddy. Cloudflare/CDN WAF and rate-limit rules cannot be applied until the domain is added to the provider and DNS is routed through that provider.
+
 ## Route Groups
 
 | Group | Routes | Risk |
@@ -9,6 +11,7 @@ Use these as the starting production rule set for the hosting/CDN/WAF provider. 
 | Auth | `/api/records/auth/login`, `/api/records/auth/mfa/*`, `/api/records/auth/logout`, `/api/records/auth/session` | Credential abuse, MFA brute force |
 | Dataset | `/api/records/dataset` | Private records read/write |
 | Evidence | `/api/records/evidence/preflight`, `/api/records/evidence/upload`, `/api/records/evidence/download`, `/api/records/evidence/delete` | Private files, malware scanning, storage abuse |
+| Edge probe | `/api/records/edge-control-probe` | Synthetic WAF/rate-limit verification only; no user data |
 | Readiness | `/api/records/readiness`, `/launch-readiness` | Operational status, should not expose secrets |
 | App | `/`, `/records`, `/privacy`, `/terms` | Normal app access |
 
@@ -34,6 +37,7 @@ Use these as the starting production rule set for the hosting/CDN/WAF provider. 
 | Evidence upload | 10 uploads per authenticated user per 10 minutes | Throttle |
 | Evidence download | 60 downloads per authenticated user per 10 minutes | Alert after threshold; throttle if anomalous |
 | Evidence delete | 20 deletes per authenticated user per 10 minutes | Alert and throttle |
+| Edge probe | 3 requests per IP per 10 seconds | Block with HTTP 429 |
 | Readiness | 60 requests per IP per 10 minutes | Throttle |
 
 Keep the app-level fallback limiter enabled even after provider limits are configured.
@@ -64,6 +68,37 @@ and (
   or http.request.uri.path eq "/launch-readiness"
 )
 ```
+
+## Cloudflare Validation Rules
+
+Add these rules first so `npm run verify:edge-controls` can prove the provider is active without touching real records.
+
+WAF custom rule:
+
+```text
+http.host eq "losttofound.org"
+and http.request.uri.path eq "/api/records/edge-control-probe"
+and http.request.uri.query contains "edge_waf_probe"
+```
+
+Action: block. The verifier expects HTTP `403`.
+
+Rate limiting rule:
+
+```text
+http.host eq "losttofound.org"
+and http.request.uri.path eq "/api/records/edge-control-probe"
+```
+
+Threshold: 3 requests per IP per 10 seconds. Action: block/throttle with HTTP `429`.
+
+Then run:
+
+```bash
+RECORDS_APP_BASE_URL=https://losttofound.org npm run verify:edge-controls
+```
+
+If the command prints `EDGE_CONTROLS_TESTED_AT=<date>`, record the date, provider, and rule IDs before setting the production readiness flags.
 
 ## Launch Evidence
 
