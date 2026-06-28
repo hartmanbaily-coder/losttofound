@@ -4,7 +4,12 @@ import {
   isSupabaseRecordsMode,
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
-import { cleanMfaCode, isValidMfaCode, sessionFromMfaVerify } from "@/lib/records/mfaServer";
+import {
+  cleanMfaCode,
+  isValidMfaCode,
+  selectTotpFactorForVerification,
+  sessionFromMfaVerify,
+} from "@/lib/records/mfaServer";
 import { upsertRecordsProfile } from "@/lib/records/profileServer";
 import { demoCaseId } from "@/lib/records/seed";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
@@ -44,7 +49,7 @@ export async function POST(request: NextRequest) {
   }
 
   const factors = await authClient.auth.mfa.listFactors();
-  const factor = factors.data?.totp[0];
+  const factor = selectTotpFactorForVerification(factors.data?.totp || []);
   if (factors.error || !factor) {
     await recordSecurityEvent({
       type: "auth_mfa_failed",
