@@ -66,9 +66,9 @@ Risk: database or object storage backups expose sensitive records.
 
 Controls: encryption at rest, encrypted backups, least-privilege backup access, retention limits, restoration testing, and incident response.
 
-### Subdomain Takeover
+### DNS or Subdomain Takeover
 
-Risk: stale DNS records for `records.losttofound.org` point to an unclaimed host.
+Risk: stale DNS records for `losttofound.org` or future subdomains point to an unclaimed host.
 
 Controls: remove stale CNAME/DNS records immediately when changing providers, verify hosting ownership, and monitor DNS.
 

@@ -10,7 +10,7 @@ Lost to Found Records can run against either the local demo store or the Supabas
 - `npm run check:pre-supabase` runs the same readiness guard while intentionally deferring the final Supabase Auth, storage, restore, and isolation gates.
 - `scripts/verify-production-env-template.mjs` verifies `.env.production.example` stays complete, points at the intended production records host/project, and does not contain real secrets.
 - `scripts/verify-security-headers.mjs` verifies CSP, HSTS, frame blocking, referrer policy, content-type sniffing protection, and browser permissions policy.
-- `.github/workflows/deploy.yml` now runs lint, typecheck, unit tests, build, and production readiness before SSH deploy.
+- `.github/workflows/deploy.yml` now runs lint, typecheck, unit tests, secret scanning, dependency audit, environment-template verification, and build. It is a validation workflow, not a production deploy workflow.
 - `database/supabase/production_schema.sql` defines the first Supabase/Postgres schema with RLS, server-mediated table access, FK indexes, and private evidence bucket policies.
 - Supabase client helpers now fail when called without production config, not at module import time.
 - `src/app/api/records/auth/login/route.ts`, `session/route.ts`, and `logout/route.ts` add Supabase Auth through server-managed HttpOnly cookies.
@@ -66,9 +66,10 @@ Verified:
 - 13 `public.records_*` tables exist with RLS enabled.
 - No direct `anon` or `authenticated` table privileges remain on `public.records_*`.
 - Private Storage bucket `records-evidence` exists with a 10 MB file limit and restricted MIME types.
-- Supabase security advisor reports no production project findings.
-- Supabase performance advisor reports expected unused-index INFO notices until real query traffic exists.
+- Supabase security advisor still reports `auth_leaked_password_protection` as disabled in the production project. This blocks real-record launch until the Supabase Auth dashboard setting is enabled.
+- Supabase performance advisor reports expected unused-index INFO notices until real query traffic exists, plus notices on retired `grant_*` tables that still exist in production.
 - The old staging/mixed-use project still has lost-pet public table/bucket findings and disabled leaked-password protection. Keep it out of production records traffic.
+- Retired `grant_*` tables and the `grant-documents` bucket still exist in the production project with small test/demo row counts. They are not referenced by the current app source and should be removed only through an explicit cleanup migration.
 
 ## Required Before Real User Data
 
@@ -78,7 +79,7 @@ Verified:
 4. Configure and verify the real malware scanning service with `npm run verify:malware`.
 5. Approve retention/deletion, backup aging, incident response, monitoring/alerting, legal review, and vendor review runbooks.
 6. Run `npm run check:pre-supabase` to confirm all non-Supabase launch gates are clear.
-7. Configure production secrets in GitHub Actions and the host using project `cieuilbpnwuvnrxrlczj`.
+7. Configure production secrets in the host using project `cieuilbpnwuvnrxrlczj`, then confirm the actual deployment path for `losttofound.org`.
 8. Set `EXPECTED_SUPABASE_PROJECT_REF=cieuilbpnwuvnrxrlczj` so production readiness fails if secrets point at the old staging project.
 9. Decide whether production is invite-only or self-registration, then configure Supabase Auth accordingly.
 10. Configure MFA policy, leaked-password protection, reset-token settings, password-change reauthentication, and session/device revocation in Supabase Auth.
@@ -86,7 +87,7 @@ Verified:
 12. Manually verify RLS/storage behavior with at least two authenticated test users, including cross-user evidence download/delete denial.
 13. Run a restore drill, save `ops/backup-restore-evidence.json`, and run `npm run verify:backup-restore`.
 14. Seed staging with synthetic data only and run end-to-end tests against staging.
-15. Point `losttofound.org` only after readiness API returns `ready` in production and `npm run check:live` passes.
+15. Deploy the current `losttofound` main branch to the host, verify `npm run verify:headers` against `https://losttofound.org`, and point/keep traffic there only after readiness API returns `ready` and `npm run check:live` passes.
 
 ## Verification Commands
 
@@ -113,4 +114,4 @@ npm run verify:backup-restore
 
 ## Known Remaining Gap
 
-The user-facing records app now has Supabase Auth cookie routes, TOTP MFA enrollment/verification endpoints, production AAL2 enforcement, a Supabase snapshot persistence adapter, server-mediated private evidence upload/download/delete routes, app-level rate-limit fallback, sanitized security event logging, CI secret/dependency scanning, production template/header verifiers, a court-oriented Records Timeline, a launch wizard, and the records schema applied in Supabase. Production launch still requires the remaining non-Supabase owner/provider approvals plus live Supabase Auth dashboard hardening, backup restore verification, two-user RLS/storage verification, production secrets, and final deployed readiness before any real custody, child, payment, court, or evidence content is entered.
+The user-facing records app now has Supabase Auth cookie routes, TOTP MFA enrollment/verification endpoints, production AAL2 enforcement, a Supabase snapshot persistence adapter, server-mediated private evidence upload/download/delete routes, app-level rate-limit fallback, sanitized security event logging, CI secret/dependency scanning, production template/header verifiers, a court-oriented Records Timeline, a launch wizard, and the records schema applied in Supabase. Production launch still requires the remaining non-Supabase owner/provider approvals plus live Supabase Auth dashboard hardening, backup restore verification, two-user RLS/storage verification, production secrets, deployment of the current source to `losttofound.org`, and final deployed readiness before any real custody, child, payment, court, or evidence content is entered.

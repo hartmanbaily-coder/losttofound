@@ -1,6 +1,6 @@
 # Edge Security Rules
 
-Use these as the starting production rule set for the hosting/CDN/WAF provider. Apply them at `records.losttofound.org` before setting `EDGE_RATE_LIMITING_ENABLED=true` or `EDGE_WAF_ENABLED=true`.
+Use these as the starting production rule set for the hosting/CDN/WAF provider. Apply them at `losttofound.org` before setting `EDGE_RATE_LIMITING_ENABLED=true` or `EDGE_WAF_ENABLED=true`.
 
 ## Route Groups
 
@@ -43,22 +43,22 @@ Keep the app-level fallback limiter enabled even after provider limits are confi
 Use equivalent expressions for your provider.
 
 ```text
-http.host eq "records.losttofound.org"
+http.host eq "losttofound.org"
 and http.request.uri.path starts_with "/api/records/auth/"
 ```
 
 ```text
-http.host eq "records.losttofound.org"
+http.host eq "losttofound.org"
 and http.request.uri.path starts_with "/api/records/evidence/"
 ```
 
 ```text
-http.host eq "records.losttofound.org"
+http.host eq "losttofound.org"
 and http.request.uri.path eq "/api/records/dataset"
 ```
 
 ```text
-http.host eq "records.losttofound.org"
+http.host eq "losttofound.org"
 and (
   http.request.uri.path eq "/api/records/readiness"
   or http.request.uri.path eq "/launch-readiness"

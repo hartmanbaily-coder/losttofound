@@ -53,7 +53,7 @@ Use deployment platform secret storage. Do not commit:
 
 Rotate exposed credentials immediately.
 
-Before production deploy, use `.env.production.example` as the source checklist and configure the GitHub Actions/host secrets used by `.github/workflows/deploy.yml`:
+Before production deploy, use `.env.production.example` as the source checklist and configure the host secrets used by the actual deployment path for `losttofound.org`:
 
 - `NEXT_PUBLIC_APP_URL`
 - `NEXT_PUBLIC_RECORDS_HOST`
@@ -94,7 +94,7 @@ Before production deploy, use `.env.production.example` as the source checklist 
 - `VENDOR_SECURITY_REVIEW_APPROVED`
 - `SECURITY_CONTACT_EMAIL`
 
-The deploy workflow runs `npm run check:production` and will fail if these are missing or unsafe.
+The current GitHub workflow validates source quality but does not deploy. Run `npm run check:production` in the deployment environment, with real host secrets loaded, before accepting real records.
 
 When Supabase is intentionally saved for last, run `npm run check:pre-supabase` first. That mode still checks host, secret strength, edge controls, monitoring, malware scanning, privacy/legal approvals, and other non-Supabase gates, while deferring the final Supabase Auth, storage, restore, and isolation checks.
 

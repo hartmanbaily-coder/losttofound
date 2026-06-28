@@ -19,10 +19,10 @@ export default function ContactPage() {
         </p>
         <p className="mt-3">
           <a
-            href="mailto:listhaushelp@outlook.com"
+            href="mailto:security@losttofound.org"
             className="font-mono font-semibold text-emerald-700 underline underline-offset-2"
           >
-            listhaushelp@outlook.com
+            security@losttofound.org
           </a>
         </p>
       </section>

@@ -1,12 +1,12 @@
 # Production Launch Rehearsal
 
-Rehearsal date: 2026-06-17 America/Anchorage
+Rehearsal date: 2026-06-27 America/Anchorage
 
 ## Decision
 
 Status: `NO-GO for real user records`
 
-Reason: the records application and records-specific Supabase schema are in good MVP shape, and a clean records production Supabase project now exists. Live Auth hardening, provider controls, isolation verification, malware verification, backup restore evidence, and legal review are still incomplete.
+Reason: the records application and records-specific Supabase schema are in good MVP shape, and the production Supabase project is active. Live Auth hardening, provider controls, isolation verification, malware verification, backup restore evidence, legal review, retired grant artifact cleanup, and current-source deployment to `losttofound.org` are still incomplete.
 
 ## Supabase Project Split
 
@@ -37,8 +37,8 @@ Evidence from 2026-06-17 production project setup:
 - `records-evidence` file limit is `10485760` bytes.
 - `records-evidence` MIME allow-list is PDF, PNG, JPEG, HEIC/HEIF, plain text, and CSV.
 - 4 storage policies reference `records-evidence`.
-- Supabase security advisor returns no findings.
-- Supabase performance advisor only reports unused-index INFO notices, expected before real workload traffic.
+- Supabase security advisor reports `auth_leaked_password_protection` as disabled.
+- Supabase performance advisor reports unused-index INFO notices, expected before real workload traffic, plus notices on retired `grant_*` tables that still exist in production.
 
 ## Staging Supabase Posture
 
@@ -100,7 +100,9 @@ Still blocked before real user data:
   - Password minimum at least 12.
   - Current-password/reauth required for password changes.
   - Invite-only or self-registration policy decided.
-- Configure production secrets in GitHub Actions and host.
+- Deploy the current `losttofound` source to the host serving `losttofound.org`; the live site still needs the stricter CSP without `unsafe-eval`.
+- Configure production secrets in the host.
+- Explicitly clean up retired `grant_*` tables and `grant-documents` bucket after confirming no needed data remains.
 - Configure provider-level WAF, bot controls, and rate limits for auth, dataset, evidence, exports, and writes.
 - Configure security monitoring sink and alert routing.
 - Run and document `npm run verify:isolation` against deployed Supabase mode using synthetic users only.
@@ -112,13 +114,13 @@ Still blocked before real user data:
 
 ## Recommended Next Action
 
-Configure production Supabase Auth hardening in project `cieuilbpnwuvnrxrlczj`, then wire deployment secrets to the new production project.
+Configure production Supabase Auth hardening in project `cieuilbpnwuvnrxrlczj`, then deploy the current `losttofound` source to the host serving `losttofound.org`.
 
 Use this sequence:
 
 1. Configure Auth hardening in the Supabase dashboard.
-2. Set production GitHub/host secrets using `https://cieuilbpnwuvnrxrlczj.supabase.co`.
-3. Deploy app in Supabase mode using the new project secrets.
+2. Set production host secrets using `https://cieuilbpnwuvnrxrlczj.supabase.co`.
+3. Deploy the current app in Supabase mode using the production project secrets.
 4. Run `npm run verify:isolation` against the deployed app using synthetic users only.
 5. Configure the real malware scanner and run `npm run verify:malware`.
 6. Run a backup restore drill and record the evidence date.

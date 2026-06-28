@@ -2,7 +2,7 @@
 
 Verification date: 2026-06-17 America/Anchorage
 
-Latest advisor refresh: 2026-06-24 America/Anchorage
+Latest advisor refresh: 2026-06-27 America/Anchorage
 
 Production project: `cieuilbpnwuvnrxrlczj`
 
@@ -38,10 +38,10 @@ Verified through Supabase SQL inspection on production project `cieuilbpnwuvnrxr
 ## Retired Non-Records Artifacts
 
 A temporary grant-operations prototype was removed from the application source on
-2026-06-24 America/Anchorage. Any `grant_*` tables, `grant-documents` Storage
-bucket, or grant migrations that still exist in Supabase are not part of the
-Lost to Found Records launch path and should be treated as retired artifacts
-until a separate database cleanup is explicitly approved.
+2026-06-24 America/Anchorage. Retired `grant_*` tables and the `grant-documents`
+Storage bucket still exist in production with small test/demo row counts. They
+are not part of the Lost to Found Records launch path and should be removed only
+through an explicit cleanup migration.
 
 The local `.env.local` file still points at staging project `adhnoiicwfvppzenwcgv` for `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY`. Do not switch only the public URL/key. The server-side `SUPABASE_SERVICE_ROLE_KEY` must also be replaced with the production project service-role key from the Supabase dashboard before running Supabase mode locally or in production.
 
@@ -53,8 +53,8 @@ Supabase connector inspection confirmed the production project has an active mod
 
 Production project `cieuilbpnwuvnrxrlczj`:
 
-- Supabase security advisor currently returns no findings.
-- Supabase performance advisor currently returns only unused-index INFO notices, expected before real workload traffic. Do not remove these indexes until production query data exists.
+- Supabase security advisor currently reports `auth_leaked_password_protection` as disabled. This blocks production readiness until the Supabase Auth dashboard control is enabled. Remediation: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+- Supabase performance advisor currently returns unused-index INFO notices. Records indexes should stay until real workload traffic exists. Additional unused-index notices are expected on retired `grant_*` tables until those retired tables are explicitly removed.
 
 Staging/mixed-use project `adhnoiicwfvppzenwcgv`:
 
