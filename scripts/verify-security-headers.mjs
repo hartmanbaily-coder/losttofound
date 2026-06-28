@@ -69,6 +69,12 @@ const headerFindings = [
   ),
   requireHeader(
     response.headers,
+    "content-security-policy",
+    (value) => !value.includes("'unsafe-eval'"),
+    "must not allow unsafe-eval in script-src"
+  ),
+  requireHeader(
+    response.headers,
     "strict-transport-security",
     (value) =>
       value.includes("max-age=31536000") &&

@@ -441,7 +441,10 @@ create policy "owners_write_support_payments" on public.records_child_support_pa
     )
     and exists (
       select 1 from public.records_child_support_orders o
-      where o.id = child_support_order_id and o.user_id = (select auth.uid()) and o.case_id = case_id
+      where
+        o.id = records_child_support_payments.child_support_order_id
+        and o.user_id = (select auth.uid())
+        and o.case_id = records_child_support_payments.case_id
     )
   )
   with check (
@@ -452,7 +455,10 @@ create policy "owners_write_support_payments" on public.records_child_support_pa
     )
     and exists (
       select 1 from public.records_child_support_orders o
-      where o.id = child_support_order_id and o.user_id = (select auth.uid()) and o.case_id = case_id
+      where
+        o.id = records_child_support_payments.child_support_order_id
+        and o.user_id = (select auth.uid())
+        and o.case_id = records_child_support_payments.case_id
     )
   );
 
