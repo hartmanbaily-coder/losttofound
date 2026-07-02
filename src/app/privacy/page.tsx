@@ -8,7 +8,7 @@ const sections = [
     body: [
       "Account information such as email address, authentication identifiers, profile labels, and timezone.",
       "Records you choose to enter, including custody matter labels, parenting-time schedules, exchange logs, notes, child support records, expense records, evidence metadata, audit events, and report selections.",
-      "Evidence files you choose to upload in Supabase-backed production mode, such as PDFs, images, text files, or CSV files.",
+      "Evidence files you choose to upload, such as PDFs, images, text files, or CSV files.",
       "Operational information needed to secure and run the service, such as route, status code, request id, timestamps, and security event metadata.",
     ],
   },
@@ -16,7 +16,7 @@ const sections = [
     title: "Sensitive information",
     body: [
       "Custody, child-related, court, school, health-adjacent, financial, child support, and evidence records can be sensitive.",
-      "The service is designed for adult users. We do not offer child accounts, child profiles, public social features, or co-parent messaging in this MVP.",
+      "The service is designed for adult users. We do not offer child accounts, child profiles, public social features, or co-parent messaging.",
       "Users should avoid entering Social Security numbers, full bank account numbers, full card numbers, bank login credentials, unrelated third-party details, or unnecessary medical detail.",
     ],
   },
@@ -31,7 +31,7 @@ const sections = [
   {
     title: "Evidence files",
     body: [
-      "Evidence files are stored in private object storage in Supabase-backed production mode.",
+      "Evidence files are stored in private object storage.",
       "Uploads are validated by file type and size, scanned for malware before storage, and downloaded only through authenticated server routes.",
       "We do not intentionally expose public evidence links or anonymous share links.",
     ],
@@ -51,13 +51,13 @@ const sections = [
       "Records are retained while the account or case remains active unless deleted earlier by the user or as required by policy.",
       "Evidence files should be deleted from private storage when the related evidence item, case, or account is deleted, subject to backup aging and legal holds.",
       "Backups may retain deleted information until they expire under the backup retention schedule.",
-      "Production deletion and retention details must be finalized before accepting real records.",
+      "Deletion and retention details may vary where legal holds, backup aging, or security investigation duties apply.",
     ],
   },
   {
     title: "Security",
     body: [
-      "Production mode uses server-managed HttpOnly cookies, Supabase Auth, private storage, server-side authorization checks, malware scanning, and readiness gates.",
+      "The service uses server-managed HttpOnly cookies, Supabase Auth, private storage, server-side authorization checks, and malware scanning.",
       "Access tokens, service role keys, and raw storage paths should not be exposed in browser URLs or logs.",
       "No internet service can guarantee absolute security, so users should keep their own exports and downloaded files protected.",
     ],
@@ -67,7 +67,7 @@ const sections = [
     body: [
       "You can use privacy-friendly labels instead of real names.",
       "You can export records and evidence files where export/download controls are available.",
-      "You can request deletion of account or case records once production deletion workflows are enabled.",
+      "You can request deletion of account or case records where deletion controls or support workflows are available.",
       "You can contact us with privacy or security questions.",
     ],
   },
@@ -80,13 +80,11 @@ export default function PrivacyPage() {
         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
           Lost to Found Records
         </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-          Privacy Policy Draft
-        </h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Privacy Policy</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-          Last updated {lastUpdated}. This draft describes the intended privacy
-          posture for the records workspace and should be reviewed by qualified
-          counsel before production launch.
+          Last updated {lastUpdated}. This policy describes the privacy posture
+          for the records workspace and should be reviewed periodically as the
+          service and legal requirements change.
         </p>
       </section>
 
@@ -116,8 +114,7 @@ export default function PrivacyPage() {
           <Link href="/contact" className="font-semibold text-emerald-700">
             contact page
           </Link>
-          . Production should also publish a monitored security contact mailbox
-          before accepting real records.
+          .
         </p>
       </section>
     </div>

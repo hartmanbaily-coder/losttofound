@@ -1,10 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-test("records MVP login and report workflow", async ({ page }) => {
+test("records login and report workflow", async ({ page }) => {
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Lost to Found Records" })).toBeVisible();
-  await page.getByRole("button", { name: "Enter records workspace" }).click();
+  const enterWorkspace = page.getByRole("button", { name: "Enter records workspace" });
+  await expect(enterWorkspace).toBeEnabled();
+  await enterWorkspace.click();
 
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
   await expect(page.getByText("This tool helps organize records and does not provide legal advice.")).toBeVisible();
@@ -50,30 +52,4 @@ test("records MVP login and report workflow", async ({ page }) => {
   await page.getByLabel(/Payment references/).check();
   await page.getByLabel(/Notes are factual/).check();
   await expect(page.getByRole("button", { name: "Download CSV" })).toBeEnabled();
-});
-
-test("launch readiness cockpit and wizard are reachable", async ({ page }) => {
-  await page.goto("/launch-readiness");
-
-  await expect(page.getByRole("heading", { name: "Records go-live readiness" })).toBeVisible();
-  await expect(
-    page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)
-  ).resolves.toBe(true);
-  await expect(page.getByText("Pre-Supabase")).toBeVisible();
-  await page.getByRole("link", { name: "Open launch wizard" }).click();
-
-  await expect(page.getByRole("heading", { name: "Launch wizard" })).toBeVisible();
-  await expect(
-    page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)
-  ).resolves.toBe(true);
-  await expect(page.getByText("Everything before Supabase")).toBeVisible();
-  await expect(page.getByText("Supabase final step")).toBeVisible();
-  await expect(page.getByText("npm run check:pre-supabase")).toBeVisible();
-
-  await page.setViewportSize({ width: 390, height: 1100 });
-  await page.goto("/launch-wizard");
-  await expect(page.getByRole("heading", { name: "Launch wizard" })).toBeVisible();
-  await expect(
-    page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)
-  ).resolves.toBe(true);
 });

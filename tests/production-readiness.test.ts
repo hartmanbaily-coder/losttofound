@@ -64,7 +64,7 @@ describe("production readiness", () => {
     expect(report.blockers).toHaveLength(0);
   });
 
-  it("allows non-Supabase launch gates to pass while Supabase final work is deferred", () => {
+  it("allows non-Supabase safety gates to pass while Supabase final work is deferred", () => {
     const report = evaluateProductionReadiness(
       {
         ...readyEnv,

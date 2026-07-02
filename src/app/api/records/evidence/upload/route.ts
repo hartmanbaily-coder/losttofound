@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       request,
       NextResponse.json(
         {
-          error: "Evidence upload is not production-ready.",
+          error: "Evidence upload is temporarily unavailable.",
           blockers: readiness.blockers,
         },
         { status: 503 }

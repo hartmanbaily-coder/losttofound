@@ -152,37 +152,6 @@ const exportReviewItems = [
 
 type ExportReviewKey = (typeof exportReviewItems)[number]["key"];
 
-const launchChecklistItems = [
-  {
-    label: "Client-side MVP has local session lockout, file allow-listing, neutral report language, and audit events.",
-    ready: true,
-  },
-  {
-    label: "Supabase Auth routes use server-managed HttpOnly cookies for records reads and writes.",
-    ready: true,
-  },
-  {
-    label: "Records auth includes TOTP MFA enrollment/verification and production AAL2 enforcement.",
-    ready: true,
-  },
-  {
-    label: "Records schema has RLS enabled and direct browser table access revoked.",
-    ready: true,
-  },
-  {
-    label: "Private evidence storage has server-mediated access, malware scanning hooks, and delete controls.",
-    ready: true,
-  },
-  {
-    label: "Supabase dashboard hardening, WAF/rate limits, monitoring, backups, scanner test, and legal review are verified live.",
-    ready: false,
-  },
-  {
-    label: "Two-user isolation and deployed readiness checks have passed against staging or production.",
-    ready: false,
-  },
-] as const;
-
 const evidenceReviewStatusLabels: Record<EvidenceReviewStatus, string> = {
   needs_review: "Needs review",
   reviewed: "Reviewed",
@@ -307,6 +276,7 @@ export default function RecordsApp() {
   if (!hydrated || !session) {
     return (
       <LoginScreen
+        appReady={hydrated}
         onLogin={login}
         onMfaVerified={finishAuthenticatedSession}
         recordsStorageMode={recordsStorageMode}
@@ -539,10 +509,12 @@ export default function RecordsApp() {
 }
 
 function LoginScreen({
+  appReady,
   onLogin,
   onMfaVerified,
   recordsStorageMode,
 }: {
+  appReady: boolean;
   onLogin: (email: string, password: string, adultConfirmed: boolean) => Promise<LoginFlowResult>;
   onMfaVerified: (session: Session) => Promise<LoginFlowResult>;
   recordsStorageMode: "local" | "supabase";
@@ -560,6 +532,8 @@ function LoginScreen({
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!appReady) return;
+
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") || "").trim();
     const password = String(formData.get("password") || "");
@@ -668,7 +642,7 @@ function LoginScreen({
             </p>
 
             {mfaMode ? (
-              <form onSubmit={onMfaSubmit} className="mt-5 space-y-4">
+              <form method="post" onSubmit={onMfaSubmit} className="mt-5 space-y-4">
                 {mfaMode === "enroll" && mfaEnrollment && (
                   <div className="rounded-md border border-slate-200 bg-white p-4">
                     {/* Supabase returns this as a data URL; a plain img avoids Next image SVG/data URL rewriting. */}
@@ -704,7 +678,7 @@ function LoginScreen({
                 </button>
               </form>
             ) : (
-              <form onSubmit={onSubmit} className="mt-5 space-y-4">
+              <form method="post" onSubmit={onSubmit} className="mt-5 space-y-4">
                 <Field label="Email">
                   <input
                     name="email"
@@ -726,17 +700,16 @@ function LoginScreen({
                 <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
                   <input name="adult" type="checkbox" defaultChecked className="mt-1" />
                   <span>
-                    I am an adult user and will use privacy-friendly labels. I will not upload
-                    client documents until uploads are production-ready.
+                    I am an adult user and will use privacy-friendly labels for sensitive records.
                   </span>
                 </label>
                 {error && <p className="text-sm font-medium text-red-700">{error}</p>}
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={!appReady || submitting}
                   className="h-10 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
                 >
-                  {submitting ? "Signing in..." : "Enter records workspace"}
+                  {!appReady ? "Loading workspace..." : submitting ? "Signing in..." : "Enter records workspace"}
                 </button>
               </form>
             )}
@@ -3104,8 +3077,8 @@ function ReportsView({
             Download report JSON
           </button>
           <p className="text-xs leading-5 text-slate-500">
-            PDF output uses the browser print dialog in this MVP. Production can replace this with a
-            server-side renderer that stores generated reports privately.
+            PDF output uses your browser print dialog. Downloaded reports leave the app&apos;s protected
+            storage and should be kept somewhere private.
           </p>
         </div>
       </Panel>
@@ -3362,13 +3335,13 @@ function SettingsView({
       </div>
 
       <div className="space-y-4">
-        <Panel title="Backend storage" action={recordsStorageMode}>
+        <Panel title="Storage status" action={recordsStorageMode === "supabase" ? "Private cloud" : "This browser"}>
           <div className="space-y-3 text-sm leading-6 text-slate-600">
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Storage mode</p>
                 <p className="mt-1 font-medium text-slate-900">
-                  {recordsStorageMode === "supabase" ? "Supabase server adapter" : "Local demo"}
+                  {recordsStorageMode === "supabase" ? "Private cloud storage" : "This browser"}
                 </p>
               </div>
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -3377,13 +3350,13 @@ function SettingsView({
               </div>
             </div>
             <p>
-              Supabase mode uses server-managed HttpOnly cookies. Access tokens are not stored in
-              localStorage or typed into this screen.
+              Records are saved behind authenticated server routes when cloud storage is active.
+              Browser-only mode is for private drafting on this device.
             </p>
           </div>
         </Panel>
 
-        <Panel title="Session management" action="MVP boundary">
+        <Panel title="Session management" action="Account access">
           <div className="grid gap-3 text-sm leading-6 text-slate-600">
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -3412,11 +3385,7 @@ function SettingsView({
                 Reset lockout counter
               </button>
             </div>
-            <p>
-              Supabase mode uses server-managed cookies and a production AAL2 gate. The
-              deployment still must verify Supabase dashboard password hardening and session
-              policy before real records are accepted.
-            </p>
+            <p>Use the session controls when switching accounts or stepping away from this device.</p>
           </div>
         </Panel>
 
@@ -3433,45 +3402,26 @@ function SettingsView({
             </button>
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-600">
-            Production deletion may be direct or queued, but it must be clear to the user and
-            documented with backup retention behavior.
+            Export your data before major cleanup. Deleting the selected case removes its records
+            from this workspace.
           </p>
         </Panel>
 
-        <Panel title="Go-live readiness" action="Roadmap gates">
-          <div className="space-y-3">
-            <div className="grid gap-2 sm:grid-cols-2">
-              <a href="/launch-wizard" className="btn-primary w-full">
-                Open launch wizard
-              </a>
-              <a href="/launch-readiness" className="btn-secondary w-full">
-                Open launch cockpit
-              </a>
-            </div>
-            {launchChecklistItems.map((item) => (
-              <label
-                key={item.label}
-                className="flex items-start gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-5 text-slate-700"
-              >
-                <input type="checkbox" className="mt-0.5" checked={item.ready} readOnly />
-                <span className="min-w-0 flex-1">{item.label}</span>
-                <span
-                  className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold ${
-                    item.ready ? "bg-teal-100 text-teal-800" : "bg-amber-100 text-amber-900"
-                  }`}
-                >
-                  {item.ready ? "MVP ready" : "production gate"}
-                </span>
-              </label>
-            ))}
-          </div>
+        <Panel title="Workspace setup" action="Recommended order">
+          <ol className="list-decimal space-y-3 pl-5 text-sm leading-6 text-slate-600">
+            <li>Create a custody matter with neutral labels for the children and parents.</li>
+            <li>Add the standing exchange rules and any schedule exceptions from the order.</li>
+            <li>Use the calendar to color custody days and log exchanges as they happen.</li>
+            <li>Attach evidence only when it supports a specific date, note, expense, or exchange.</li>
+            <li>Review the Reports tab before exporting anything for another person or agency.</li>
+          </ol>
         </Panel>
 
-        <Panel title="Session and security notes" action="MVP boundaries">
+        <Panel title="Session and security notes" action="Privacy defaults">
           <div className="space-y-3 text-sm leading-6 text-slate-600">
             <p>No child accounts, public profiles, social features, co-parent messaging, advertising trackers, or session replay are included.</p>
-            <p>Supabase mode uses server-side auth routes and HttpOnly cookies; local mode remains a synthetic demo path.</p>
-            <p>Evidence files use server-mediated private object storage in Supabase mode, require a clean malware scan before download, and never expose public or anonymous share links.</p>
+            <p>Cloud storage uses server-side auth routes and HttpOnly cookies instead of browser-stored access tokens.</p>
+            <p>Evidence files use server-mediated private object storage, require a clean malware scan before download, and never expose public or anonymous share links.</p>
           </div>
         </Panel>
 

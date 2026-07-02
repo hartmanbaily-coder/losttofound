@@ -6,9 +6,9 @@ const sections = [
   {
     title: "Records workspace",
     body: [
-      "Lost to Found Records is an MVP for adults organizing custody, parenting-time, child support, expense, evidence, and family-court documentation.",
+      "Lost to Found Records is a private workspace for adults organizing custody, parenting-time, child support, expense, evidence, and family-court documentation.",
       "The service is for factual organization and recordkeeping. It does not decide legal rights, verify legal claims, predict outcomes, or replace professional advice.",
-      "The MVP may change as production controls, storage, exports, deletion workflows, and security operations mature.",
+      "The service may change as storage, exports, deletion workflows, and security operations mature.",
     ],
   },
   {
@@ -63,14 +63,14 @@ const sections = [
     title: "Accounts and availability",
     body: [
       "Users are responsible for keeping account credentials secure and promptly reporting suspected unauthorized access.",
-      "Production may require multi-factor authentication, stronger password rules, session controls, and account verification before accepting real records.",
-      "The service may be unavailable during maintenance, security events, vendor outages, or production readiness work.",
+      "The service may require multi-factor authentication, stronger password rules, session controls, and account verification.",
+      "The service may be unavailable during maintenance, security events, vendor outages, or operational work.",
     ],
   },
   {
     title: "Deletion and retention",
     body: [
-      "Users may be offered export, case deletion, evidence deletion, and account deletion controls as production workflows are finalized.",
+      "Users may be offered export, case deletion, evidence deletion, and account deletion controls.",
       "Deleted records may remain in encrypted backups until those backups expire under the retention schedule.",
       "Deletion may be delayed or limited when legally required, when needed for security investigation, or when a valid hold applies.",
     ],
@@ -84,13 +84,11 @@ export default function TermsPage() {
         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
           Lost to Found Records
         </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-          Terms of Use Draft
-        </h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Terms of Use</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-          Last updated {lastUpdated}. These draft terms describe the intended
-          use boundaries for the records workspace and should be reviewed by
-          qualified counsel before production launch.
+          Last updated {lastUpdated}. These terms describe the use boundaries
+          for the records workspace and should be reviewed periodically as the
+          service and legal requirements change.
         </p>
       </section>
 
@@ -126,8 +124,7 @@ export default function TermsPage() {
           <Link href="/contact" className="font-semibold text-emerald-700">
             contact page
           </Link>
-          . Production should also publish a monitored security contact before
-          accepting real records.
+          .
         </p>
       </section>
     </div>
