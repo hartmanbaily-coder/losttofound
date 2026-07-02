@@ -298,7 +298,7 @@ export function createRecordsSeed(): RecordsDataset {
         recipientLabel: "Parent A",
         paymentMethodExpected: "State agency",
         agencyOrCaseNumber: "Withheld in demo",
-        notes: "Synthetic support order details for MVP testing only.",
+        notes: "Support order details are withheld in demo data.",
         createdAt: now,
         updatedAt: now,
       },

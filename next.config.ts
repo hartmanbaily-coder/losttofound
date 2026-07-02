@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const projectRoot = process.cwd();
+const isDevelopment = process.env.NODE_ENV !== "production";
+const scriptSrc = ["script-src", "'self'", "'unsafe-inline'", ...(isDevelopment ? ["'unsafe-eval'"] : [])];
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
@@ -23,7 +25,7 @@ const nextConfig: NextConfig = {
           "img-src 'self' data: blob:",
           "font-src 'self' data:",
           "style-src 'self' 'unsafe-inline'",
-          "script-src 'self' 'unsafe-inline'",
+          scriptSrc.join(" "),
           "connect-src 'self'",
         ].join("; "),
       },

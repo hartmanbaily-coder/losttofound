@@ -25,23 +25,23 @@ export function evaluateEvidenceIntakeReadiness(
   const maxBytes = Number(env.EVIDENCE_MAX_FILE_BYTES || maxEvidenceFileBytes);
 
   if (env.RECORDS_STORAGE_MODE !== "supabase") {
-    blockers.push("Supabase records storage must be enabled before evidence intake.");
+    blockers.push("Cloud records storage is not enabled for evidence intake.");
   }
 
   if (placeholderProviders.has(provider)) {
-    blockers.push("Configure a real malware scanning provider before evidence intake.");
+    blockers.push("Evidence malware scanning is not available.");
   }
 
   if ((provider === "http" || provider === "webhook") && !env.MALWARE_SCAN_ENDPOINT) {
-    blockers.push("Configure MALWARE_SCAN_ENDPOINT for the HTTP malware scanning provider.");
+    blockers.push("Evidence malware scanning endpoint is not configured.");
   }
 
   if (!env.RECORDS_EVIDENCE_BUCKET) {
-    blockers.push("Configure RECORDS_EVIDENCE_BUCKET for private evidence storage.");
+    blockers.push("Private evidence storage is not configured.");
   }
 
   if (!Number.isFinite(maxBytes) || maxBytes <= 0 || maxBytes > 25 * 1024 * 1024) {
-    blockers.push("Configure EVIDENCE_MAX_FILE_BYTES to a positive limit no larger than 25 MB.");
+    blockers.push("Evidence upload size limit is not configured.");
   }
 
   return {

@@ -371,7 +371,7 @@ export function evaluateProductionReadiness(
       "Incident response plan is approved",
       isEnabled(env.INCIDENT_RESPONSE_PLAN_APPROVED),
       "blocker",
-      "Approve an incident response and breach notification plan before production launch."
+      "Approve an incident response and breach notification plan before real records are accepted."
     ),
     check(
       "privacy-policy",

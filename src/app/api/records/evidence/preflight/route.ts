@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   if (!readiness.ready) {
     return NextResponse.json(
       {
-        error: "Evidence intake is not production-ready.",
+        error: "Evidence intake is temporarily unavailable.",
         blockers: readiness.blockers,
       },
       { status: 503 }

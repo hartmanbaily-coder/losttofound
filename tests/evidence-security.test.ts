@@ -11,7 +11,7 @@ describe("evidence intake readiness", () => {
     });
 
     expect(report.ready).toBe(false);
-    expect(report.blockers).toContain("Configure a real malware scanning provider before evidence intake.");
+    expect(report.blockers).toContain("Evidence malware scanning is not available.");
   });
 
   it("passes when Supabase storage and malware scanning are configured", () => {
@@ -35,9 +35,7 @@ describe("evidence intake readiness", () => {
     });
 
     expect(report.ready).toBe(false);
-    expect(report.blockers).toContain(
-      "Configure MALWARE_SCAN_ENDPOINT for the HTTP malware scanning provider."
-    );
+    expect(report.blockers).toContain("Evidence malware scanning endpoint is not configured.");
   });
 
   it("blocks the non-production mock scanner", () => {
@@ -49,6 +47,6 @@ describe("evidence intake readiness", () => {
     });
 
     expect(report.ready).toBe(false);
-    expect(report.blockers).toContain("Configure a real malware scanning provider before evidence intake.");
+    expect(report.blockers).toContain("Evidence malware scanning is not available.");
   });
 });
