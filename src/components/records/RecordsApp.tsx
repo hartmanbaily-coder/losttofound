@@ -135,6 +135,15 @@ const timelineFilterOptions: Array<{ value: TimelineFilter; label: string }> = [
   { value: "expense_item", label: "Expenses" },
 ];
 
+const directTimelineDeleteTypes = new Set<CalendarEvent["type"]>([
+  "custody_day",
+  "logged_exchange",
+  "custody_note",
+  "child_support_due",
+  "child_support_paid",
+  "expense_item",
+]);
+
 const exportReviewItems = [
   {
     key: "neutralLabels",
@@ -1041,6 +1050,45 @@ function CalendarView({
     flash("Custody day color cleared.");
   }
 
+  function clearCustodyLabel(caregiverLabel: string) {
+    const normalizedLabel = caregiverLabel.trim();
+    if (!normalizedLabel) return;
+
+    updateDataset((current) =>
+      withAudit(
+        {
+          ...current,
+          custodyDayAssignments: current.custodyDayAssignments.filter(
+            (item) =>
+              item.userId !== userId ||
+              item.caseId !== caseId ||
+              item.caregiverLabel !== normalizedLabel
+          ),
+        },
+        {
+          userId,
+          caseId,
+          action: "deleted",
+          entityType: "custodyDayAssignment",
+          entityId: `calendar-label-${normalizedLabel}`,
+          metadataSummary: "Calendar custody label and color assignments removed.",
+        }
+      )
+    );
+
+    flash(`Calendar label "${normalizedLabel}" removed.`);
+  }
+
+  function deleteTimelineEvent(event: CalendarEvent) {
+    if (!canDeleteTimelineEvent(event)) {
+      flash("Delete this generated item from its source tab.");
+      return;
+    }
+
+    updateDataset((current) => deleteTimelineEventFromDataset(current, event, userId, caseId));
+    flash(`${labelEventType(event.type)} deleted from timeline.`);
+  }
+
   return (
     <div className="space-y-4">
       <Segmented
@@ -1110,6 +1158,14 @@ function CalendarView({
                     style={{ backgroundColor: assignment.color }}
                   />
                   {assignment.caregiverLabel}
+                  <button
+                    type="button"
+                    aria-label={`Delete calendar label ${assignment.caregiverLabel}`}
+                    onClick={() => clearCustodyLabel(assignment.caregiverLabel)}
+                    className="ml-1 rounded border border-red-200 px-1.5 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
                 </span>
               ))}
             </div>
@@ -1222,7 +1278,11 @@ function CalendarView({
                   )}
                 </div>
               )}
-              <Timeline events={dayEvents} emptyLabel="No records on this day." />
+              <Timeline
+                events={dayEvents}
+                emptyLabel="No records on this day."
+                onDeleteEvent={deleteTimelineEvent}
+              />
             </Panel>
 
             <Panel title="Color selected day" action="Custody schedule">
@@ -1290,7 +1350,7 @@ function CalendarView({
                     onClick={clearCustodyDay}
                     disabled={!selectedAssignment}
                   >
-                    Clear day
+                    Clear selected day
                   </button>
                 </div>
               </form>
@@ -1301,13 +1361,21 @@ function CalendarView({
 
       {mode === "list" && (
         <Panel title="Weekly/list view" action={`${events.length} records`}>
-          <Timeline events={events} emptyLabel="No calendar records in this date range." />
+          <Timeline
+            events={events}
+            emptyLabel="No calendar records in this date range."
+            onDeleteEvent={deleteTimelineEvent}
+          />
         </Panel>
       )}
 
       {mode === "timeline" && (
         <Panel title="Chronological timeline" action="Order, recorded events, notes, evidence, expenses">
-          <Timeline events={events} emptyLabel="No timeline records in this date range." />
+          <Timeline
+            events={events}
+            emptyLabel="No timeline records in this date range."
+            onDeleteEvent={deleteTimelineEvent}
+          />
         </Panel>
       )}
     </div>
@@ -1337,6 +1405,16 @@ function TimelineView({
   ).length;
   const noteCount = events.filter((event) => event.type === "custody_note").length;
   const evidenceCount = events.filter((event) => event.type === "evidence_item").length;
+
+  function deleteTimelineEvent(event: CalendarEvent) {
+    if (!canDeleteTimelineEvent(event)) {
+      flash("Delete this generated item from its source tab.");
+      return;
+    }
+
+    updateDataset((current) => deleteTimelineEventFromDataset(current, event, userId, caseId));
+    flash(`${labelEventType(event.type)} deleted from timeline.`);
+  }
 
   function downloadTimelineCsv() {
     const rows = filteredEvents.map((event) => ({
@@ -1398,6 +1476,10 @@ function TimelineView({
             <button type="button" onClick={downloadTimelineCsv} className="btn-primary">
               Export timeline CSV
             </button>
+            <p className="text-xs leading-5 text-slate-500">
+              Delete removes user-entered records from this workspace. Scheduled exchanges and
+              evidence files are managed from their source tabs.
+            </p>
             <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sources</p>
               <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-medium text-slate-600">
@@ -1425,6 +1507,7 @@ function TimelineView({
           <Timeline
             events={filteredEvents}
             emptyLabel="No timeline records match this filter."
+            onDeleteEvent={deleteTimelineEvent}
           />
         </Panel>
       </section>
@@ -3586,6 +3669,105 @@ function Segmented({
   );
 }
 
+function timelinePrimaryRecordId(event: CalendarEvent) {
+  return event.relatedIds?.[0];
+}
+
+function canDeleteTimelineEvent(event: CalendarEvent) {
+  return directTimelineDeleteTypes.has(event.type) && Boolean(timelinePrimaryRecordId(event));
+}
+
+function removeOwnedRecordById<T extends { id: string; userId: string; caseId: string }>(
+  records: T[],
+  recordId: string,
+  userId: string,
+  caseId: string
+) {
+  return records.filter(
+    (record) => !(record.id === recordId && record.userId === userId && record.caseId === caseId)
+  );
+}
+
+function deleteTimelineEventFromDataset(
+  dataset: RecordsDataset,
+  event: CalendarEvent,
+  userId: string,
+  caseId: string
+) {
+  const recordId = timelinePrimaryRecordId(event);
+  if (!recordId) return dataset;
+
+  const auditBase = {
+    userId,
+    caseId,
+    action: "deleted" as const,
+    entityId: recordId,
+    metadataSummary: `${labelEventType(event.type)} removed from timeline.`,
+  };
+
+  if (event.type === "custody_day") {
+    return withAudit(
+      {
+        ...dataset,
+        custodyDayAssignments: removeOwnedRecordById(
+          dataset.custodyDayAssignments,
+          recordId,
+          userId,
+          caseId
+        ),
+      },
+      { ...auditBase, entityType: "custodyDayAssignment" }
+    );
+  }
+
+  if (event.type === "logged_exchange") {
+    return withAudit(
+      {
+        ...dataset,
+        exchangeLogs: removeOwnedRecordById(dataset.exchangeLogs, recordId, userId, caseId),
+      },
+      { ...auditBase, entityType: "exchangeLog" }
+    );
+  }
+
+  if (event.type === "custody_note") {
+    return withAudit(
+      {
+        ...dataset,
+        dateNotes: removeOwnedRecordById(dataset.dateNotes, recordId, userId, caseId),
+      },
+      { ...auditBase, entityType: "dateNote" }
+    );
+  }
+
+  if (event.type === "child_support_due" || event.type === "child_support_paid") {
+    return withAudit(
+      {
+        ...dataset,
+        childSupportPayments: removeOwnedRecordById(
+          dataset.childSupportPayments,
+          recordId,
+          userId,
+          caseId
+        ),
+      },
+      { ...auditBase, entityType: "childSupportPayment" }
+    );
+  }
+
+  if (event.type === "expense_item") {
+    return withAudit(
+      {
+        ...dataset,
+        expenseItems: removeOwnedRecordById(dataset.expenseItems, recordId, userId, caseId),
+      },
+      { ...auditBase, entityType: "expenseItem" }
+    );
+  }
+
+  return dataset;
+}
+
 function matchesTimelineFilter(event: CalendarEvent, filter: TimelineFilter) {
   if (filter === "all") return true;
   if (filter === "attention") return isAttentionTimelineEvent(event);
@@ -3649,10 +3831,12 @@ function Timeline({
   events,
   emptyLabel = "No records yet.",
   compact = false,
+  onDeleteEvent,
 }: {
   events: CalendarEvent[];
   emptyLabel?: string;
   compact?: boolean;
+  onDeleteEvent?: (event: CalendarEvent) => void;
 }) {
   if (events.length === 0) return <Empty label={emptyLabel} />;
 
@@ -3673,7 +3857,12 @@ function Timeline({
           )}
           <div className="space-y-2">
             {group.rows.map((event) => (
-              <TimelineEventRow key={event.id} event={event} compact={compact} />
+              <TimelineEventRow
+                key={event.id}
+                event={event}
+                compact={compact}
+                onDeleteEvent={onDeleteEvent}
+              />
             ))}
           </div>
         </div>
@@ -3682,9 +3871,18 @@ function Timeline({
   );
 }
 
-function TimelineEventRow({ event, compact }: { event: CalendarEvent; compact: boolean }) {
+function TimelineEventRow({
+  event,
+  compact,
+  onDeleteEvent,
+}: {
+  event: CalendarEvent;
+  compact: boolean;
+  onDeleteEvent?: (event: CalendarEvent) => void;
+}) {
   const severity = timelineSeverity(event);
   const tagList = event.tags || [];
+  const showDelete = Boolean(onDeleteEvent && canDeleteTimelineEvent(event));
 
   return (
     <details
@@ -3734,6 +3932,15 @@ function TimelineEventRow({ event, compact }: { event: CalendarEvent; compact: b
           )}
         </div>
         <TagList tags={tagList} />
+        {showDelete && (
+          <div className="mt-3">
+            <DeleteButton
+              label="Delete item"
+              ariaLabel={`Delete timeline item ${event.title}`}
+              onClick={() => onDeleteEvent?.(event)}
+            />
+          </div>
+        )}
       </div>
     </details>
   );

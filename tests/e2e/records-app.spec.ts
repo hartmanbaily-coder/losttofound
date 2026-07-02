@@ -22,6 +22,9 @@ test("records login and report workflow", async ({ page }) => {
   const paintedDay = page.getByRole("button", { name: "Edit calendar day 2026-05-08" });
   await expect(paintedDay).toBeVisible();
   await expect(paintedDay.getByText("Parent C")).toBeVisible();
+  await page.getByRole("button", { name: "Clear selected day" }).click();
+  await expect(page.getByText("Custody day color cleared.")).toBeVisible();
+  await expect(paintedDay.getByText("Parent C")).toHaveCount(0);
 
   await page.locator("nav").getByRole("button", { name: /^Timeline/ }).click();
   await expect(page.getByRole("heading", { name: "Timeline", exact: true })).toBeVisible();
@@ -32,6 +35,9 @@ test("records login and report workflow", async ({ page }) => {
   await expect(lateExchange).toBeVisible();
   await lateExchange.locator("summary").click();
   await expect(lateExchange.getByText("Recorded arrival at 6:32 PM.")).toBeVisible();
+  await lateExchange.getByRole("button", { name: "Delete timeline item Logged exchange: completed late" }).click();
+  await expect(page.getByText("Logged exchange deleted from timeline.")).toBeVisible();
+  await expect(page.getByText("Logged exchange: completed late")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Child Support", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Child Support", exact: true })).toBeVisible();
