@@ -40,7 +40,14 @@ import {
   type RecordsMfaEnrollment,
   type RecordsSession,
 } from "@/lib/records/clientStore";
-import { rowsToCsv, buildReportPreview, reportTypeLabels } from "@/lib/records/reports";
+import {
+  buildReportPreview,
+  buildSectionExportPacket,
+  reportTypeLabels,
+  rowsToCsv,
+  sectionExportToCsv,
+  type SectionExportPacket,
+} from "@/lib/records/reports";
 import { demoCaseId, demoUserId } from "@/lib/records/seed";
 import type {
   CalendarEvent,
@@ -91,6 +98,7 @@ const navItems = [
 
 type ActiveView = (typeof navItems)[number];
 type Session = RecordsSession;
+type SectionExportFormat = "pdf" | "csv" | "json";
 type LoginFlowResult =
   | { status: "complete" }
   | { status: "mfa_required" }
@@ -234,10 +242,57 @@ export default function RecordsApp() {
     () => buildReportPreview(dataset, userId, effectiveCaseId, range, reportType),
     [dataset, userId, effectiveCaseId, range, reportType]
   );
+  const sectionExportPackets = useMemo(
+    () => ({
+      calendar: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "calendar"),
+      timeline: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "timeline"),
+      exchanges: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "exchanges"),
+      notes: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "notes"),
+      evidence: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "evidence"),
+      childSupport: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "child_support"),
+      expenses: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "expenses"),
+    }),
+    [dataset, userId, effectiveCaseId, range]
+  );
 
   function flash(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2800);
+  }
+
+  function exportSectionPacket(packet: SectionExportPacket, format: SectionExportFormat) {
+    const slug = `${packet.id}-${packet.range.from}-${packet.range.to}`;
+
+    if (format === "json") {
+      downloadTextFile(
+        `lost-to-found-${slug}.json`,
+        JSON.stringify(packet, null, 2),
+        "application/json"
+      );
+    } else if (format === "csv") {
+      downloadTextFile(`lost-to-found-${slug}.csv`, sectionExportToCsv(packet), "text/csv");
+    } else {
+      const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1000,height=760");
+      if (!printWindow) {
+        flash("Popup blocked. Allow popups to print the section packet.");
+        return;
+      }
+
+      printWindow.document.write(buildSectionExportPrintHtml(packet));
+      printWindow.document.close();
+    }
+
+    updateDataset((current) =>
+      withAudit(current, {
+        userId,
+        caseId: effectiveCaseId,
+        action: "exported",
+        entityType: "sectionExport",
+        entityId: `${packet.id}-${format}`,
+        metadataSummary: `${packet.title} ${format.toUpperCase()} exported without raw row contents in audit metadata.`,
+      })
+    );
+    flash(`${packet.title} ${format.toUpperCase()} export ready.`);
   }
 
   async function finishAuthenticatedSession(nextSession: Session) {
@@ -418,6 +473,8 @@ export default function RecordsApp() {
                 selectedDay={selectedDay}
                 setSelectedDay={setSelectedDay}
                 range={range}
+                sectionExport={sectionExportPackets.calendar}
+                onExportSection={exportSectionPacket}
                 flash={flash}
               />
             )}
@@ -428,6 +485,8 @@ export default function RecordsApp() {
                 updateDataset={updateDataset}
                 userId={userId}
                 caseId={effectiveCaseId}
+                sectionExport={sectionExportPackets.timeline}
+                onExportSection={exportSectionPacket}
                 flash={flash}
               />
             )}
@@ -439,6 +498,8 @@ export default function RecordsApp() {
                 selected={selected}
                 range={range}
                 expectedExchanges={expectedExchanges}
+                sectionExport={sectionExportPackets.exchanges}
+                onExportSection={exportSectionPacket}
                 flash={flash}
               />
             )}
@@ -448,6 +509,8 @@ export default function RecordsApp() {
                 userId={userId}
                 caseId={effectiveCaseId}
                 notes={selected.dateNotes}
+                sectionExport={sectionExportPackets.notes}
+                onExportSection={exportSectionPacket}
                 flash={flash}
               />
             )}
@@ -458,6 +521,8 @@ export default function RecordsApp() {
                 caseId={effectiveCaseId}
                 evidence={selected.evidenceItems}
                 recordsStorageMode={recordsStorageMode}
+                sectionExport={sectionExportPackets.evidence}
+                onExportSection={exportSectionPacket}
                 flash={flash}
               />
             )}
@@ -470,6 +535,8 @@ export default function RecordsApp() {
                 payments={selected.childSupportPayments}
                 supportRows={supportRows}
                 supportStats={supportStats}
+                sectionExport={sectionExportPackets.childSupport}
+                onExportSection={exportSectionPacket}
                 flash={flash}
               />
             )}
@@ -480,6 +547,8 @@ export default function RecordsApp() {
                 caseId={effectiveCaseId}
                 expenses={selected.expenseItems}
                 expenseStats={expenseStats}
+                sectionExport={sectionExportPackets.expenses}
+                onExportSection={exportSectionPacket}
                 flash={flash}
               />
             )}
@@ -792,6 +861,8 @@ function CalendarView({
   selectedDay,
   setSelectedDay,
   range,
+  sectionExport,
+  onExportSection,
   flash,
 }: {
   events: CalendarEvent[];
@@ -804,6 +875,8 @@ function CalendarView({
   selectedDay: string;
   setSelectedDay: (day: string) => void;
   range: DateRange;
+  sectionExport: SectionExportPacket;
+  onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
   const monthKey = range.from.slice(0, 7);
@@ -1101,6 +1174,8 @@ function CalendarView({
         onChange={(value) => setMode(value as "month" | "list" | "timeline")}
       />
 
+      <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
+
       {mode === "month" && (
         <section className="grid gap-4 xl:grid-cols-[1fr_400px]">
           <Panel title={`Monthly custody calendar: ${monthKey}`} action="Editable color blocks">
@@ -1388,6 +1463,8 @@ function TimelineView({
   updateDataset,
   userId,
   caseId,
+  sectionExport,
+  onExportSection,
   flash,
 }: {
   events: CalendarEvent[];
@@ -1395,6 +1472,8 @@ function TimelineView({
   updateDataset: ReturnType<typeof useRecordsStore>["updateDataset"];
   userId: string;
   caseId: string;
+  sectionExport: SectionExportPacket;
+  onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
   const [filter, setFilter] = useState<TimelineFilter>("all");
@@ -1457,51 +1536,55 @@ function TimelineView({
         <StatCard label="Evidence" value={evidenceCount} detail="Dated evidence items" />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[320px_1fr]">
-        <Panel title="Timeline controls" action="Court packet view">
-          <div className="grid gap-4">
-            <Field label="Show">
-              <select
-                value={filter}
-                onChange={(event) => setFilter(event.target.value as TimelineFilter)}
-                className="input"
-              >
-                {timelineFilterOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <button type="button" onClick={downloadTimelineCsv} className="btn-primary">
-              Export timeline CSV
-            </button>
-            <p className="text-xs leading-5 text-slate-500">
-              Delete removes user-entered records from this workspace. Scheduled exchanges and
-              evidence files are managed from their source tabs.
-            </p>
-            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sources</p>
-              <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-medium text-slate-600">
-                {["Calendar", "Exchanges", "Notes", "Evidence", "Support", "Expenses"].map((source) => (
-                  <span key={source} className="rounded bg-white px-2 py-1">
-                    {source}
-                  </span>
+      <section className="grid gap-4 xl:grid-cols-[340px_1fr]">
+        <div className="space-y-4">
+          <Panel title="Timeline controls" action="Court packet view">
+            <div className="grid gap-4">
+              <Field label="Show">
+                <select
+                  value={filter}
+                  onChange={(event) => setFilter(event.target.value as TimelineFilter)}
+                  className="input"
+                >
+                  {timelineFilterOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <button type="button" onClick={downloadTimelineCsv} className="btn-primary">
+                Export timeline CSV
+              </button>
+              <p className="text-xs leading-5 text-slate-500">
+                Delete removes user-entered records from this workspace. Scheduled exchanges and
+                evidence files are managed from their source tabs.
+              </p>
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sources</p>
+                <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-medium text-slate-600">
+                  {["Calendar", "Exchanges", "Notes", "Evidence", "Support", "Expenses"].map((source) => (
+                    <span key={source} className="rounded bg-white px-2 py-1">
+                      {source}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                {(["critical", "attention", "positive", "neutral"] as const).map((severity) => (
+                  <div key={severity} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="font-medium capitalize text-slate-700">{severity}</span>
+                    <span className={`rounded px-2 py-1 font-semibold ${timelineSeverityPillClass(severity)}`}>
+                      {timelineSeverityLabel(severity)}
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
-            <div className="space-y-2">
-              {(["critical", "attention", "positive", "neutral"] as const).map((severity) => (
-                <div key={severity} className="flex items-center justify-between gap-3 text-xs">
-                  <span className="font-medium capitalize text-slate-700">{severity}</span>
-                  <span className={`rounded px-2 py-1 font-semibold ${timelineSeverityPillClass(severity)}`}>
-                    {timelineSeverityLabel(severity)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Panel>
+          </Panel>
+
+          <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
+        </div>
 
         <Panel title="Case timeline" action={`${filteredEvents.length} shown`}>
           <Timeline
@@ -1522,6 +1605,8 @@ function ExchangesView({
   selected,
   range,
   expectedExchanges,
+  sectionExport,
+  onExportSection,
   flash,
 }: {
   updateDataset: ReturnType<typeof useRecordsStore>["updateDataset"];
@@ -1530,6 +1615,8 @@ function ExchangesView({
   selected: ReturnType<typeof useSelectedRecords>;
   range: DateRange;
   expectedExchanges: ReturnType<typeof generateExpectedExchangeEvents>;
+  sectionExport: SectionExportPacket;
+  onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
   function addRule(event: FormEvent<HTMLFormElement>) {
@@ -1677,6 +1764,8 @@ function ExchangesView({
     flash("Exchange log deleted.");
   }
 
+  const exchangeTimingRows = exchangeChartRows(selected.exchangeLogs, range);
+
   return (
     <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
       <div className="space-y-4">
@@ -1784,6 +1873,12 @@ function ExchangesView({
       </div>
 
       <div className="space-y-4">
+        <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
+
+        <Panel title="Exchange timing graph" action={`${range.from} to ${range.to}`}>
+          <ExchangeTimingChart rows={exchangeTimingRows} />
+        </Panel>
+
         <Panel title="Exchange rules" action={`${selected.exchangeRules.length} saved`}>
           <Table
             headers={["Rule", "Day", "Time", "Direction", "Action"]}
@@ -1844,12 +1939,16 @@ function NotesView({
   userId,
   caseId,
   notes,
+  sectionExport,
+  onExportSection,
   flash,
 }: {
   updateDataset: ReturnType<typeof useRecordsStore>["updateDataset"];
   userId: string;
   caseId: string;
   notes: ReturnType<typeof useSelectedRecords>["dateNotes"];
+  sectionExport: SectionExportPacket;
+  onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
   const [filter, setFilter] = useState("all");
@@ -1924,56 +2023,60 @@ function NotesView({
 
   return (
     <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
-      <Panel title="Add date-based note" action="Factual wording">
-        <form onSubmit={addNote} className="grid gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Date">
-              <input name="noteDate" type="date" className="input" defaultValue="2026-06-10" />
+      <div className="space-y-4">
+        <Panel title="Add date-based note" action="Factual wording">
+          <form onSubmit={addNote} className="grid gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Date">
+                <input name="noteDate" type="date" className="input" defaultValue="2026-06-10" />
+              </Field>
+              <Field label="Time">
+                <input name="noteTime" type="time" className="input" />
+              </Field>
+            </div>
+            <Field label="Category">
+              <select name="category" className="input" defaultValue="exchange">
+                {[
+                  "exchange",
+                  "communication",
+                  "school",
+                  "medical",
+                  "expense",
+                  "child_support",
+                  "safety",
+                  "schedule_change",
+                  "child_item",
+                  "attorney",
+                  "court",
+                  "other",
+                ].map((category) => (
+                  <option key={category} value={category}>
+                    {labelNoteCategory(category as NoteCategory)}
+                  </option>
+                ))}
+              </select>
             </Field>
-            <Field label="Time">
-              <input name="noteTime" type="time" className="input" />
+            <Field label="Title">
+              <input name="title" className="input" placeholder="Short factual title" />
             </Field>
-          </div>
-          <Field label="Category">
-            <select name="category" className="input" defaultValue="exchange">
-              {[
-                "exchange",
-                "communication",
-                "school",
-                "medical",
-                "expense",
-                "child_support",
-                "safety",
-                "schedule_change",
-                "child_item",
-                "attorney",
-                "court",
-                "other",
-              ].map((category) => (
-                <option key={category} value={category}>
-                  {labelNoteCategory(category as NoteCategory)}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Title">
-            <input name="title" className="input" placeholder="Short factual title" />
-          </Field>
-          <Field label="What happened?">
-            <textarea name="body" className="input min-h-28" />
-          </Field>
-          <Field label="Tags">
-            <input name="tags" className="input" placeholder="school, exchange" />
-          </Field>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input name="includeInReports" type="checkbox" defaultChecked />
-            Include this note in selected reports
-          </label>
-          <button className="btn-primary" type="submit">
-            Save note
-          </button>
-        </form>
-      </Panel>
+            <Field label="What happened?">
+              <textarea name="body" className="input min-h-28" />
+            </Field>
+            <Field label="Tags">
+              <input name="tags" className="input" placeholder="school, exchange" />
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input name="includeInReports" type="checkbox" defaultChecked />
+              Include this note in selected reports
+            </label>
+            <button className="btn-primary" type="submit">
+              Save note
+            </button>
+          </form>
+        </Panel>
+
+        <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
+      </div>
 
       <Panel title="Notes" action={`${filteredNotes.length} records`}>
         <div className="mb-4 flex flex-wrap gap-2">
@@ -2026,6 +2129,8 @@ function EvidenceView({
   caseId,
   evidence,
   recordsStorageMode,
+  sectionExport,
+  onExportSection,
   flash,
 }: {
   updateDataset: ReturnType<typeof useRecordsStore>["updateDataset"];
@@ -2033,6 +2138,8 @@ function EvidenceView({
   caseId: string;
   evidence: ReturnType<typeof useSelectedRecords>["evidenceItems"];
   recordsStorageMode: "local" | "supabase";
+  sectionExport: SectionExportPacket;
+  onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
   const [uploading, setUploading] = useState(false);
@@ -2404,90 +2511,94 @@ function EvidenceView({
         </form>
       </Panel>
 
-      <Panel title="Evidence index" action={`${evidence.length} records`}>
-        {evidence.length === 0 ? (
-          <Empty label="No evidence records yet." />
-        ) : (
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
-              <p className="text-sm font-medium text-slate-700">
-                {evidence.filter((item) => (item.reviewStatus || "needs_review") === "needs_review").length} need review
-              </p>
-              <button type="button" className="btn-secondary" onClick={downloadEvidenceMetadata}>
-                Download index
-              </button>
-            </div>
-            <div className="divide-y divide-slate-100 rounded-md border border-slate-200 bg-white">
-              {evidence.map((item) => (
-              <div key={item.id} className="grid gap-3 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="break-words text-sm font-semibold text-slate-950">
-                      {item.originalFileName}
-                    </h3>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      {item.evidenceDate || item.uploadedAt.slice(0, 10)} -{" "}
-                      {Math.round(item.fileSize / 1024)} KB - {item.fileType}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    <select
-                      aria-label={`Review status for ${item.originalFileName}`}
-                      value={item.reviewStatus || "needs_review"}
-                      onChange={(event) =>
-                        updateEvidenceReviewStatus(item, event.target.value as EvidenceReviewStatus)
-                      }
-                      className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700"
-                    >
-                      {Object.entries(evidenceReviewStatusLabels).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                    {recordsStorageMode === "supabase" && item.storagePath ? (
+      <div className="space-y-4">
+        <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
+
+        <Panel title="Evidence index" action={`${evidence.length} records`}>
+          {evidence.length === 0 ? (
+            <Empty label="No evidence records yet." />
+          ) : (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className="text-sm font-medium text-slate-700">
+                  {evidence.filter((item) => (item.reviewStatus || "needs_review") === "needs_review").length} need review
+                </p>
+                <button type="button" className="btn-secondary" onClick={downloadEvidenceMetadata}>
+                  Download index
+                </button>
+              </div>
+              <div className="divide-y divide-slate-100 rounded-md border border-slate-200 bg-white">
+                {evidence.map((item) => (
+                <div key={item.id} className="grid gap-3 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="break-words text-sm font-semibold text-slate-950">
+                        {item.originalFileName}
+                      </h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        {item.evidenceDate || item.uploadedAt.slice(0, 10)} -{" "}
+                        {Math.round(item.fileSize / 1024)} KB - {item.fileType}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                      <select
+                        aria-label={`Review status for ${item.originalFileName}`}
+                        value={item.reviewStatus || "needs_review"}
+                        onChange={(event) =>
+                          updateEvidenceReviewStatus(item, event.target.value as EvidenceReviewStatus)
+                        }
+                        className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700"
+                      >
+                        {Object.entries(evidenceReviewStatusLabels).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                      {recordsStorageMode === "supabase" && item.storagePath ? (
+                        <button
+                          type="button"
+                          className="btn-secondary px-3 py-1.5 text-xs"
+                          disabled={busyEvidenceId === item.id || item.malwareScanStatus !== "clean"}
+                          onClick={() => void downloadEvidence(item)}
+                        >
+                          {busyEvidenceId === item.id ? "Working" : "Download"}
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="btn-secondary px-3 py-1.5 text-xs"
-                        disabled={busyEvidenceId === item.id || item.malwareScanStatus !== "clean"}
-                        onClick={() => void downloadEvidence(item)}
+                        onClick={() => printEvidenceSheet(item)}
                       >
-                        {busyEvidenceId === item.id ? "Working" : "Download"}
+                        Print sheet
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="btn-secondary px-3 py-1.5 text-xs"
-                      onClick={() => printEvidenceSheet(item)}
-                    >
-                      Print sheet
-                    </button>
-                    <DeleteButton
-                      label="Delete"
-                      ariaLabel={`Delete evidence ${item.originalFileName}`}
-                      disabled={busyEvidenceId === item.id}
-                      onClick={() => void deleteEvidence(item)}
-                    />
+                      <DeleteButton
+                        label="Delete"
+                        ariaLabel={`Delete evidence ${item.originalFileName}`}
+                        disabled={busyEvidenceId === item.id}
+                        onClick={() => void deleteEvidence(item)}
+                      />
+                    </div>
                   </div>
+                  <div className="flex flex-wrap gap-2">
+                    <StatusPill label={`scan: ${item.malwareScanStatus || "pending"}`} />
+                    <StatusPill label={evidenceReviewStatusLabels[item.reviewStatus || "needs_review"]} />
+                    <StatusPill label={item.storagePath ? "private file" : "metadata only"} />
+                    <StatusPill label={item.includeInReports ? "report included" : "not selected"} />
+                  </div>
+                  {item.reviewedAt || item.submittedAt ? (
+                    <p className="text-xs text-slate-500">
+                      {item.reviewedAt ? `Reviewed ${item.reviewedAt.slice(0, 10)}. ` : ""}
+                      {item.submittedAt ? `Submitted ${item.submittedAt.slice(0, 10)}.` : ""}
+                    </p>
+                  ) : null}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <StatusPill label={`scan: ${item.malwareScanStatus || "pending"}`} />
-                  <StatusPill label={evidenceReviewStatusLabels[item.reviewStatus || "needs_review"]} />
-                  <StatusPill label={item.storagePath ? "private file" : "metadata only"} />
-                  <StatusPill label={item.includeInReports ? "report included" : "not selected"} />
-                </div>
-                {item.reviewedAt || item.submittedAt ? (
-                  <p className="text-xs text-slate-500">
-                    {item.reviewedAt ? `Reviewed ${item.reviewedAt.slice(0, 10)}. ` : ""}
-                    {item.submittedAt ? `Submitted ${item.submittedAt.slice(0, 10)}.` : ""}
-                  </p>
-                ) : null}
+                ))}
               </div>
-              ))}
             </div>
-          </div>
-        )}
-      </Panel>
+          )}
+        </Panel>
+      </div>
     </div>
   );
 }
@@ -2500,6 +2611,8 @@ function ChildSupportView({
   payments,
   supportRows,
   supportStats,
+  sectionExport,
+  onExportSection,
   flash,
 }: {
   updateDataset: ReturnType<typeof useRecordsStore>["updateDataset"];
@@ -2509,6 +2622,8 @@ function ChildSupportView({
   payments: ReturnType<typeof useSelectedRecords>["childSupportPayments"];
   supportRows: Array<{ month: string; amountDue: number; amountPaid: number; unpaidBalance: number }>;
   supportStats: ReturnType<typeof calculateChildSupportStats>;
+  sectionExport: SectionExportPacket;
+  onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
   const firstOrder = orders[0];
@@ -2785,6 +2900,8 @@ function ChildSupportView({
         </div>
 
         <div className="space-y-4">
+          <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
+
           <Panel title="Support orders" action={`${orders.length} saved`}>
             <Table
               headers={["Order", "Amount", "Frequency", "Payer", "Recipient", "Action"]}
@@ -2837,6 +2954,8 @@ function ExpensesView({
   caseId,
   expenses,
   expenseStats,
+  sectionExport,
+  onExportSection,
   flash,
 }: {
   updateDataset: ReturnType<typeof useRecordsStore>["updateDataset"];
@@ -2844,6 +2963,8 @@ function ExpensesView({
   caseId: string;
   expenses: ReturnType<typeof useSelectedRecords>["expenseItems"];
   expenseStats: ReturnType<typeof calculateExpenseStats>;
+  sectionExport: SectionExportPacket;
+  onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
   function addExpense(event: FormEvent<HTMLFormElement>) {
@@ -2994,6 +3115,8 @@ function ExpensesView({
         </Panel>
 
         <div className="space-y-4">
+          <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
+
           <Panel title="Expenses by category" action={`${expenses.length} records`}>
             <ExpenseCategoryChart rows={expenseStats.byCategory} />
           </Panel>
@@ -3642,6 +3765,134 @@ function StatMini({ label, value }: { label: string; value: string }) {
   );
 }
 
+function SectionExportPanel({
+  packet,
+  onExport,
+}: {
+  packet: SectionExportPacket;
+  onExport: (packet: SectionExportPacket, format: SectionExportFormat) => void;
+}) {
+  return (
+    <Panel title="Lawyer/court export" action="Summary + charts">
+      <div className="space-y-4">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {packet.metrics.slice(0, 4).map((metric) => (
+            <StatMini key={metric.label} label={metric.label} value={String(metric.value)} />
+          ))}
+        </div>
+
+        <div className="space-y-3">
+          {packet.charts.slice(0, 2).map((chart) => (
+            <PacketChart key={chart.title} chart={chart} />
+          ))}
+        </div>
+
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Best use</p>
+          <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-5 text-slate-600">
+            {packet.suggestedUses.slice(0, 2).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-3">
+          <button type="button" className="btn-primary" onClick={() => onExport(packet, "pdf")}>
+            Print / save PDF
+          </button>
+          <button type="button" className="btn-secondary" onClick={() => onExport(packet, "csv")}>
+            Download CSV
+          </button>
+          <button type="button" className="btn-secondary" onClick={() => onExport(packet, "json")}>
+            Download JSON
+          </button>
+        </div>
+        <p className="text-xs leading-5 text-slate-500">
+          Exports leave protected storage. Review names, account numbers, and third-party details before sharing.
+        </p>
+      </div>
+    </Panel>
+  );
+}
+
+function PacketChart({ chart }: { chart: SectionExportPacket["charts"][number] }) {
+  if (chart.rows.length === 0) return <Empty label="No chart data for this range." />;
+  const values = chart.rows.flatMap((row) =>
+    [row.value, row.secondaryValue, row.tertiaryValue].filter((value): value is number => typeof value === "number")
+  );
+  const max = Math.max(1, ...values.map((value) => Math.abs(value)));
+  const shownRows = chart.rows.slice(0, 8);
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-950">{chart.title}</h3>
+          {chart.description && <p className="mt-1 text-xs leading-5 text-slate-500">{chart.description}</p>}
+        </div>
+        {chart.unit && <span className="text-xs font-medium text-slate-500">{chart.unit}</span>}
+      </div>
+      <div className="mt-3 space-y-2">
+        {shownRows.map((row) => (
+          <div key={row.label} className="grid gap-1">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <span className="truncate font-medium text-slate-700">{row.label}</span>
+              <span className="shrink-0 tabular-nums text-slate-500">
+                {formatChartValue(row.value, chart.unit)}
+                {typeof row.secondaryValue === "number" ? ` / ${formatChartValue(row.secondaryValue, chart.unit)}` : ""}
+                {typeof row.tertiaryValue === "number" ? ` / ${formatChartValue(row.tertiaryValue, chart.unit)}` : ""}
+              </span>
+            </div>
+            <div className="space-y-1">
+              <ChartBar value={row.value} max={max} tone={row.value < 0 ? "teal" : "amber"} />
+              {typeof row.secondaryValue === "number" && (
+                <ChartBar value={row.secondaryValue} max={max} tone="blue" />
+              )}
+              {typeof row.tertiaryValue === "number" && (
+                <ChartBar value={row.tertiaryValue} max={max} tone="slate" />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      {chart.rows.length > shownRows.length && (
+        <p className="mt-2 text-xs text-slate-500">{chart.rows.length - shownRows.length} more rows included in export.</p>
+      )}
+    </div>
+  );
+}
+
+function ChartBar({
+  value,
+  max,
+  tone,
+}: {
+  value: number;
+  max: number;
+  tone: "amber" | "blue" | "slate" | "teal";
+}) {
+  const width = `${Math.max(4, Math.min(100, (Math.abs(value) / max) * 100))}%`;
+  const color =
+    tone === "blue"
+      ? "bg-blue-600"
+      : tone === "slate"
+        ? "bg-slate-500"
+        : tone === "teal"
+          ? "bg-teal-600"
+          : "bg-amber-500";
+  return (
+    <div className="h-2 rounded-full bg-slate-100">
+      <div className={`h-2 rounded-full ${color}`} style={{ width }} />
+    </div>
+  );
+}
+
+function formatChartValue(value: number, unit?: string) {
+  if (unit === "USD") return formatMoney(value);
+  if (unit === "minutes") return `${value} min`;
+  return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+}
+
 function Segmented({
   value,
   options,
@@ -4065,6 +4316,142 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function buildSectionExportPrintHtml(packet: SectionExportPacket) {
+  return `<!doctype html>
+    <html>
+      <head>
+        <title>${escapeHtml(packet.title)}</title>
+        <style>
+          @page { margin: 0.55in; }
+          body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #0f172a; margin: 0; }
+          h1 { font-size: 24px; line-height: 1.2; margin: 0 0 6px; }
+          h2 { font-size: 15px; margin: 24px 0 8px; }
+          h3 { font-size: 13px; margin: 0 0 8px; }
+          p { color: #475569; font-size: 12px; line-height: 1.55; margin: 0; }
+          .muted { color: #64748b; }
+          .notice { border: 1px solid #fde68a; background: #fffbeb; padding: 10px; margin: 14px 0; font-size: 12px; line-height: 1.5; color: #713f12; }
+          .summary { display: grid; gap: 8px; margin: 16px 0; }
+          .summary p { border: 1px solid #e2e8f0; background: #f8fafc; padding: 10px; color: #334155; }
+          .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
+          .metric { border: 1px solid #e2e8f0; padding: 10px; }
+          .metric strong { display: block; font-size: 18px; color: #0f766e; margin-top: 4px; }
+          .chart { break-inside: avoid; border: 1px solid #e2e8f0; padding: 12px; margin: 12px 0; }
+          .chart-row { margin-top: 8px; }
+          .chart-label { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; color: #334155; }
+          .track { height: 8px; background: #f1f5f9; border-radius: 999px; margin-top: 4px; overflow: hidden; }
+          .bar { height: 8px; border-radius: 999px; background: #d97706; }
+          .bar.secondary { background: #2563eb; }
+          .bar.tertiary { background: #64748b; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
+          th, td { border: 1px solid #cbd5e1; padding: 6px; vertical-align: top; text-align: left; }
+          th { background: #f8fafc; color: #334155; }
+          ul { color: #475569; font-size: 12px; line-height: 1.5; margin: 8px 0 0 18px; padding: 0; }
+        </style>
+      </head>
+      <body>
+        <p class="muted">${escapeHtml(packet.range.from)} to ${escapeHtml(packet.range.to)}</p>
+        <h1>${escapeHtml(packet.title)}</h1>
+        <p>${escapeHtml(packet.caseName)}</p>
+        <p class="muted">Generated ${escapeHtml(packet.generatedAt)}</p>
+        <div class="notice">${escapeHtml(packet.disclaimer)}</div>
+        <section class="metrics">
+          ${packet.metrics
+            .map(
+              (metric) => `<div class="metric"><p>${escapeHtml(metric.label)}</p><strong>${escapeHtml(
+                String(metric.value)
+              )}</strong><p>${escapeHtml(metric.detail || "")}</p></div>`
+            )
+            .join("")}
+        </section>
+        <section class="summary">
+          ${packet.summaries.map((summary) => `<p>${escapeHtml(summary)}</p>`).join("")}
+        </section>
+        <h2>Charts</h2>
+        ${packet.charts.map(buildPrintableChartHtml).join("") || "<p>No chart data for this range.</p>"}
+        <h2>Suggested use</h2>
+        <ul>${packet.suggestedUses.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        <h2>Tables</h2>
+        ${packet.tables.map(buildPrintableTableHtml).join("")}
+        <script>window.print();</script>
+      </body>
+    </html>`;
+}
+
+function buildPrintableChartHtml(chart: SectionExportPacket["charts"][number]) {
+  if (chart.rows.length === 0) {
+    return `<div class="chart"><h3>${escapeHtml(chart.title)}</h3><p>No chart data for this range.</p></div>`;
+  }
+  const values = chart.rows.flatMap((row) =>
+    [row.value, row.secondaryValue, row.tertiaryValue].filter((value): value is number => typeof value === "number")
+  );
+  const max = Math.max(1, ...values.map((value) => Math.abs(value)));
+
+  return `<div class="chart">
+    <h3>${escapeHtml(chart.title)}${chart.unit ? ` (${escapeHtml(chart.unit)})` : ""}</h3>
+    ${chart.description ? `<p>${escapeHtml(chart.description)}</p>` : ""}
+    ${chart.rows
+      .map((row) => {
+        const width = Math.max(4, Math.min(100, (Math.abs(row.value) / max) * 100));
+        const secondaryWidth =
+          typeof row.secondaryValue === "number"
+            ? Math.max(4, Math.min(100, (Math.abs(row.secondaryValue) / max) * 100))
+            : 0;
+        const tertiaryWidth =
+          typeof row.tertiaryValue === "number"
+            ? Math.max(4, Math.min(100, (Math.abs(row.tertiaryValue) / max) * 100))
+            : 0;
+        return `<div class="chart-row">
+          <div class="chart-label"><span>${escapeHtml(row.label)}</span><span>${escapeHtml(
+            [
+              formatChartValue(row.value, chart.unit),
+              typeof row.secondaryValue === "number" ? formatChartValue(row.secondaryValue, chart.unit) : "",
+              typeof row.tertiaryValue === "number" ? formatChartValue(row.tertiaryValue, chart.unit) : "",
+            ]
+              .filter(Boolean)
+              .join(" / ")
+          )}</span></div>
+          <div class="track"><div class="bar" style="width:${width}%"></div></div>
+          ${
+            typeof row.secondaryValue === "number"
+              ? `<div class="track"><div class="bar secondary" style="width:${secondaryWidth}%"></div></div>`
+              : ""
+          }
+          ${
+            typeof row.tertiaryValue === "number"
+              ? `<div class="track"><div class="bar tertiary" style="width:${tertiaryWidth}%"></div></div>`
+              : ""
+          }
+        </div>`;
+      })
+      .join("")}
+  </div>`;
+}
+
+function buildPrintableTableHtml(table: SectionExportPacket["tables"][number]) {
+  return `<section>
+    <h2>${escapeHtml(table.title)}</h2>
+    ${
+      table.rows.length === 0
+        ? "<p>No rows for this range.</p>"
+        : `<table>
+            <thead>
+              <tr>${table.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
+            </thead>
+            <tbody>
+              ${table.rows
+                .map(
+                  (row) =>
+                    `<tr>${table.headers
+                      .map((_, index) => `<td>${escapeHtml(row[index] || "")}</td>`)
+                      .join("")}</tr>`
+                )
+                .join("")}
+            </tbody>
+          </table>`
+    }
+  </section>`;
 }
 
 function withAlpha(hex: string, alpha: number) {

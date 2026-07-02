@@ -14,7 +14,7 @@ import {
   generateExpectedExchangeEvents,
 } from "@/lib/records/calculations";
 import { createRecordsSeed, demoCaseId, demoUserId } from "@/lib/records/seed";
-import { buildReportPreview, rowsToCsv } from "@/lib/records/reports";
+import { buildReportPreview, buildSectionExportPacket, rowsToCsv, sectionExportToCsv } from "@/lib/records/reports";
 import { validateEvidenceFile } from "@/lib/records/validation";
 
 const range = { from: "2026-05-01", to: "2026-05-31" };
@@ -190,6 +190,19 @@ describe("privacy and safety helpers", () => {
     );
     expect(csv.split("\n")[0]).toContain("caregiver_label");
     expect(csv.split("\n")[0]).toContain("ordered_exchange_time");
+  });
+
+  it("builds section export packets with chart and table data", () => {
+    const dataset = createRecordsSeed();
+    const packet = buildSectionExportPacket(dataset, demoUserId, demoCaseId, range, "exchanges");
+    const csv = sectionExportToCsv(packet);
+
+    expect(packet.title).toBe("Exchange Compliance Packet");
+    expect(packet.metrics.map((metric) => metric.label)).toContain("Late");
+    expect(packet.charts.map((chart) => chart.title)).toContain("Minutes early/late by logged exchange");
+    expect(packet.tables.map((table) => table.title)).toContain("Logged exchange outcomes");
+    expect(csv).toContain("chart_data");
+    expect(csv).toContain("Logged exchange outcomes");
   });
 
   it("exports incident timeline rows from all dated record sources", () => {

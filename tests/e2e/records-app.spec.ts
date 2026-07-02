@@ -30,6 +30,8 @@ test("records login and report workflow", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Timeline", exact: true })).toBeVisible();
   await expect(page.getByText("Case timeline")).toBeVisible();
   await expect(page.getByRole("button", { name: "Export timeline CSV" })).toBeVisible();
+  await expect(page.getByText("Lawyer/court export")).toBeVisible();
+  await expect(page.getByText("Timeline records by type")).toBeVisible();
   await page.getByLabel("Show").selectOption("logged_exchange");
   const lateExchange = page.locator("details").filter({ hasText: "Logged exchange: completed late" }).first();
   await expect(lateExchange).toBeVisible();
