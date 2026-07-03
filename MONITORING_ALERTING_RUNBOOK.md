@@ -41,6 +41,17 @@ npm run verify:security-events
 
 For webhook sinks, the script requires a successful HTTPS response. For platform or SIEM sinks, confirm the synthetic sanitized event appears in the monitoring tool before setting `SECURITY_MONITORING_ENABLED=true`.
 
+## Current Automated Monitor
+
+`.github/workflows/live-monitor.yml` runs every 30 minutes and can also be started manually. It checks:
+
+- `https://losttofound.org/records` responds successfully.
+- Required security headers are present.
+- `/api/records/readiness` responds with JSON.
+- Any readiness blockers are limited to the known unresolved launch gates.
+
+If the workflow fails, it opens or comments on a GitHub issue labeled `live-monitor`. This provides a basic live drift alert, but it does not replace the required production monitoring channels above. Keep `SECURITY_MONITORING_ENABLED=false` until the owner has confirmed the alert channel is watched and the platform/SIEM/webhook event sink is visible in production logs.
+
 ## Required Alerts
 
 | Signal | Suggested Threshold | Severity |

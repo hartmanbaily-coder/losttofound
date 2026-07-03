@@ -1,0 +1,113 @@
+name: LostToFound Live Monitor
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    env:
+      RECORDS_APP_BASE_URL: https://losttofound.org
+    steps:
+      - name: Check live records app
+        run: |
+          node <<'NODE'
+          const baseUrl = process.env.RECORDS_APP_BASE_URL.replace(/\/$/, "");
+          const expectedKnownBlockers = new Set([
+            "supabase-leaked-passwords",
+            "supabase-auth-hardening-verified",
+            "security-monitoring",
+            "backup-restore-tested",
+            "data-retention-policy",
+            "incident-response-plan",
+            "legal-review",
+          ]);
+
+          function fail(message) {
+            console.error(message);
+            process.exitCode = 1;
+          }
+
+          async function get(url, options = {}) {
+            const response = await fetch(url, {
+              ...options,
+              headers: {
+                Accept: "application/json,text/html,*/*",
+                ...(options.headers || {}),
+              },
+            });
+            return response;
+          }
+
+          const recordsResponse = await get(`${baseUrl}/records`);
+          if (!recordsResponse.ok) {
+            fail(`/records returned HTTP ${recordsResponse.status}`);
+          }
+
+          const requiredHeaders = [
+            "content-security-policy",
+            "strict-transport-security",
+            "x-content-type-options",
+            "x-frame-options",
+            "referrer-policy",
+            "permissions-policy",
+          ];
+
+          for (const header of requiredHeaders) {
+            if (!recordsResponse.headers.get(header)) {
+              fail(`/records is missing ${header}`);
+            }
+          }
+
+          const readinessResponse = await get(`${baseUrl}/api/records/readiness`);
+          if (![200, 503].includes(readinessResponse.status)) {
+            fail(`/api/records/readiness returned HTTP ${readinessResponse.status}`);
+          }
+
+          const readiness = await readinessResponse.json();
+          if (!Array.isArray(readiness.blockers)) {
+            fail("Readiness response does not include blockers array.");
+          }
+
+          const blockerIds = readiness.blockers.map((item) => item.id);
+          const unexpected = blockerIds.filter((id) => !expectedKnownBlockers.has(id));
+          if (unexpected.length > 0) {
+            fail(`Unexpected readiness blockers: ${unexpected.join(", ")}`);
+          }
+
+          console.log(
+            JSON.stringify(
+              {
+                checkedAt: new Date().toISOString(),
+                url: baseUrl,
+                readinessStatus: readiness.status,
+                knownBlockers: blockerIds,
+              },
+              null,
+              2
+            )
+          );
+          NODE
+
+      - name: Open monitor issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing_issue="$(gh issue list --state open --label live-monitor --json number --jq '.[0].number // empty')"
+          if [ -n "$existing_issue" ]; then
+            gh issue comment "$existing_issue" --body "Live monitor failed again: ${RUN_URL}"
+            exit 0
+          fi
+
+          gh issue create \
+            --title "LostToFound live monitor failed" \
+            --label "live-monitor" \
+            --body "The scheduled live monitor failed. Review the workflow run: ${RUN_URL}"
