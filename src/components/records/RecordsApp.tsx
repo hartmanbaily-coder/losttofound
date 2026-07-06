@@ -13,6 +13,7 @@ import {
   formatMoney,
   generateExpectedExchangeEvents,
   getIsoDateFromDateTime,
+  isTimelineVisibleEvent,
   labelEventType,
   labelExchangeStatus,
   labelNoteCategory,
@@ -227,6 +228,10 @@ export default function RecordsApp() {
   const calendarEvents = useMemo(
     () => buildCalendarEvents(dataset, userId, effectiveCaseId, range),
     [dataset, userId, effectiveCaseId, range]
+  );
+  const timelineEvents = useMemo(
+    () => calendarEvents.filter(isTimelineVisibleEvent),
+    [calendarEvents]
   );
   const exchangeRows = useMemo(
     () => exchangeChartRows(selected.exchangeLogs, range),
@@ -455,13 +460,13 @@ export default function RecordsApp() {
                 exchangeRows={exchangeRows}
                 supportRows={supportRows}
                 expenseRows={expenseStats.byCategory}
-                calendarEvents={calendarEvents}
+                calendarEvents={timelineEvents}
                 evidenceCount={selected.evidenceItems.length}
               />
             )}
             {activeView === "Calendar" && (
               <CalendarView
-                events={calendarEvents}
+                events={timelineEvents}
                 custodyDayAssignments={selected.custodyDayAssignments}
                 updateDataset={updateDataset}
                 userId={userId}
@@ -478,7 +483,7 @@ export default function RecordsApp() {
             )}
             {activeView === "Timeline" && (
               <TimelineView
-                events={calendarEvents}
+                events={timelineEvents}
                 range={range}
                 updateDataset={updateDataset}
                 userId={userId}
@@ -887,8 +892,9 @@ function CalendarView({
   const [paintDraftDates, setPaintDraftDates] = useState<Set<string>>(() => new Set());
   const paintingRef = useRef(false);
   const paintDraftDatesRef = useRef<Set<string>>(new Set());
+  const visibleEvents = useMemo(() => events.filter(isTimelineVisibleEvent), [events]);
   const eventsByDate = new Map<string, CalendarEvent[]>();
-  for (const event of events) {
+  for (const event of visibleEvents) {
     eventsByDate.set(event.date, [...(eventsByDate.get(event.date) || []), event]);
   }
   const custodyDayMap = buildCustodyDayMap(custodyDayAssignments, {
@@ -1433,9 +1439,9 @@ function CalendarView({
       )}
 
       {mode === "list" && (
-        <Panel title="Weekly/list view" action={`${events.length} records`}>
+        <Panel title="Weekly/list view" action={`${visibleEvents.length} records`}>
           <Timeline
-            events={events}
+            events={visibleEvents}
             emptyLabel="No calendar records in this date range."
             onDeleteEvent={deleteTimelineEvent}
           />
@@ -1445,7 +1451,7 @@ function CalendarView({
       {mode === "timeline" && (
         <Panel title="Chronological timeline" action="Order, recorded events, notes, evidence, expenses">
           <Timeline
-            events={events}
+            events={visibleEvents}
             emptyLabel="No timeline records in this date range."
             onDeleteEvent={deleteTimelineEvent}
           />
@@ -1475,13 +1481,14 @@ function TimelineView({
   flash: (message: string) => void;
 }) {
   const [filter, setFilter] = useState<TimelineFilter>("all");
-  const filteredEvents = events.filter((event) => matchesTimelineFilter(event, filter));
-  const attentionCount = events.filter(isAttentionTimelineEvent).length;
-  const exchangeCount = events.filter(
+  const visibleEvents = events.filter(isTimelineVisibleEvent);
+  const filteredEvents = visibleEvents.filter((event) => matchesTimelineFilter(event, filter));
+  const attentionCount = visibleEvents.filter(isAttentionTimelineEvent).length;
+  const exchangeCount = visibleEvents.filter(
     (event) => event.type === "scheduled_exchange" || event.type === "logged_exchange"
   ).length;
-  const noteCount = events.filter((event) => event.type === "custody_note").length;
-  const evidenceCount = events.filter((event) => event.type === "evidence_item").length;
+  const noteCount = visibleEvents.filter((event) => event.type === "custody_note").length;
+  const evidenceCount = visibleEvents.filter((event) => event.type === "evidence_item").length;
 
   function deleteTimelineEvent(event: CalendarEvent) {
     if (!canDeleteTimelineEvent(event)) {
@@ -1527,7 +1534,7 @@ function TimelineView({
   return (
     <div className="space-y-4">
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Timeline records" value={events.length} detail={`${range.from} to ${range.to}`} />
+        <StatCard label="Timeline records" value={visibleEvents.length} detail={`${range.from} to ${range.to}`} />
         <StatCard label="Needs review" value={attentionCount} detail="Attention or critical markers" tone="amber" />
         <StatCard label="Exchange entries" value={exchangeCount} detail="Scheduled and logged" />
         <StatCard label="Notes" value={noteCount} detail="Date-based records" tone="slate" />
@@ -3953,21 +3960,6 @@ function deleteTimelineEventFromDataset(
     entityId: recordId,
     metadataSummary: `${labelEventType(event.type)} removed from timeline.`,
   };
-
-  if (event.type === "custody_day") {
-    return withAudit(
-      {
-        ...dataset,
-        custodyDayAssignments: removeOwnedRecordById(
-          dataset.custodyDayAssignments,
-          recordId,
-          userId,
-          caseId
-        ),
-      },
-      { ...auditBase, entityType: "custodyDayAssignment" }
-    );
-  }
 
   if (event.type === "logged_exchange") {
     return withAudit(

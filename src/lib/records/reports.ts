@@ -11,6 +11,7 @@ import {
   formatMoney,
   generateExpectedExchangeEvents,
   getIsoDateFromDateTime,
+  isTimelineVisibleEvent,
   isWithinDateRange,
   labelEventType,
   labelExchangeStatus,
@@ -201,7 +202,7 @@ export function buildSectionExportPacket(
   const generatedAt = new Date().toISOString();
   const disclaimer =
     "This export organizes user-entered records. It is not legal advice; review with a qualified attorney before filing or sharing.";
-  const events = buildCalendarEvents(dataset, userId, caseId, range);
+  const events = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent);
   const exchangeRules = ownedCaseRecords(dataset.exchangeRules, userId, caseId);
   const expectedExchanges = generateExpectedExchangeEvents(exchangeRules, range);
   const exchangeLogs = ownedCaseRecords(dataset.exchangeLogs, userId, caseId).filter((log) =>
@@ -650,7 +651,7 @@ export function buildReportRows(
       tags: log.tags.join("; "),
     }));
 
-  const timelineRows = buildCalendarEvents(dataset, userId, caseId, range).map((event) => ({
+  const timelineRows = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent).map((event) => ({
     date: event.date,
     time: event.time || "",
     type: labelEventType(event.type),

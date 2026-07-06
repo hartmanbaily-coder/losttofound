@@ -538,6 +538,10 @@ export function buildCalendarEvents(
     );
 }
 
+export function isTimelineVisibleEvent(event: CalendarEvent) {
+  return event.type !== "custody_day";
+}
+
 export function buildNeutralExchangeSummary(
   range: DateRange,
   scheduledCount: number,

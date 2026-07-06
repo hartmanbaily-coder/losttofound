@@ -12,6 +12,7 @@ import {
   containsForbiddenGeneratedTerm,
   filterOwnedCaseRecords,
   generateExpectedExchangeEvents,
+  isTimelineVisibleEvent,
 } from "@/lib/records/calculations";
 import { createRecordsSeed, demoCaseId, demoUserId } from "@/lib/records/seed";
 import { buildReportPreview, buildSectionExportPacket, rowsToCsv, sectionExportToCsv } from "@/lib/records/reports";
@@ -92,6 +93,15 @@ describe("records calculations", () => {
       exchangeTime: "18:00",
     });
     expect(events.some((event) => event.type === "custody_day")).toBe(false);
+    expect(
+      isTimelineVisibleEvent({
+        id: "legacy-custody-day",
+        caseId: demoCaseId,
+        date: "2026-05-01",
+        type: "custody_day",
+        title: "Parent A",
+      })
+    ).toBe(false);
   });
 
   it("builds a detailed court timeline from exchanges, notes, evidence, support, and expenses", () => {
