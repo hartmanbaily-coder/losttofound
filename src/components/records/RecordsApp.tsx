@@ -135,7 +135,6 @@ const timelineFilterOptions: Array<{ value: TimelineFilter; label: string }> = [
   { value: "attention", label: "Needs review" },
   { value: "scheduled_exchange", label: "Scheduled exchanges" },
   { value: "logged_exchange", label: "Logged exchanges" },
-  { value: "custody_day", label: "Custody days" },
   { value: "custody_note", label: "Notes" },
   { value: "evidence_item", label: "Evidence" },
   { value: "child_support_due", label: "Support due" },
@@ -144,7 +143,6 @@ const timelineFilterOptions: Array<{ value: TimelineFilter; label: string }> = [
 ];
 
 const directTimelineDeleteTypes = new Set<CalendarEvent["type"]>([
-  "custody_day",
   "logged_exchange",
   "custody_note",
   "child_support_due",
@@ -1563,7 +1561,7 @@ function TimelineView({
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sources</p>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-medium text-slate-600">
-                  {["Calendar", "Exchanges", "Notes", "Evidence", "Support", "Expenses"].map((source) => (
+                  {["Exchanges", "Notes", "Evidence", "Support", "Expenses"].map((source) => (
                     <span key={source} className="rounded bg-white px-2 py-1">
                       {source}
                     </span>

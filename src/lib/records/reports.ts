@@ -246,7 +246,7 @@ export function buildSectionExportPacket(
       ],
       metrics: [
         { label: "Custody days", value: custodyAssignments.length, detail: "Color-coded calendar entries" },
-        { label: "Dated records", value: events.length, detail: "All timeline sources" },
+        { label: "Dated records", value: events.length, detail: "Timeline-visible sources" },
         { label: "Needs review", value: attentionEvents.length, detail: "Attention or critical severity" },
       ],
       charts: [
@@ -258,7 +258,7 @@ export function buildSectionExportPacket(
         },
         {
           title: "Calendar records by source",
-          description: "All dated records shown on the calendar.",
+          description: "Dated exchange, note, evidence, support, and expense records shown on the calendar.",
           unit: "records",
           rows: countBy(events, (event) => labelEventType(event.type)),
         },
@@ -302,7 +302,7 @@ export function buildSectionExportPacket(
       ...base,
       summaries: [
         `The timeline has ${events.length} dated record${events.length === 1 ? "" : "s"} in the selected range, with ${attentionEvents.length} marked for review.`,
-        "Timeline exports combine calendar, exchange, notes, evidence, support, and expense records in chronological order.",
+        "Timeline exports combine exchange, note, evidence, support, and expense records in chronological order.",
       ],
       metrics: [
         { label: "Timeline records", value: events.length, detail: `${range.from} to ${range.to}` },

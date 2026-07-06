@@ -341,7 +341,6 @@ export function buildCalendarEvents(
 ): CalendarEvent[] {
   const rules = filterOwnedCaseRecords(dataset.exchangeRules, userId, caseId);
   const expected = generateExpectedExchangeEvents(rules, range);
-  const custodyDayAssignments = filterOwnedCaseRecords(dataset.custodyDayAssignments, userId, caseId);
   const exchangeLogs = filterOwnedCaseRecords(dataset.exchangeLogs, userId, caseId);
   const notes = filterOwnedCaseRecords(dataset.dateNotes, userId, caseId);
   const evidenceItems = filterOwnedCaseRecords(dataset.evidenceItems, userId, caseId);
@@ -349,32 +348,6 @@ export function buildCalendarEvents(
   const expenses = filterOwnedCaseRecords(dataset.expenseItems, userId, caseId);
 
   const events: CalendarEvent[] = [
-    ...custodyDayAssignments.map((assignment) => ({
-      id: `custody-day-${assignment.id}`,
-      caseId,
-      date: assignment.date,
-      time: assignment.startsAt || assignment.exchangeTime,
-      sortAt: buildSortAt(assignment.date, assignment.startsAt || assignment.exchangeTime),
-      type: "custody_day" as const,
-      title: `Custody day: ${assignment.caregiverLabel}`,
-      detail: joinParts([
-        assignment.startsAt && assignment.endsAt ? `${assignment.startsAt}-${assignment.endsAt}` : undefined,
-        assignment.exchangeTime ? `Exchange at ${assignment.exchangeTime}` : undefined,
-        assignment.exchangeDirection ? assignment.exchangeDirection.replaceAll("_", " ") : undefined,
-        assignment.exchangeLocation,
-      ]),
-      summary: joinParts([
-        `Caregiver: ${assignment.caregiverLabel}`,
-        assignment.exchangeLocation ? `Location: ${assignment.exchangeLocation}` : undefined,
-      ]),
-      body: assignment.notes,
-      tags: [assignment.caregiverLabel, assignment.exchangeDirection?.replaceAll("_", " ")].filter(
-        Boolean
-      ) as string[],
-      severity: "neutral" as const,
-      sourceLabel: "Custody calendar",
-      relatedIds: [assignment.id],
-    })),
     ...expected.map((event) => ({
       id: event.id,
       caseId,

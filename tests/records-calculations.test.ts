@@ -80,7 +80,7 @@ describe("records calculations", () => {
     expect(stats.byCategory.map((row) => row.category)).toContain("school");
   });
 
-  it("maps color-coded custody days into calendar events", () => {
+  it("keeps color-coded custody days on the calendar outside timeline events", () => {
     const dataset = createRecordsSeed();
     const assignments = filterOwnedCaseRecords(dataset.custodyDayAssignments, demoUserId, demoCaseId);
     const dayMap = buildCustodyDayMap(assignments, range);
@@ -91,16 +91,10 @@ describe("records calculations", () => {
       color: "#0f766e",
       exchangeTime: "18:00",
     });
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        date: "2026-05-01",
-        type: "custody_day",
-        title: "Custody day: Parent A",
-      })
-    );
+    expect(events.some((event) => event.type === "custody_day")).toBe(false);
   });
 
-  it("builds a detailed court timeline from calendar, exchanges, notes, evidence, support, and expenses", () => {
+  it("builds a detailed court timeline from exchanges, notes, evidence, support, and expenses", () => {
     const dataset = createRecordsSeed();
     const events = buildCalendarEvents(dataset, demoUserId, demoCaseId, range);
     const lateExchange = events.find((event) => event.id === "log-exchange-2026-05-08");
@@ -205,7 +199,7 @@ describe("privacy and safety helpers", () => {
     expect(csv).toContain("Logged exchange outcomes");
   });
 
-  it("exports incident timeline rows from all dated record sources", () => {
+  it("exports incident timeline rows from timeline-visible dated record sources", () => {
     const dataset = createRecordsSeed();
     const preview = buildReportPreview(dataset, demoUserId, demoCaseId, range, "incident_timeline");
     const csv = rowsToCsv(preview.rows);
@@ -219,15 +213,12 @@ describe("privacy and safety helpers", () => {
           attention_level: "attention",
         }),
         expect.objectContaining({
-          type: "custody day",
-          source: "Custody calendar",
-        }),
-        expect.objectContaining({
           type: "evidence item",
           source: "Evidence",
         }),
       ])
     );
+    expect(preview.rows.some((row) => "type" in row && row.type === "custody day")).toBe(false);
     expect(csv.split("\n")[0]).toContain("attention_level");
     expect(csv).toContain("Recorded arrival at 6:32 PM.");
   });
