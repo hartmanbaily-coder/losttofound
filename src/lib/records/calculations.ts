@@ -352,6 +352,7 @@ export function buildCalendarEvents(
 ): CalendarEvent[] {
   const rules = filterOwnedCaseRecords(dataset.exchangeRules, userId, caseId);
   const expected = generateExpectedExchangeEvents(rules, range);
+  const custodyAssignments = filterOwnedCaseRecords(dataset.custodyDayAssignments, userId, caseId);
   const exchangeLogs = filterOwnedCaseRecords(dataset.exchangeLogs, userId, caseId);
   const notes = filterOwnedCaseRecords(dataset.dateNotes, userId, caseId);
   const evidenceItems = filterOwnedCaseRecords(dataset.evidenceItems, userId, caseId);
@@ -378,6 +379,35 @@ export function buildCalendarEvents(
       sourceLabel: "Exchange schedule",
       relatedIds: [event.custodyExchangeRuleId],
     })),
+    ...custodyAssignments
+      .filter((assignment) => assignment.exchangeTime)
+      .map((assignment) => ({
+        id: `custody-scheduled-exchange-${assignment.id}`,
+        caseId,
+        date: assignment.date,
+        time: assignment.exchangeTime,
+        sortAt: buildSortAt(assignment.date, assignment.exchangeTime),
+        type: "scheduled_exchange" as const,
+        title: `Scheduled exchange: ${assignment.caregiverLabel}`,
+        detail: joinParts([
+          assignment.exchangeTime ? `Ordered time ${assignment.exchangeTime}` : undefined,
+          assignment.exchangeDirection?.replaceAll("_", " "),
+          assignment.exchangeLocation,
+        ]),
+        summary: joinParts([
+          `Calendar assignment: ${assignment.caregiverLabel}`,
+          assignment.exchangeLocation ? `Location: ${assignment.exchangeLocation}` : undefined,
+        ]),
+        body: assignment.notes,
+        tags: [
+          "scheduled exchange",
+          "custody calendar",
+          assignment.exchangeDirection?.replaceAll("_", " "),
+        ].filter(Boolean) as string[],
+        severity: "neutral" as const,
+        sourceLabel: "Custody calendar",
+        relatedIds: [assignment.id],
+      })),
     ...exchangeLogs.map((log) => {
       const timing = calculateExchangeTiming(log);
       const orderedDate = getIsoDateFromDateTime(log.orderedExchangeAt);

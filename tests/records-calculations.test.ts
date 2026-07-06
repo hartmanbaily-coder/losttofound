@@ -92,16 +92,25 @@ describe("records calculations", () => {
     expect(stats.byCategory.map((row) => row.category)).toContain("school");
   });
 
-  it("keeps color-coded custody days on the calendar outside timeline events", () => {
+  it("keeps custody day colors off the timeline while surfacing dated transition exchanges", () => {
     const dataset = createRecordsSeed();
     const assignments = filterOwnedCaseRecords(dataset.custodyDayAssignments, demoUserId, demoCaseId);
     const dayMap = buildCustodyDayMap(assignments, range);
     const events = buildCalendarEvents(dataset, demoUserId, demoCaseId, range);
+    const custodyExchange = events.find(
+      (event) => event.id === "custody-scheduled-exchange-custody-day-2026-05-01"
+    );
 
     expect(dayMap.get("2026-05-01")).toMatchObject({
       caregiverLabel: "Parent A",
       color: "#0f766e",
       exchangeTime: "18:00",
+    });
+    expect(custodyExchange).toMatchObject({
+      date: "2026-05-01",
+      time: "18:00",
+      type: "scheduled_exchange",
+      sourceLabel: "Custody calendar",
     });
     expect(events.some((event) => event.type === "custody_day")).toBe(false);
     expect(

@@ -3,12 +3,14 @@
 import type { FormEvent, PointerEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  addDays,
   buildDashboardTimelineStats,
   buildCalendarEvents,
   buildCustodyDayMap,
   calculateChildSupportStats,
   calculateExpenseStats,
   childSupportChartRows,
+  daysBetween,
   exchangeChartRows,
   formatMoney,
   generateExpectedExchangeEvents,
@@ -140,6 +142,57 @@ const paymentStatuses: PaymentStatus[] = [
 
 type TimelineFilter = "all" | "attention" | CalendarEvent["type"];
 type EvidenceReviewStatus = NonNullable<EvidenceItem["reviewStatus"]>;
+type ParentingSchedulePresetId =
+  | "three_four_four_three_flip"
+  | "week_on_week_off"
+  | "two_two_three"
+  | "two_two_five_five"
+  | "three_three_four_four"
+  | "weekday_alternating_weekend";
+type ScheduleParentKey = "you" | "other";
+
+const parentingSchedulePresets: Array<{
+  id: ParentingSchedulePresetId;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: "three_four_four_three_flip",
+    label: "3/4/4/3 with 8-week flip",
+    description:
+      "Alternates 4-3 then 3-4 blocks for eight weeks, then swaps which parent starts the four-day block.",
+  },
+  {
+    id: "week_on_week_off",
+    label: "Week on / week off",
+    description:
+      "Seven days with one parent, then seven days with the other parent.",
+  },
+  {
+    id: "two_two_three",
+    label: "2-2-3",
+    description:
+      "Two days, two days, then a three-day weekend, flipping the long weekend each week.",
+  },
+  {
+    id: "two_two_five_five",
+    label: "2-2-5-5",
+    description:
+      "Two fixed weekdays with each parent, then alternating five-day stretches.",
+  },
+  {
+    id: "three_three_four_four",
+    label: "3-3-4-4",
+    description:
+      "Three days with each parent, then four days with each parent.",
+  },
+  {
+    id: "weekday_alternating_weekend",
+    label: "Weekdays + alternating weekend",
+    description:
+      "Primary weekday pattern with the other parent receiving every other weekend.",
+  },
+];
 
 const timelineFilterOptions: Array<{ value: TimelineFilter; label: string }> = [
   { value: "all", label: "All records" },
@@ -2513,8 +2566,8 @@ async function requestAiImportDrafts({
 }: {
   content: string;
   sourceLabel: string;
-  defaultYear: number;
-  defaultOrderedTime: string;
+  defaultYear?: number;
+  defaultOrderedTime?: string;
   importKind: AiImportKind;
 }) {
   const response = await fetch("/api/records/import/assist", {
@@ -2524,9 +2577,9 @@ async function requestAiImportDrafts({
     body: JSON.stringify({
       content,
       sourceLabel,
-      defaultYear,
-      defaultOrderedTime,
       importKind,
+      ...(defaultYear ? { defaultYear } : {}),
+      ...(defaultOrderedTime ? { defaultOrderedTime } : {}),
     }),
   });
 
@@ -2573,6 +2626,165 @@ function aiPayloadToImportDraft(draft: AiImportDraftPayload): ImportDraft {
   };
 }
 
+function oppositeScheduleParent(parent: ScheduleParentKey): ScheduleParentKey {
+  return parent === "you" ? "other" : "you";
+}
+
+function ownerFromBlocks(
+  offset: number,
+  blocks: Array<{ owner: ScheduleParentKey; days: number }>
+) {
+  const cycleLength = blocks.reduce((sum, block) => sum + block.days, 0);
+  let cursor = offset % cycleLength;
+  for (const block of blocks) {
+    if (cursor < block.days) return block.owner;
+    cursor -= block.days;
+  }
+  return blocks[0].owner;
+}
+
+function scheduleOwnerForOffset(
+  presetId: ParentingSchedulePresetId,
+  startOwner: ScheduleParentKey,
+  offset: number
+) {
+  const otherOwner = oppositeScheduleParent(startOwner);
+
+  if (presetId === "three_four_four_three_flip") {
+    const activeStartOwner = Math.floor(offset / 56) % 2 === 0 ? startOwner : otherOwner;
+    const activeOtherOwner = oppositeScheduleParent(activeStartOwner);
+    return ownerFromBlocks(offset % 56, [
+      { owner: activeStartOwner, days: 4 },
+      { owner: activeOtherOwner, days: 3 },
+      { owner: activeStartOwner, days: 3 },
+      { owner: activeOtherOwner, days: 4 },
+    ]);
+  }
+
+  if (presetId === "week_on_week_off") {
+    return ownerFromBlocks(offset, [
+      { owner: startOwner, days: 7 },
+      { owner: otherOwner, days: 7 },
+    ]);
+  }
+
+  if (presetId === "two_two_three") {
+    return ownerFromBlocks(offset, [
+      { owner: startOwner, days: 2 },
+      { owner: otherOwner, days: 2 },
+      { owner: startOwner, days: 3 },
+      { owner: otherOwner, days: 2 },
+      { owner: startOwner, days: 2 },
+      { owner: otherOwner, days: 3 },
+    ]);
+  }
+
+  if (presetId === "two_two_five_five") {
+    return ownerFromBlocks(offset, [
+      { owner: startOwner, days: 2 },
+      { owner: otherOwner, days: 2 },
+      { owner: startOwner, days: 5 },
+      { owner: otherOwner, days: 5 },
+    ]);
+  }
+
+  if (presetId === "three_three_four_four") {
+    return ownerFromBlocks(offset, [
+      { owner: startOwner, days: 3 },
+      { owner: otherOwner, days: 3 },
+      { owner: startOwner, days: 4 },
+      { owner: otherOwner, days: 4 },
+    ]);
+  }
+
+  return ownerFromBlocks(offset, [
+    { owner: startOwner, days: 5 },
+    { owner: otherOwner, days: 2 },
+    { owner: startOwner, days: 7 },
+  ]);
+}
+
+function directionForIncomingParent(owner: ScheduleParentKey): ExchangeDirection {
+  return owner === "you" ? "other_parent_to_me" : "me_to_other_parent";
+}
+
+function buildScheduleSetupAssignments({
+  presetId,
+  presetLabel,
+  startDate,
+  endDate,
+  startOwner,
+  yourLabel,
+  otherParentLabel,
+  yourColor,
+  otherParentColor,
+  exchangeTime,
+  exchangeLocation,
+  sourceLabel,
+  orderNotes,
+  markStartAsExchange,
+  userId,
+  caseId,
+}: {
+  presetId: ParentingSchedulePresetId;
+  presetLabel: string;
+  startDate: string;
+  endDate: string;
+  startOwner: ScheduleParentKey;
+  yourLabel: string;
+  otherParentLabel: string;
+  yourColor: string;
+  otherParentColor: string;
+  exchangeTime: string;
+  exchangeLocation?: string;
+  sourceLabel: string;
+  orderNotes?: string;
+  markStartAsExchange: boolean;
+  userId: string;
+  caseId: string;
+}) {
+  const dayCount = (daysBetween(startDate, endDate) ?? -1) + 1;
+  const now = nowIso();
+  const assignments: CustodyDayAssignment[] = [];
+  let previousOwner: ScheduleParentKey | undefined;
+
+  for (let offset = 0; offset < dayCount; offset += 1) {
+    const date = addDays(startDate, offset);
+    const owner = scheduleOwnerForOffset(presetId, startOwner, offset);
+    const isExchangeDate = offset === 0 ? markStartAsExchange : owner !== previousOwner;
+    const caregiverLabel = owner === "you" ? yourLabel : otherParentLabel;
+    const setupNotes = [
+      `Generated from ${sourceLabel || "custody order setup"}.`,
+      `Pattern: ${presetLabel}.`,
+      isExchangeDate ? `Transition marked at ${exchangeTime}${exchangeLocation ? ` at ${exchangeLocation}` : ""}.` : "",
+      isExchangeDate && orderNotes ? orderNotes : "",
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 1000);
+
+    assignments.push({
+      id: createId("custody-day"),
+      caseId,
+      userId,
+      date,
+      caregiverLabel,
+      color: owner === "you" ? yourColor : otherParentColor,
+      startsAt: isExchangeDate ? exchangeTime : "00:00",
+      endsAt: "23:59",
+      exchangeTime: isExchangeDate ? exchangeTime : undefined,
+      exchangeDirection: isExchangeDate ? directionForIncomingParent(owner) : undefined,
+      exchangeLocation: isExchangeDate ? exchangeLocation : undefined,
+      notes: setupNotes,
+      createdAt: now,
+      updatedAt: now,
+    });
+    previousOwner = owner;
+  }
+
+  return assignments;
+}
+
 function ImportView({
   updateDataset,
   userId,
@@ -2590,7 +2802,14 @@ function ImportView({
   const [parsing, setParsing] = useState(false);
   const [assistBusy, setAssistBusy] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [setupSchedulePreset, setSetupSchedulePreset] =
+    useState<ParentingSchedulePresetId>("three_four_four_three_flip");
   const selectedCount = drafts.filter((draft) => draft.selected).length;
+  const selectedSetupPreset =
+    parentingSchedulePresets.find((preset) => preset.id === setupSchedulePreset) ||
+    parentingSchedulePresets[0];
+  const setupToday = new Date().toISOString().slice(0, 10);
+  const setupDefaultEndDate = addDays(setupToday, 90);
 
   function queueDrafts(nextDrafts: ImportDraft[], sourceLabel: string) {
     if (nextDrafts.length === 0) {
@@ -2615,22 +2834,18 @@ function ImportView({
     if (useAiAssist) setAssistBusy(true);
     else setParsing(true);
     try {
-      const defaultYear = Number(text(formData, "defaultYear")) || new Date().getFullYear();
-      const defaultOrderedTime = text(formData, "defaultOrderedTime") || "17:00";
       const content = await file.text();
       const nextDrafts = useAiAssist
         ? await requestAiImportDrafts({
             content,
             sourceLabel: file.name,
-            defaultYear,
-            defaultOrderedTime,
             importKind: "message_archive",
           })
         : buildMessageImportDrafts({
             content,
             sourceLabel: file.name,
-            defaultYear,
-            defaultOrderedTime,
+            defaultYear: new Date().getFullYear(),
+            defaultOrderedTime: "17:00",
           });
       queueDrafts(
         nextDrafts,
@@ -2655,8 +2870,6 @@ function ImportView({
       return;
     }
 
-    const defaultYear = Number(text(formData, "defaultYear")) || new Date().getFullYear();
-    const defaultOrderedTime = text(formData, "defaultOrderedTime") || "17:00";
     const sourceLabel = text(formData, "sourceLabel") || "Pasted notes";
 
     if (useAiAssist) setAssistBusy(true);
@@ -2665,15 +2878,13 @@ function ImportView({
         ? await requestAiImportDrafts({
             content,
             sourceLabel,
-            defaultYear,
-            defaultOrderedTime,
             importKind: "pasted_notes",
           })
         : buildPastedNoteDrafts({
             content,
             sourceLabel,
-            defaultYear,
-            defaultOrderedTime,
+            defaultYear: new Date().getFullYear(),
+            defaultOrderedTime: "17:00",
           });
       queueDrafts(nextDrafts, "pasted notes");
       event.currentTarget.reset();
@@ -2775,6 +2986,105 @@ function ImportView({
     );
     event.currentTarget.reset();
     flash("Exchange rule saved.");
+  }
+
+  function saveCustodyScheduleSetup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const presetId = text(formData, "schedulePreset") as ParentingSchedulePresetId;
+    const preset = parentingSchedulePresets.find((item) => item.id === presetId);
+    if (!preset) return flash("Choose a custody schedule pattern.");
+
+    const startDate = text(formData, "startDate");
+    const endDate = text(formData, "endDate");
+    const exchangeTime = text(formData, "exchangeTime") || "17:00";
+    const dayCount = (daysBetween(startDate, endDate) ?? -1) + 1;
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return flash("Enter a valid schedule start and end date.");
+    }
+    if (endDate < startDate) return flash("Schedule end date must be after the start date.");
+    if (dayCount < 1 || dayCount > 731) return flash("Generate between 1 day and 2 years at a time.");
+    if (!/^\d{2}:\d{2}$/.test(exchangeTime)) return flash("Enter a valid exchange time.");
+
+    const yourLabel = text(formData, "yourLabel") || "You";
+    const otherParentLabel = text(formData, "otherParentLabel") || "Other Parent";
+    const yourColor = text(formData, "yourColor") || custodyDayColors[0];
+    const otherParentColor = text(formData, "otherParentColor") || custodyDayColors[1];
+    const startOwner = text(formData, "startOwner") === "other" ? "other" : "you";
+    const sourceLabel = text(formData, "sourceLabel") || "Custody order setup";
+    const exchangeLocation = text(formData, "exchangeLocation");
+    const orderNotes = text(formData, "orderNotes");
+    const replaceExisting = formData.get("replaceExisting") === "on";
+    const markStartAsExchange = formData.get("markStartAsExchange") === "on";
+
+    const firstAssignment = custodyDayAssignmentSchema.safeParse({
+      date: startDate,
+      caregiverLabel: startOwner === "you" ? yourLabel : otherParentLabel,
+      color: startOwner === "you" ? yourColor : otherParentColor,
+      startsAt: markStartAsExchange ? exchangeTime : "00:00",
+      endsAt: "23:59",
+      exchangeTime: markStartAsExchange ? exchangeTime : "",
+      exchangeDirection: markStartAsExchange ? directionForIncomingParent(startOwner) : "",
+      exchangeLocation,
+      notes: orderNotes,
+    });
+    if (!firstAssignment.success) {
+      return flash(firstAssignment.error.issues[0]?.message || "Check the custody setup fields.");
+    }
+
+    const generatedAssignments = buildScheduleSetupAssignments({
+      presetId,
+      presetLabel: preset.label,
+      startDate,
+      endDate,
+      startOwner,
+      yourLabel,
+      otherParentLabel,
+      yourColor,
+      otherParentColor,
+      exchangeTime,
+      exchangeLocation,
+      sourceLabel,
+      orderNotes,
+      markStartAsExchange,
+      userId,
+      caseId,
+    });
+
+    updateDataset((current) => {
+      const existingDates = new Set(
+        current.custodyDayAssignments
+          .filter((item) => item.userId === userId && item.caseId === caseId)
+          .map((item) => item.date)
+      );
+      const assignmentsToSave = replaceExisting
+        ? generatedAssignments
+        : generatedAssignments.filter((item) => !existingDates.has(item.date));
+      const generatedDateSet = new Set(generatedAssignments.map((item) => item.date));
+      const retainedAssignments = current.custodyDayAssignments.filter((item) => {
+        if (item.userId !== userId || item.caseId !== caseId) return true;
+        if (!replaceExisting) return true;
+        return !generatedDateSet.has(item.date);
+      });
+
+      return withAudit(
+        {
+          ...current,
+          custodyDayAssignments: [...assignmentsToSave, ...retainedAssignments],
+        },
+        {
+          userId,
+          caseId,
+          action: "created",
+          entityType: "custodyScheduleSetup",
+          entityId: createId("schedule-setup"),
+          metadataSummary: `${assignmentsToSave.length} custody calendar day assignments generated from ${preset.label}.`,
+        }
+      );
+    });
+
+    flash(`${generatedAssignments.length} custody calendar day${generatedAssignments.length === 1 ? "" : "s"} generated.`);
   }
 
   async function reviewCustodyCalendarRows(event: FormEvent<HTMLFormElement>) {
@@ -3030,14 +3340,6 @@ function ImportView({
             <Field label="Archive file">
               <input name="archive" type="file" className="input" accept=".csv,.txt,.html,text/csv,text/plain,text/html" />
             </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Default year">
-                <input name="defaultYear" type="number" className="input" defaultValue={new Date().getFullYear()} />
-              </Field>
-              <Field label="Default exchange time">
-                <input name="defaultOrderedTime" type="time" className="input" defaultValue="17:00" />
-              </Field>
-            </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <button className="btn-primary" type="submit" value="rules" disabled={parsing || assistBusy}>
                 {parsing ? "Reviewing..." : "Review message file"}
@@ -3054,14 +3356,6 @@ function ImportView({
             <Field label="Source label">
               <input name="sourceLabel" className="input" defaultValue="Pasted notes" />
             </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Default year">
-                <input name="defaultYear" type="number" className="input" defaultValue={new Date().getFullYear()} />
-              </Field>
-              <Field label="Default exchange time">
-                <input name="defaultOrderedTime" type="time" className="input" defaultValue="17:00" />
-              </Field>
-            </div>
             <Field label="Notes">
               <textarea name="notes" className="input min-h-44" />
             </Field>
@@ -3106,9 +3400,94 @@ function ImportView({
           </form>
         </Panel>
 
-        <Panel title="Custody order setup" action="Rules + calendar">
+        <Panel title="Custody order setup" action="Schedule templates">
           <div className="space-y-5">
-            <form onSubmit={saveExchangeRule} className="grid gap-3">
+            <form onSubmit={saveCustodyScheduleSetup} className="grid gap-3">
+              <Field label="Order/source label">
+                <input name="sourceLabel" className="input" defaultValue="Custody order" />
+              </Field>
+              <Field label="Schedule pattern">
+                <select
+                  name="schedulePreset"
+                  className="input"
+                  value={setupSchedulePreset}
+                  onChange={(event) => setSetupSchedulePreset(event.target.value as ParentingSchedulePresetId)}
+                >
+                  {parentingSchedulePresets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
+                {selectedSetupPreset.description}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Pattern start date">
+                  <input name="startDate" type="date" className="input" defaultValue={setupToday} />
+                </Field>
+                <Field label="Generate through">
+                  <input name="endDate" type="date" className="input" defaultValue={setupDefaultEndDate} />
+                </Field>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Your calendar label">
+                  <input name="yourLabel" className="input" defaultValue="You" />
+                </Field>
+                <Field label="Other parent label">
+                  <input name="otherParentLabel" className="input" defaultValue="Other Parent" />
+                </Field>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Your color">
+                  <input name="yourColor" type="color" className="h-10 w-full cursor-pointer rounded-md border border-slate-300 bg-white p-1" defaultValue={custodyDayColors[0]} />
+                </Field>
+                <Field label="Other parent color">
+                  <input name="otherParentColor" type="color" className="h-10 w-full cursor-pointer rounded-md border border-slate-300 bg-white p-1" defaultValue={custodyDayColors[1]} />
+                </Field>
+              </div>
+              <Field label="Pattern starts with">
+                <select name="startOwner" className="input" defaultValue="other">
+                  <option value="you">Your label</option>
+                  <option value="other">Other parent label</option>
+                </select>
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Exchange time">
+                  <input name="exchangeTime" type="time" className="input" defaultValue="17:00" />
+                </Field>
+                <Field label="Exchange location">
+                  <input name="exchangeLocation" className="input" placeholder="Optional" />
+                </Field>
+              </div>
+              <Field label="Order notes">
+                <textarea
+                  name="orderNotes"
+                  className="input min-h-20"
+                  placeholder="Vacation, holiday, communication, and order-specific notes."
+                  defaultValue="Vacation schedule: each parent may exercise two uninterrupted weeks with notice. Holidays: alternate annually unless the order states otherwise."
+                />
+              </Field>
+              <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
+                <label className="flex items-start gap-2 rounded-md border border-slate-200 bg-white p-3">
+                  <input name="markStartAsExchange" type="checkbox" defaultChecked />
+                  <span>Mark the start date as an exchange.</span>
+                </label>
+                <label className="flex items-start gap-2 rounded-md border border-slate-200 bg-white p-3">
+                  <input name="replaceExisting" type="checkbox" defaultChecked />
+                  <span>Replace existing calendar colors in this range.</span>
+                </label>
+              </div>
+              <button className="btn-primary" type="submit">
+                Generate custody calendar
+              </button>
+            </form>
+
+            <form onSubmit={saveExchangeRule} className="grid gap-3 border-t border-slate-200 pt-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Manual exchange rule
+              </p>
               <Field label="Rule name">
                 <input name="ruleName" className="input" placeholder="Standing exchange rule" />
               </Field>

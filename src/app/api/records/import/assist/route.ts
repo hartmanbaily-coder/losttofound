@@ -277,12 +277,22 @@ function extractionPrompt(input: {
   defaultOrderedTime: string;
   importKind: AiImportKind;
 }) {
+  const dateAndTimeInstructions =
+    input.importKind === "message_archive" || input.importKind === "pasted_notes"
+      ? [
+          "For message archives and pasted notes, use dates and times stated in the source text.",
+          "If a source date lacks a year, use the current year only as a normalization fallback and mark that uncertainty in reviewReason.",
+          "Do not assume a default ordered exchange time for message archives or pasted notes. Create exchange drafts only when the source supports both the expected/agreed time and actual time.",
+        ]
+      : [
+          "If a date lacks a year, use the provided default year.",
+          "For exchange lateness, compare actual exchange time to the ordered/default exchange time when both are available.",
+        ];
   return [
     "Extract draft custody-record entries from the user's import text.",
     "Return only facts supported by the source text. Do not create legal conclusions, accusations, or advice.",
     "Use neutral wording suitable for a review queue.",
-    "If a date lacks a year, use the provided default year.",
-    "For exchange lateness, compare actual exchange time to the ordered/default exchange time when both are available.",
+    ...dateAndTimeInstructions,
     "FaceTime cancellations should usually be note drafts titled 'No FaceTime conducted'.",
     "If the source indicates the other parent only gave notice after a call was not answered, include tag 'post_call_notice'.",
     "Use exchange drafts only for actual exchange outcomes, not scheduled custody days.",
@@ -291,8 +301,12 @@ function extractionPrompt(input: {
     "",
     `Source label: ${input.sourceLabel}`,
     `Import kind: ${input.importKind}`,
-    `Default year: ${input.defaultYear}`,
-    `Default ordered exchange time: ${input.defaultOrderedTime}`,
+    ...(input.importKind === "message_archive" || input.importKind === "pasted_notes"
+      ? []
+      : [
+          `Default year: ${input.defaultYear}`,
+          `Default ordered exchange time: ${input.defaultOrderedTime}`,
+        ]),
     "",
     input.content,
   ].join("\n");
