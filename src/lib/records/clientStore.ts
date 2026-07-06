@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createEmptyRecordsDatasetForUser,
   createRecordsSeed,
@@ -138,21 +138,50 @@ export function useRecordsStore() {
   const [storageStatus, setStorageStatus] = useState(
     recordsStorageMode === "supabase" ? "Supabase storage pending." : "Local demo storage."
   );
+  const datasetRef = useRef(dataset);
+  const remoteWriteChainRef = useRef<Promise<void>>(Promise.resolve());
 
-  async function reloadDataset() {
+  const setCurrentDataset = useCallback((next: RecordsDataset) => {
+    datasetRef.current = next;
+    setDataset(next);
+  }, []);
+
+  const persistDataset = useCallback((next: RecordsDataset) => {
+    if (typeof window === "undefined") return Promise.resolve();
+
+    if (recordsStorageMode === "supabase") {
+      const write = remoteWriteChainRef.current.then(() => persistRemoteDataset(next));
+      remoteWriteChainRef.current = write.catch(() => undefined);
+      return write
+        .then(() => {
+          setStorageStatus("Supabase records storage saved.");
+        })
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error ? error.message : "Supabase records storage save failed.";
+          setStorageStatus(message);
+          throw new Error(message);
+        });
+    }
+
+    persistLocalDataset(next);
+    return Promise.resolve();
+  }, []);
+
+  const reloadDataset = useCallback(async () => {
     try {
       if (recordsStorageMode === "supabase") {
         const remoteSession = await readRemoteSession();
         const remote = await readRemoteDataset(remoteSession);
-        setDataset(remote);
+        setCurrentDataset(remote);
         setStorageStatus("Supabase records storage connected.");
       } else {
-        setDataset(readLocalDataset());
+        setCurrentDataset(readLocalDataset());
         setStorageStatus("Local demo storage.");
       }
     } catch (error) {
       if (recordsStorageMode === "supabase") {
-        setDataset({
+        setCurrentDataset({
           users: [],
           matters: [],
           exchangeRules: [],
@@ -167,13 +196,13 @@ export function useRecordsStore() {
           auditLogs: [],
         });
       } else {
-        setDataset(createRecordsSeed());
+        setCurrentDataset(createRecordsSeed());
       }
       setStorageStatus(error instanceof Error ? error.message : "Records storage unavailable.");
     } finally {
       setHydrated(true);
     }
-  }
+  }, [setCurrentDataset]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -181,26 +210,12 @@ export function useRecordsStore() {
     }, 0);
 
     return () => window.clearTimeout(timeout);
-  }, []);
+  }, [reloadDataset]);
 
   function updateDataset(updater: (current: RecordsDataset) => RecordsDataset) {
-    setDataset((current) => {
-      const next = updater(cloneDataset(current));
-      if (typeof window !== "undefined") {
-        if (recordsStorageMode === "supabase") {
-          void persistRemoteDataset(next)
-            .then(() => setStorageStatus("Supabase records storage saved."))
-            .catch((error: unknown) =>
-              setStorageStatus(
-                error instanceof Error ? error.message : "Supabase records storage save failed."
-              )
-            );
-        } else {
-          persistLocalDataset(next);
-        }
-      }
-      return next;
-    });
+    const next = updater(cloneDataset(datasetRef.current));
+    setCurrentDataset(next);
+    return persistDataset(next);
   }
 
   function resetDemoData() {
@@ -210,20 +225,12 @@ export function useRecordsStore() {
       recordsStorageMode === "supabase" && currentProfile
         ? createEmptyRecordsDatasetForUser(currentProfile.userId, currentProfile.email)
         : createRecordsSeed();
-    setDataset(next);
-    if (typeof window !== "undefined") {
-      if (recordsStorageMode === "supabase") {
-        void persistRemoteDataset(next)
-          .then(() => setStorageStatus("Supabase records storage reset."))
-          .catch((error: unknown) =>
-            setStorageStatus(
-              error instanceof Error ? error.message : "Supabase records storage reset failed."
-            )
-          );
-      } else {
-        persistLocalDataset(next);
-      }
-    }
+    setCurrentDataset(next);
+    void persistDataset(next)
+      .then(() => setStorageStatus(recordsStorageMode === "supabase" ? "Supabase records storage reset." : "Local demo storage."))
+      .catch((error: unknown) =>
+        setStorageStatus(error instanceof Error ? error.message : "Supabase records storage reset failed.")
+      );
   }
 
   return {

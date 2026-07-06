@@ -183,6 +183,14 @@ describe("privacy and safety helpers", () => {
 
     expect(
       validateEvidenceFile({
+        originalFileName: "attorney-notes.docx",
+        fileType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        fileSize: 20_000,
+      })
+    ).toEqual({ ok: true });
+
+    expect(
+      validateEvidenceFile({
         originalFileName: "script.sh",
         fileType: "text/plain",
         fileSize: 100,

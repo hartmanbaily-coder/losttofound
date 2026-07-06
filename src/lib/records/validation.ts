@@ -209,6 +209,7 @@ export const expenseItemSchema = z.object({
 });
 
 export const allowedEvidenceExtensions = [
+  "docx",
   "pdf",
   "png",
   "jpg",
@@ -219,6 +220,7 @@ export const allowedEvidenceExtensions = [
 ] as const;
 
 export const allowedEvidenceMimeTypes = new Set([
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/pdf",
   "image/png",
   "image/jpeg",

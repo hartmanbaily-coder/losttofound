@@ -8,9 +8,9 @@ test("records login and report workflow", async ({ page }) => {
   await expect(enterWorkspace).toBeEnabled();
   await enterWorkspace.click();
 
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   await expect(page.getByText("This tool helps organize records and does not provide legal advice.")).toBeVisible();
-  await expect(page.getByText("Scheduled exchanges")).toBeVisible();
+  await expect(page.getByText("Late exchanges").first()).toBeVisible();
 
   await page.getByRole("button", { name: "Calendar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Calendar", exact: true })).toBeVisible();
@@ -21,10 +21,44 @@ test("records login and report workflow", async ({ page }) => {
   await expect(page.getByText("Custody day color saved.")).toBeVisible();
   const paintedDay = page.getByRole("button", { name: "Edit calendar day 2026-05-08" });
   await expect(paintedDay).toBeVisible();
-  await expect(paintedDay.getByText("Parent C")).toBeVisible();
+  await expect(paintedDay.getByText("Parent C", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Clear selected day" }).click();
   await expect(page.getByText("Custody day color cleared.")).toBeVisible();
-  await expect(paintedDay.getByText("Parent C")).toHaveCount(0);
+  await expect(paintedDay.getByText("Parent C", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Caregiver label").fill("Drag Parent");
+  const dragStartDay = page.getByRole("button", { name: "Edit calendar day 2026-05-09" });
+  const dragMiddleDay = page.getByRole("button", { name: "Edit calendar day 2026-05-10" });
+  const dragEndDay = page.getByRole("button", { name: "Edit calendar day 2026-05-11" });
+  await dragStartDay.dragTo(dragEndDay);
+  await expect(page.getByText("3 custody days colored.")).toBeVisible();
+  await expect(dragStartDay.getByText("Drag Parent", { exact: true })).toBeVisible();
+  await expect(dragMiddleDay.getByText("Drag Parent", { exact: true })).toBeVisible();
+  await expect(dragEndDay.getByText("Drag Parent", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Import", exact: true })).toBeVisible();
+  const documentImportForm = page.locator("form").filter({ has: page.locator("input[name=files]") });
+  await documentImportForm.locator("input[name=files]").setInputFiles({
+    name: "imported-document.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Synthetic imported document"),
+  });
+  await documentImportForm.locator("textarea[name=description]").fill("Imported through Document intake");
+  await documentImportForm.getByRole("button", { name: "Save files to Files" }).click();
+  await expect(page.getByText("1 file record saved to Files.")).toBeVisible();
+
+  await page.locator("nav").getByRole("button", { name: /^Files/ }).click();
+  await expect(page.getByRole("heading", { name: "Files", exact: true })).toBeVisible();
+  await expect(page.getByText("imported-document.txt")).toBeVisible();
+  await page.locator("input[name=file]").setInputFiles({
+    name: "files-tab-document.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Synthetic files tab document"),
+  });
+  await page.locator("textarea[name=description]").fill("Uploaded through Files tab");
+  await page.getByRole("button", { name: "Save file record" }).click();
+  await expect(page.getByText("File metadata saved with allow-list validation.")).toBeVisible();
+  await expect(page.getByText("files-tab-document.txt")).toBeVisible();
 
   await page.locator("nav").getByRole("button", { name: /^Timeline/ }).click();
   await expect(page.getByRole("heading", { name: "Timeline", exact: true })).toBeVisible();
@@ -52,7 +86,7 @@ test("records login and report workflow", async ({ page }) => {
 
   await page.getByRole("button", { name: "Reports", exact: true }).click();
   await expect(
-    page.getByRole("article").getByRole("heading", { name: "Combined Attorney Summary" })
+    page.getByRole("article").getByRole("heading", { name: "Exchange Lateness Report" })
   ).toBeVisible();
   await expect(page.getByText("Pre-export privacy review")).toBeVisible();
   await expect(page.getByRole("button", { name: "Download CSV" })).toBeDisabled();

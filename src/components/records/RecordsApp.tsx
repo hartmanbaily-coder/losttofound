@@ -1,6 +1,6 @@
 "use client";
 
-import type { FormEvent, PointerEvent, ReactNode } from "react";
+import type { FormEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
@@ -304,6 +304,7 @@ export default function RecordsApp() {
   const [selectedDay, setSelectedDay] = useState("2026-05-08");
   const [reportType, setReportType] = useState<ReportType>("exchange_compliance");
   const [toast, setToast] = useState("");
+  const toastTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -321,6 +322,15 @@ export default function RecordsApp() {
 
     return () => window.clearTimeout(timeout);
   }, [recordsStorageMode]);
+
+  useEffect(
+    () => () => {
+      if (toastTimeoutRef.current !== null) {
+        window.clearTimeout(toastTimeoutRef.current);
+      }
+    },
+    []
+  );
 
   const userId = session?.userId || demoUserId;
   const selected = useSelectedRecords(dataset, userId, selectedCaseId);
@@ -369,8 +379,14 @@ export default function RecordsApp() {
   );
 
   function flash(message: string) {
+    if (toastTimeoutRef.current !== null) {
+      window.clearTimeout(toastTimeoutRef.current);
+    }
     setToast(message);
-    window.setTimeout(() => setToast(""), 2800);
+    toastTimeoutRef.current = window.setTimeout(() => {
+      setToast("");
+      toastTimeoutRef.current = null;
+    }, 2800);
   }
 
   function exportSectionPacket(packet: SectionExportPacket, format: SectionExportFormat) {
@@ -1315,6 +1331,8 @@ function CalendarView({
   const [isPainting, setIsPainting] = useState(false);
   const [paintDraftDates, setPaintDraftDates] = useState<Set<string>>(() => new Set());
   const paintingRef = useRef(false);
+  const paintAnchorDateRef = useRef<string | null>(null);
+  const activePaintPointerIdRef = useRef<number | null>(null);
   const paintDraftDatesRef = useRef<Set<string>>(new Set());
   const visibleEvents = useMemo(() => events.filter(isTimelineVisibleEvent), [events]);
   const eventsByDate = new Map<string, CalendarEvent[]>();
@@ -1331,6 +1349,15 @@ function CalendarView({
   const setPaintDraft = useCallback((dates: Set<string>) => {
     paintDraftDatesRef.current = dates;
     setPaintDraftDates(dates);
+  }, []);
+
+  const buildPaintDateRange = useCallback((from: string, to: string) => {
+    const delta = daysBetween(from, to);
+    if (delta === null) return [to];
+    const direction = delta >= 0 ? 1 : -1;
+    return Array.from({ length: Math.abs(delta) + 1 }, (_, index) =>
+      addDays(from, index * direction)
+    );
   }, []);
 
   const applyCustodyDayPaint = useCallback(
@@ -1421,31 +1448,67 @@ function CalendarView({
   const extendPaint = useCallback(
     (day: string) => {
       if (!paintingRef.current) return;
+      const anchorDay = paintAnchorDateRef.current || day;
+      const nextDates = new Set(buildPaintDateRange(anchorDay, day));
       const currentDates = paintDraftDatesRef.current;
-      if (currentDates.has(day)) return;
+      if (
+        currentDates.size === nextDates.size &&
+        Array.from(nextDates).every((date) => currentDates.has(date))
+      ) {
+        return;
+      }
       setSelectedDay(day);
-      setPaintDraft(new Set([...currentDates, day]));
+      setPaintDraft(nextDates);
     },
-    [setPaintDraft, setSelectedDay]
+    [buildPaintDateRange, setPaintDraft, setSelectedDay]
+  );
+
+  const finishPaint = useCallback(
+    (event?: globalThis.PointerEvent | ReactPointerEvent<HTMLElement>) => {
+      if (!paintingRef.current) return;
+      if (
+        event &&
+        activePaintPointerIdRef.current !== null &&
+        event.pointerId !== activePaintPointerIdRef.current
+      ) {
+        return;
+      }
+
+      const pointerId = activePaintPointerIdRef.current;
+      const target = event?.currentTarget;
+      if (pointerId !== null && target instanceof HTMLElement) {
+        try {
+          if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
+        } catch {
+          // Pointer capture can already be released by the browser on cancel/lost-capture.
+        }
+      }
+
+      paintingRef.current = false;
+      paintAnchorDateRef.current = null;
+      activePaintPointerIdRef.current = null;
+      setIsPainting(false);
+      const dates = Array.from(paintDraftDatesRef.current);
+      setPaintDraft(new Set());
+      applyCustodyDayPaint(dates);
+    },
+    [applyCustodyDayPaint, setPaintDraft]
   );
 
   useEffect(() => {
     function handlePointerMove(event: globalThis.PointerEvent) {
       if (!paintingRef.current) return;
+      if (
+        activePaintPointerIdRef.current !== null &&
+        event.pointerId !== activePaintPointerIdRef.current
+      ) {
+        return;
+      }
       const target = document.elementFromPoint(event.clientX, event.clientY);
       const day = target instanceof Element
         ? target.closest<HTMLElement>("[data-calendar-day]")?.dataset.calendarDay
         : undefined;
       if (day) extendPaint(day);
-    }
-
-    function finishPaint() {
-      if (!paintingRef.current) return;
-      paintingRef.current = false;
-      setIsPainting(false);
-      const dates = Array.from(paintDraftDatesRef.current);
-      setPaintDraft(new Set());
-      applyCustodyDayPaint(dates);
     }
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -1456,11 +1519,18 @@ function CalendarView({
       window.removeEventListener("pointerup", finishPaint);
       window.removeEventListener("pointercancel", finishPaint);
     };
-  }, [applyCustodyDayPaint, extendPaint, setPaintDraft]);
+  }, [extendPaint, finishPaint]);
 
-  function beginPaint(day: string, event: PointerEvent<HTMLButtonElement>) {
+  function beginPaint(day: string, event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
     paintingRef.current = true;
+    paintAnchorDateRef.current = day;
+    activePaintPointerIdRef.current = event.pointerId;
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Some browsers may reject capture if the pointer is no longer active.
+    }
     setIsPainting(true);
     setSelectedDay(day);
     setPaintDraft(new Set([day]));
@@ -1700,6 +1770,9 @@ function CalendarView({
                     aria-label={day ? `Edit calendar day ${day}` : undefined}
                     onPointerDown={(event) => day && beginPaint(day, event)}
                     onPointerEnter={() => day && extendPaint(day)}
+                    onPointerUp={(event) => day && finishPaint(event)}
+                    onPointerCancel={(event) => day && finishPaint(event)}
+                    onLostPointerCapture={(event) => day && finishPaint(event)}
                     onClick={() => day && setSelectedDay(day)}
                     style={
                       visibleColor
@@ -2802,6 +2875,7 @@ function ImportView({
   const [parsing, setParsing] = useState(false);
   const [assistBusy, setAssistBusy] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [documentSaving, setDocumentSaving] = useState(false);
   const [setupSchedulePreset, setSetupSchedulePreset] =
     useState<ParentingSchedulePresetId>("three_four_four_three_flip");
   const selectedCount = drafts.filter((draft) => draft.selected).length;
@@ -2823,8 +2897,9 @@ function ImportView({
 
   async function reviewMessageArchive(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     const useAiAssist = importSubmitterValue(event) === "ai";
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
     const file = formData.get("archive");
     if (!(file instanceof File) || file.size === 0) {
       flash("Choose a CSV, TXT, or HTML message export.");
@@ -2851,7 +2926,7 @@ function ImportView({
         nextDrafts,
         file.name
       );
-      event.currentTarget.reset();
+      form.reset();
     } catch (error) {
       flash(error instanceof Error ? error.message : "Message import failed.");
     } finally {
@@ -2862,8 +2937,9 @@ function ImportView({
 
   async function reviewPastedNotes(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     const useAiAssist = importSubmitterValue(event) === "ai";
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
     const content = text(formData, "notes");
     if (!content) {
       flash("Paste notes before reviewing.");
@@ -2887,7 +2963,7 @@ function ImportView({
             defaultOrderedTime: "17:00",
           });
       queueDrafts(nextDrafts, "pasted notes");
-      event.currentTarget.reset();
+      form.reset();
     } catch (error) {
       flash(error instanceof Error ? error.message : "Pasted-note import failed.");
     } finally {
@@ -2895,8 +2971,9 @@ function ImportView({
     }
   }
 
-  function queueDocumentFiles(event: FormEvent<HTMLFormElement>) {
+  async function saveDocumentFiles(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     const formData = new FormData(event.currentTarget);
     const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File && entry.size > 0);
     if (files.length === 0) {
@@ -2908,39 +2985,76 @@ function ImportView({
     const description = text(formData, "description");
     const tags = parseTags(text(formData, "tags") || "document");
     const includeInReports = formData.get("includeInReports") === "on";
-    const nextDrafts: ImportDraft[] = [];
+    const evidenceRecords: RecordsDataset["evidenceItems"] = [];
+    const now = nowIso();
 
-    for (const file of files) {
-      const validation = validateEvidenceFile({
-        originalFileName: file.name,
-        fileType: file.type,
-        fileSize: file.size,
-      });
-      if (!validation.ok) {
-        flash(`${file.name}: ${validation.error}`);
-        continue;
+    setDocumentSaving(true);
+    try {
+      for (const file of files) {
+        const validation = validateEvidenceFile({
+          originalFileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+        });
+        if (!validation.ok) throw new Error(`${file.name}: ${validation.error}`);
+
+        const id = createId("evidence");
+        const uploaded =
+          recordsStorageMode === "supabase" ? await uploadImportEvidenceFile(file, id) : undefined;
+
+        evidenceRecords.push({
+          id,
+          userId,
+          caseId,
+          originalFileName: file.name,
+          storedFileName:
+            uploaded?.storedFileName || buildStoredEvidenceName({ id, originalFileName: file.name }),
+          fileType: file.type,
+          fileSize: file.size,
+          storageBucket: uploaded?.storageBucket,
+          storagePath: uploaded?.storagePath,
+          storageUploadedAt: uploaded?.storageUploadedAt,
+          storageSha256: uploaded?.storageSha256,
+          uploadedAt: now,
+          evidenceDate: evidenceDate || now.slice(0, 10),
+          description: description || `Imported document: ${file.name}`,
+          tags,
+          includeInReports,
+          reviewStatus: "needs_review",
+          malwareScanStatus: uploaded?.malwareScanStatus || "pending",
+          createdAt: now,
+          updatedAt: now,
+        });
       }
 
-      nextDrafts.push({
-        id: createId("import-file"),
-        kind: "file",
-        date: evidenceDate || new Date().toISOString().slice(0, 10),
-        title: file.name,
-        body: description || `Imported document: ${file.name}`,
-        category: "other",
-        tags,
-        includeInReports,
-        confidence: "high",
-        sourceLabel: "Document upload",
-        selected: true,
-        file,
-        fileType: file.type,
-        fileSize: file.size,
-      });
+      await updateDataset((current) =>
+        withAudit(
+          {
+            ...current,
+            evidenceItems: [...evidenceRecords, ...current.evidenceItems],
+          },
+          {
+            userId,
+            caseId,
+            action: "uploaded",
+            entityType: "evidenceItem",
+            entityId: evidenceRecords.length === 1 ? evidenceRecords[0].id : createId("evidence-batch"),
+            metadataSummary:
+              evidenceRecords.length === 1
+                ? "Document imported into the private file index."
+                : `${evidenceRecords.length} documents imported into the private file index.`,
+          }
+        )
+      );
+      form.reset();
+      flash(
+        `${evidenceRecords.length} file record${evidenceRecords.length === 1 ? "" : "s"} saved to Files.`
+      );
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Document import failed.");
+    } finally {
+      setDocumentSaving(false);
     }
-
-    queueDrafts(nextDrafts, "selected files");
-    event.currentTarget.reset();
   }
 
   function saveExchangeRule(event: FormEvent<HTMLFormElement>) {
@@ -3089,8 +3203,9 @@ function ImportView({
 
   async function reviewCustodyCalendarRows(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     const useAiAssist = importSubmitterValue(event) === "ai";
-    const formData = new FormData(event.currentTarget);
+    const formData = new FormData(form);
     const content = text(formData, "calendarRows");
     if (!content) {
       flash("Paste calendar rows before reviewing.");
@@ -3111,7 +3226,7 @@ function ImportView({
           })
         : buildCustodyCalendarDrafts({ content, sourceLabel });
       queueDrafts(nextDrafts, "custody calendar rows");
-      event.currentTarget.reset();
+      form.reset();
     } catch (error) {
       flash(error instanceof Error ? error.message : "Calendar import failed.");
     } finally {
@@ -3290,7 +3405,7 @@ function ImportView({
         }
       }
 
-      updateDataset((current) =>
+      await updateDataset((current) =>
         withAudit(
           {
             ...current,
@@ -3371,14 +3486,14 @@ function ImportView({
         </Panel>
 
         <Panel title="Document intake" action={recordsStorageMode === "supabase" ? "Private storage" : "Metadata only"}>
-          <form onSubmit={queueDocumentFiles} className="grid gap-3">
+          <form onSubmit={saveDocumentFiles} className="grid gap-3">
             <Field label="Files">
               <input
                 name="files"
                 type="file"
                 multiple
                 className="input"
-                accept=".pdf,.png,.jpg,.jpeg,.heic,.txt,.csv"
+                accept=".docx,.pdf,.png,.jpg,.jpeg,.heic,.txt,.csv"
               />
             </Field>
             <Field label="Record date">
@@ -3394,8 +3509,12 @@ function ImportView({
               <input name="includeInReports" type="checkbox" defaultChecked />
               Include in report file index
             </label>
-            <button className="btn-primary" type="submit">
-              Queue files
+            <button className="btn-primary" type="submit" disabled={documentSaving}>
+              {documentSaving
+                ? "Saving files..."
+                : recordsStorageMode === "supabase"
+                  ? "Upload files to Files"
+                  : "Save files to Files"}
             </button>
           </form>
         </Panel>
@@ -3820,7 +3939,8 @@ function EvidenceView({
 
   async function addEvidence(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const file = formData.get("file");
     if (!(file instanceof File)) return flash("Choose a file to attach.");
 
@@ -3838,62 +3958,63 @@ function EvidenceView({
       setUploading(true);
       uploaded =
         recordsStorageMode === "supabase" ? await uploadEvidenceFile(file, id) : undefined;
+
+      const now = nowIso();
+      await updateDataset((current) =>
+        withAudit(
+          {
+            ...current,
+            evidenceItems: [
+              {
+                id,
+                caseId,
+                userId,
+                originalFileName: file.name,
+                storedFileName:
+                  uploaded?.storedFileName || buildStoredEvidenceName({ id, originalFileName: file.name }),
+                fileType: file.type,
+                fileSize: file.size,
+                storageBucket: uploaded?.storageBucket,
+                storagePath: uploaded?.storagePath,
+                storageUploadedAt: uploaded?.storageUploadedAt,
+                storageSha256: uploaded?.storageSha256,
+                uploadedAt: now,
+                evidenceDate: text(formData, "evidenceDate") || undefined,
+                description: text(formData, "description") || undefined,
+                tags: parseTags(text(formData, "tags")),
+                includeInReports: formData.get("includeInReports") === "on",
+                reviewStatus: "needs_review",
+                malwareScanStatus: uploaded?.malwareScanStatus || "pending",
+                createdAt: now,
+                updatedAt: now,
+              },
+              ...current.evidenceItems,
+            ],
+          },
+          {
+            userId,
+            caseId,
+            action: "uploaded",
+            entityType: "evidenceItem",
+            entityId: id,
+            metadataSummary:
+              recordsStorageMode === "supabase"
+                ? "Attached file stored in private storage after malware scanning."
+                : "Attached file metadata stored without raw file path or contents.",
+          }
+        )
+      );
+      form.reset();
+      flash(
+        recordsStorageMode === "supabase"
+          ? "File uploaded, scanned clean, and metadata saved."
+          : "File metadata saved with allow-list validation."
+      );
     } catch (error) {
-      return flash(error instanceof Error ? error.message : "File upload failed.");
+      flash(error instanceof Error ? error.message : "File upload failed.");
     } finally {
       setUploading(false);
     }
-
-    updateDataset((current) =>
-      withAudit(
-        {
-          ...current,
-          evidenceItems: [
-            {
-              id,
-              caseId,
-              userId,
-              originalFileName: file.name,
-              storedFileName:
-                uploaded?.storedFileName || buildStoredEvidenceName({ id, originalFileName: file.name }),
-              fileType: file.type,
-              fileSize: file.size,
-              storageBucket: uploaded?.storageBucket,
-              storagePath: uploaded?.storagePath,
-              storageUploadedAt: uploaded?.storageUploadedAt,
-              storageSha256: uploaded?.storageSha256,
-              uploadedAt: nowIso(),
-              evidenceDate: text(formData, "evidenceDate") || undefined,
-              description: text(formData, "description") || undefined,
-              tags: parseTags(text(formData, "tags")),
-              includeInReports: formData.get("includeInReports") === "on",
-              reviewStatus: "needs_review",
-              malwareScanStatus: uploaded?.malwareScanStatus || "pending",
-              createdAt: nowIso(),
-              updatedAt: nowIso(),
-            },
-            ...current.evidenceItems,
-          ],
-        },
-        {
-          userId,
-          caseId,
-          action: "uploaded",
-          entityType: "evidenceItem",
-          entityId: id,
-          metadataSummary:
-            recordsStorageMode === "supabase"
-              ? "Attached file stored in private storage after malware scanning."
-              : "Attached file metadata stored without raw file path or contents.",
-        }
-      )
-    );
-    event.currentTarget.reset();
-    flash(
-      recordsStorageMode === "supabase"
-        ? "File uploaded, scanned clean, and metadata saved."
-        : "File metadata saved with allow-list validation."
-    );
   }
 
   async function downloadEvidence(item: EvidenceItem) {
@@ -4129,7 +4250,7 @@ function EvidenceView({
               name="file"
               type="file"
               className="input"
-              accept=".pdf,.png,.jpg,.jpeg,.heic,.txt,.csv"
+              accept=".docx,.pdf,.png,.jpg,.jpeg,.heic,.txt,.csv"
             />
           </Field>
           <Field label="Record date">
