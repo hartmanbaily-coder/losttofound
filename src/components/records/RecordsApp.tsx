@@ -3,16 +3,20 @@
 import type { FormEvent, PointerEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  buildDashboardTimelineStats,
   buildCalendarEvents,
   buildCustodyDayMap,
   calculateChildSupportStats,
-  calculateExchangeStats,
   calculateExpenseStats,
   childSupportChartRows,
   exchangeChartRows,
   formatMoney,
   generateExpectedExchangeEvents,
   getIsoDateFromDateTime,
+  isLateExchangeTimelineEvent,
+  isMissedExchangeTimelineEvent,
+  isNoFaceTimeTimelineEvent,
+  isPostCallFaceTimeNotice,
   isTimelineVisibleEvent,
   labelEventType,
   labelExchangeStatus,
@@ -77,7 +81,6 @@ import {
 import {
   ExchangeTimingChart,
   ExpenseCategoryChart,
-  SupportPaymentChart,
   SupportTrendLine,
 } from "./RecordsCharts";
 
@@ -213,10 +216,6 @@ export default function RecordsApp() {
     () => generateExpectedExchangeEvents(selected.exchangeRules, range),
     [selected.exchangeRules, range]
   );
-  const exchangeStats = useMemo(
-    () => calculateExchangeStats(selected.exchangeLogs, expectedExchanges, range),
-    [selected.exchangeLogs, expectedExchanges, range]
-  );
   const supportStats = useMemo(
     () => calculateChildSupportStats(selected.childSupportPayments, range),
     [selected.childSupportPayments, range]
@@ -232,10 +231,6 @@ export default function RecordsApp() {
   const timelineEvents = useMemo(
     () => calendarEvents.filter(isTimelineVisibleEvent),
     [calendarEvents]
-  );
-  const exchangeRows = useMemo(
-    () => exchangeChartRows(selected.exchangeLogs, range),
-    [selected.exchangeLogs, range]
   );
   const supportRows = useMemo(
     () => childSupportChartRows(selected.childSupportPayments, range),
@@ -454,12 +449,6 @@ export default function RecordsApp() {
             {activeView === "Dashboard" && (
               <DashboardView
                 range={range}
-                exchangeStats={exchangeStats}
-                supportStats={supportStats}
-                expenseStats={expenseStats}
-                exchangeRows={exchangeRows}
-                supportRows={supportRows}
-                expenseRows={expenseStats.byCategory}
                 calendarEvents={timelineEvents}
                 evidenceCount={selected.evidenceItems.length}
               />
@@ -803,50 +792,90 @@ function LoginScreen({
 
 function DashboardView({
   range,
-  exchangeStats,
-  supportStats,
-  expenseStats,
-  exchangeRows,
-  supportRows,
-  expenseRows,
   calendarEvents,
   evidenceCount,
 }: {
   range: DateRange;
-  exchangeStats: ReturnType<typeof calculateExchangeStats>;
-  supportStats: ReturnType<typeof calculateChildSupportStats>;
-  expenseStats: ReturnType<typeof calculateExpenseStats>;
-  exchangeRows: Array<{ date: string; minutesEarlyOrLate: number; status: string }>;
-  supportRows: Array<{ month: string; amountDue: number; amountPaid: number; unpaidBalance: number }>;
-  expenseRows: Array<{ category: string; amount: number }>;
   calendarEvents: CalendarEvent[];
   evidenceCount: number;
 }) {
+  const visibleEvents = calendarEvents.filter(isTimelineVisibleEvent);
+  const dashboardEvents = visibleEvents.filter(
+    (event) =>
+      event.type !== "child_support_due" &&
+      event.type !== "child_support_paid" &&
+      event.type !== "expense_item"
+  );
+  const stats = buildDashboardTimelineStats(dashboardEvents);
+  const focusEvents = dashboardEvents.filter(
+    (event) =>
+      isLateExchangeTimelineEvent(event) ||
+      isMissedExchangeTimelineEvent(event) ||
+      isNoFaceTimeTimelineEvent(event) ||
+      isPostCallFaceTimeNotice(event) ||
+      event.severity === "critical" ||
+      event.severity === "attention"
+  );
+  const sourceCounts = [
+    { label: "Late exchanges", value: stats.lateExchangeCount },
+    { label: "Missed/refused", value: stats.missedExchangeCount },
+    { label: "No FaceTime", value: stats.noFaceTimeCount },
+    { label: "Post-call notices", value: stats.postCallNoFaceTimeCount },
+    { label: "Dated evidence", value: stats.evidenceCount },
+  ];
+
   return (
     <div className="space-y-5">
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Scheduled exchanges" value={exchangeStats.scheduledCount} detail="Selected date range" />
-        <StatCard label="Late exchanges" value={exchangeStats.lateCount} detail={`${exchangeStats.averageLatenessMinutes} min average delay`} tone="amber" />
-        <StatCard label="Missed exchanges" value={exchangeStats.missedCount} detail="Marked by user records" tone="slate" />
-        <StatCard label="Payments marked unpaid" value={supportStats.unpaidCount} detail={formatMoney(supportStats.unpaidBalance)} tone="amber" />
-        <StatCard label="Evidence items" value={evidenceCount} detail="Private index" />
+        <StatCard label="Timeline records" value={stats.timelineCount} detail={`${range.from} to ${range.to}`} />
+        <StatCard label="Late exchanges" value={stats.lateExchangeCount} detail="From visible timeline records" tone="amber" />
+        <StatCard label="Missed/refused" value={stats.missedExchangeCount} detail="Exchange issues in timeline" tone="slate" />
+        <StatCard label="No FaceTime conducted" value={stats.noFaceTimeCount} detail="FaceTime notes and text archive" tone="amber" />
+        <StatCard label="Post-call notices" value={stats.postCallNoFaceTimeCount} detail="Call first, then text response" tone="slate" />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
-        <Panel title="Exchange order comparison" action={`${range.from} to ${range.to}`}>
-          <ExchangeTimingChart rows={exchangeRows} />
-        </Panel>
-        <Panel title="Child support due vs paid" action="Based on user-entered records">
-          <SupportPaymentChart rows={supportRows} />
-        </Panel>
-      </section>
+      <section className="grid gap-4 xl:grid-cols-[340px_1fr]">
+        <div className="space-y-4">
+          <Panel title="Dashboard focus" action="Court packet view">
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                {sourceCounts.map((item) => (
+                  <div
+                    key={item.label}
+                    className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                  >
+                    <span className="font-medium text-slate-700">{item.label}</span>
+                    <span className="rounded bg-white px-2 py-1 text-xs font-semibold text-slate-950">
+                      {item.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                <StatMini label="Needs review" value={String(stats.attentionCount)} />
+                <StatMini label="Evidence in profile" value={String(evidenceCount)} />
+              </div>
+              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Visible sources</p>
+                <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-medium text-slate-600">
+                  {["Exchanges", "FaceTime", "Notes", "Evidence"].map((source) => (
+                    <span key={source} className="rounded bg-white px-2 py-1">
+                      {source}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Panel>
+        </div>
 
-      <section className="grid gap-4 xl:grid-cols-[1fr_420px]">
-        <Panel title="Expenses by category" action={formatMoney(expenseStats.totalExpenses)}>
-          <ExpenseCategoryChart rows={expenseRows} />
-        </Panel>
-        <Panel title="Recent factual timeline" action={`${calendarEvents.length} events`}>
-          <Timeline events={calendarEvents.slice(-8).reverse()} compact />
+        <Panel title="Case timeline" action={`${dashboardEvents.length} records`}>
+          <Timeline events={dashboardEvents} emptyLabel="No timeline records in this date range." />
+          {focusEvents.length > 0 && (
+            <p className="mt-3 text-xs leading-5 text-slate-500">
+              {focusEvents.length} record{focusEvents.length === 1 ? "" : "s"} match the dashboard focus categories.
+            </p>
+          )}
         </Panel>
       </section>
     </div>

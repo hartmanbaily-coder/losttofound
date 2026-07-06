@@ -322,6 +322,17 @@ function expenseSeverity(expense: ExpenseItem): CalendarEvent["severity"] {
 
 function noteSeverity(note: DateNote): CalendarEvent["severity"] {
   if (note.category === "safety") return "critical";
+  const tags = new Set(note.tags.map((tag) => tag.toLowerCase()));
+  if (
+    tags.has("late_exchange") ||
+    tags.has("refused_exchange") ||
+    tags.has("missed_exchange") ||
+    tags.has("no_facetime") ||
+    tags.has("post_call_notice") ||
+    tags.has("unanswered_call")
+  ) {
+    return "attention";
+  }
   if (
     note.category === "exchange" ||
     note.category === "child_support" ||
@@ -540,6 +551,163 @@ export function buildCalendarEvents(
 
 export function isTimelineVisibleEvent(event: CalendarEvent) {
   return event.type !== "custody_day";
+}
+
+export function timelineSearchText(event: CalendarEvent) {
+  return [
+    event.title,
+    event.detail,
+    event.summary,
+    event.body,
+    event.sourceLabel,
+    ...(event.tags || []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function includesAny(value: string, terms: string[]) {
+  return terms.some((term) => value.includes(term));
+}
+
+export function isLateExchangeTimelineEvent(event: CalendarEvent) {
+  const text = timelineSearchText(event);
+
+  if (event.type === "logged_exchange") {
+    return includesAny(text, [
+      "completed late",
+      "late exchange",
+      "minutes after ordered time",
+      "after ordered time",
+    ]);
+  }
+
+  if (event.type !== "custody_note") return false;
+
+  const exchangeLanguage = includesAny(text, [
+    "late exchange",
+    "late drop",
+    "late transition",
+    "drop off",
+    "drop-off",
+    "dropped off",
+    "showed up",
+    "arrived",
+    "arrival",
+    "exchange",
+    "transition",
+  ]);
+  const lateLanguage = includesAny(text, [
+    "late",
+    "not on time",
+    "after ordered time",
+    "court order",
+    "ordered time",
+    "minutes after",
+    "showed up at",
+    "arrived at",
+    "dropped off at",
+  ]);
+
+  return exchangeLanguage && lateLanguage;
+}
+
+export function isMissedExchangeTimelineEvent(event: CalendarEvent) {
+  const text = timelineSearchText(event);
+
+  if (event.type === "logged_exchange") {
+    return includesAny(text, ["missed", "refused"]);
+  }
+
+  if (event.type !== "custody_note") return false;
+
+  return includesAny(text, [
+    "missed exchange",
+    "refused exchange",
+    "refused to bring",
+    "would not bring",
+    "did not bring",
+    "unable to exchange",
+    "refuses to bring",
+  ]);
+}
+
+export function isNoFaceTimeTimelineEvent(event: CalendarEvent) {
+  if (event.type !== "custody_note") return false;
+
+  const text = timelineSearchText(event);
+  const hasFaceTimeLanguage = /\bft\b/.test(text) || includesAny(text, ["facetime", "face time"]);
+  if (!hasFaceTimeLanguage) return false;
+
+  return includesAny(text, [
+    "no_facetime",
+    "no facetime conducted",
+    "no facetime",
+    "no face time",
+    "no ft",
+    "not tonight",
+    "not today",
+    "can't facetime",
+    "cannot facetime",
+    "could not facetime",
+    "unable to facetime",
+    "not able",
+    "no service",
+    "won't have much service",
+  ]);
+}
+
+export function isPostCallFaceTimeNotice(event: CalendarEvent) {
+  if (!isNoFaceTimeTimelineEvent(event)) return false;
+
+  const text = timelineSearchText(event);
+  return includesAny(text, [
+    "post_call_notice",
+    "call_attempt_first",
+    "unanswered_call",
+    "after attempted",
+    "after an attempted",
+    "after a call",
+    "after i called",
+    "after calling",
+    "after request",
+    "called a few minutes ago",
+    "called about",
+    "facetimed about",
+    "facetimed a few minutes ago",
+    "tried to facetime",
+    "attempted to facetime",
+    "went straight to voicemail",
+    "sent to voicemail",
+    "cancelled the call",
+    "call was sent",
+  ]);
+}
+
+export function buildDashboardTimelineStats(events: CalendarEvent[]) {
+  const visibleEvents = events.filter(isTimelineVisibleEvent);
+  const lateExchangeCount = visibleEvents.filter(isLateExchangeTimelineEvent).length;
+  const missedExchangeCount = visibleEvents.filter(isMissedExchangeTimelineEvent).length;
+  const noFaceTimeCount = visibleEvents.filter(isNoFaceTimeTimelineEvent).length;
+  const postCallNoFaceTimeCount = visibleEvents.filter(isPostCallFaceTimeNotice).length;
+  const attentionCount = visibleEvents.filter(
+    (event) => event.severity === "attention" || event.severity === "critical"
+  ).length;
+
+  return {
+    timelineCount: visibleEvents.length,
+    attentionCount,
+    lateExchangeCount,
+    missedExchangeCount,
+    noFaceTimeCount,
+    postCallNoFaceTimeCount,
+    exchangeCount: visibleEvents.filter(
+      (event) => event.type === "scheduled_exchange" || event.type === "logged_exchange"
+    ).length,
+    noteCount: visibleEvents.filter((event) => event.type === "custody_note").length,
+    evidenceCount: visibleEvents.filter((event) => event.type === "evidence_item").length,
+  };
 }
 
 export function buildNeutralExchangeSummary(

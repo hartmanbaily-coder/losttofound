@@ -3,6 +3,7 @@ import {
   assertOwnedRecord,
   buildCalendarEvents,
   buildCustodyDayMap,
+  buildDashboardTimelineStats,
   buildEvidenceIndex,
   buildNeutralExchangeSummary,
   calculateChildSupportStats,
@@ -12,10 +13,14 @@ import {
   containsForbiddenGeneratedTerm,
   filterOwnedCaseRecords,
   generateExpectedExchangeEvents,
+  isLateExchangeTimelineEvent,
+  isNoFaceTimeTimelineEvent,
+  isPostCallFaceTimeNotice,
   isTimelineVisibleEvent,
 } from "@/lib/records/calculations";
 import { createRecordsSeed, demoCaseId, demoUserId } from "@/lib/records/seed";
 import { buildReportPreview, buildSectionExportPacket, rowsToCsv, sectionExportToCsv } from "@/lib/records/reports";
+import type { CalendarEvent } from "@/lib/records/types";
 import { validateEvidenceFile } from "@/lib/records/validation";
 
 const range = { from: "2026-05-01", to: "2026-05-31" };
@@ -231,6 +236,77 @@ describe("privacy and safety helpers", () => {
     expect(preview.rows.some((row) => "type" in row && row.type === "custody day")).toBe(false);
     expect(csv.split("\n")[0]).toContain("attention_level");
     expect(csv).toContain("Recorded arrival at 6:32 PM.");
+  });
+
+  it("derives dashboard counts from timeline records including imported text notes", () => {
+    const events: CalendarEvent[] = [
+      {
+        id: "late-note",
+        caseId: demoCaseId,
+        date: "2026-03-20",
+        type: "custody_note",
+        title: "Late exchange documented",
+        body: "Andrea dropped kids off at 5:40; court order is 5.",
+        tags: ["late_exchange", "text_archive"],
+        severity: "attention",
+      },
+      {
+        id: "missed-note",
+        caseId: demoCaseId,
+        date: "2026-03-20",
+        type: "custody_note",
+        title: "Exchange issue",
+        body: "Andrea refused to bring kids at 5.",
+        tags: ["refused_exchange"],
+        severity: "critical",
+      },
+      {
+        id: "facetime-note",
+        caseId: demoCaseId,
+        date: "2026-06-12",
+        time: "19:21",
+        type: "custody_note",
+        title: "No FaceTime conducted - no reason stated",
+        body: "FaceTimed about 30 minutes earlier. Andrea replied by text: No FT.",
+        tags: ["facetime", "no_facetime", "post_call_notice"],
+        severity: "attention",
+      },
+      {
+        id: "evidence",
+        caseId: demoCaseId,
+        date: "2026-06-12",
+        type: "evidence_item",
+        title: "Evidence item: text-export.csv",
+        tags: ["text_archive"],
+        severity: "neutral",
+      },
+      {
+        id: "delayed-facetime",
+        caseId: demoCaseId,
+        date: "2026-02-20",
+        type: "custody_note",
+        title: "FaceTime delayed - napping",
+        body: "Andrea replied that Sadie was napping and would FaceTime when she was awake.",
+        tags: ["facetime", "delayed", "napping"],
+        severity: "neutral",
+      },
+    ];
+
+    const stats = buildDashboardTimelineStats(events);
+
+    expect(isLateExchangeTimelineEvent(events[0])).toBe(true);
+    expect(isNoFaceTimeTimelineEvent(events[2])).toBe(true);
+    expect(isPostCallFaceTimeNotice(events[2])).toBe(true);
+    expect(isNoFaceTimeTimelineEvent(events[4])).toBe(false);
+    expect(stats).toMatchObject({
+      timelineCount: 5,
+      attentionCount: 3,
+      lateExchangeCount: 1,
+      missedExchangeCount: 1,
+      noFaceTimeCount: 1,
+      postCallNoFaceTimeCount: 1,
+      evidenceCount: 1,
+    });
   });
 
   it("includes evidence scan and storage status without raw storage paths", () => {
