@@ -93,7 +93,7 @@ const navItems = [
   "Timeline",
   "Exchanges",
   "Notes",
-  "Evidence",
+  "Files",
   "Child Support",
   "Expenses",
   "Reports",
@@ -140,7 +140,7 @@ const timelineFilterOptions: Array<{ value: TimelineFilter; label: string }> = [
   { value: "scheduled_exchange", label: "Scheduled exchanges" },
   { value: "logged_exchange", label: "Logged exchanges" },
   { value: "custody_note", label: "Notes" },
-  { value: "evidence_item", label: "Evidence" },
+  { value: "evidence_item", label: "Files" },
   { value: "child_support_due", label: "Support due" },
   { value: "child_support_paid", label: "Support paid" },
   { value: "expense_item", label: "Expenses" },
@@ -376,7 +376,7 @@ export default function RecordsApp() {
                   }`}
                 >
                   <span>{item}</span>
-                  {item === "Evidence" && (
+                  {item === "Files" && (
                     <span className="rounded bg-white/20 px-1.5 text-[11px]">
                       {selected.evidenceItems.length}
                     </span>
@@ -506,7 +506,7 @@ export default function RecordsApp() {
                 flash={flash}
               />
             )}
-            {activeView === "Evidence" && (
+            {activeView === "Files" && (
               <EvidenceView
                 updateDataset={updateDataset}
                 userId={userId}
@@ -687,8 +687,8 @@ function LoginScreen({
 
             <p className="max-w-2xl text-sm leading-6 text-slate-600">
               Sign in to organize court-ordered exchange expectations, recorded exchange
-              outcomes, child support payment records, expenses, date-based notes, evidence
-              metadata, and neutral report exports.
+              outcomes, child support payment records, expenses, date-based notes, file
+              attachments, and neutral report exports.
             </p>
 
             <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
@@ -821,7 +821,7 @@ function DashboardView({
     { label: "Missed/refused", value: stats.missedExchangeCount },
     { label: "No FaceTime", value: stats.noFaceTimeCount },
     { label: "Post-call notices", value: stats.postCallNoFaceTimeCount },
-    { label: "Dated evidence", value: stats.evidenceCount },
+    { label: "Attached files", value: stats.evidenceCount },
   ];
 
   return (
@@ -853,12 +853,12 @@ function DashboardView({
               </div>
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                 <StatMini label="Needs review" value={String(stats.attentionCount)} />
-                <StatMini label="Evidence in profile" value={String(evidenceCount)} />
+                <StatMini label="Files in profile" value={String(evidenceCount)} />
               </div>
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Visible sources</p>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-medium text-slate-600">
-                  {["Exchanges", "FaceTime", "Notes", "Evidence"].map((source) => (
+                  {["Exchanges", "FaceTime", "Notes", "Files"].map((source) => (
                     <span key={source} className="rounded bg-white px-2 py-1">
                       {source}
                     </span>
@@ -1478,7 +1478,7 @@ function CalendarView({
       )}
 
       {mode === "timeline" && (
-        <Panel title="Chronological timeline" action="Order, recorded events, notes, evidence, expenses">
+        <Panel title="Chronological timeline" action="Order, recorded events, notes, files, expenses">
           <Timeline
             events={visibleEvents}
             emptyLabel="No timeline records in this date range."
@@ -1567,7 +1567,7 @@ function TimelineView({
         <StatCard label="Needs review" value={attentionCount} detail="Attention or critical markers" tone="amber" />
         <StatCard label="Exchange entries" value={exchangeCount} detail="Scheduled and logged" />
         <StatCard label="Notes" value={noteCount} detail="Date-based records" tone="slate" />
-        <StatCard label="Evidence" value={evidenceCount} detail="Dated evidence items" />
+        <StatCard label="Files" value={evidenceCount} detail="Dated file attachments" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[340px_1fr]">
@@ -1592,12 +1592,12 @@ function TimelineView({
               </button>
               <p className="text-xs leading-5 text-slate-500">
                 Delete removes user-entered records from this workspace. Scheduled exchanges and
-                evidence files are managed from their source tabs.
+                uploaded files are managed from the Files tab.
               </p>
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sources</p>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-medium text-slate-600">
-                  {["Exchanges", "Notes", "Evidence", "Support", "Expenses"].map((source) => (
+                  {["Exchanges", "Notes", "Files", "Support", "Expenses"].map((source) => (
                     <span key={source} className="rounded bg-white px-2 py-1">
                       {source}
                     </span>
@@ -2198,11 +2198,11 @@ function EvidenceView({
 
     if (!response.ok) {
       const details = parsed.blockers?.length ? ` ${parsed.blockers.join(" ")}` : "";
-      throw new Error(`${parsed.error || "Evidence upload failed."}${details}`);
+      throw new Error(`${parsed.error || "File upload failed."}${details}`);
     }
 
     if (!parsed.evidence?.storagePath || parsed.evidence.malwareScanStatus !== "clean") {
-      throw new Error("Evidence upload response was incomplete.");
+      throw new Error("File upload response was incomplete.");
     }
 
     return parsed.evidence;
@@ -2212,7 +2212,7 @@ function EvidenceView({
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const file = formData.get("file");
-    if (!(file instanceof File)) return flash("Choose a file for evidence metadata.");
+    if (!(file instanceof File)) return flash("Choose a file to attach.");
 
     const validation = validateEvidenceFile({
       originalFileName: file.name,
@@ -2229,7 +2229,7 @@ function EvidenceView({
       uploaded =
         recordsStorageMode === "supabase" ? await uploadEvidenceFile(file, id) : undefined;
     } catch (error) {
-      return flash(error instanceof Error ? error.message : "Evidence upload failed.");
+      return flash(error instanceof Error ? error.message : "File upload failed.");
     } finally {
       setUploading(false);
     }
@@ -2273,22 +2273,22 @@ function EvidenceView({
           entityId: id,
           metadataSummary:
             recordsStorageMode === "supabase"
-              ? "Evidence file stored in private storage after malware scanning."
-              : "Evidence metadata stored without raw file path or contents.",
+              ? "Attached file stored in private storage after malware scanning."
+              : "Attached file metadata stored without raw file path or contents.",
         }
       )
     );
     event.currentTarget.reset();
     flash(
       recordsStorageMode === "supabase"
-        ? "Evidence file uploaded, scanned clean, and metadata saved."
-        : "Evidence metadata saved with allow-list validation."
+        ? "File uploaded, scanned clean, and metadata saved."
+        : "File metadata saved with allow-list validation."
     );
   }
 
   async function downloadEvidence(item: EvidenceItem) {
     if (recordsStorageMode !== "supabase" || !item.storagePath) {
-      flash("This evidence record does not have a stored file to download.");
+      flash("This file record does not have a stored file to download.");
       return;
     }
 
@@ -2303,7 +2303,7 @@ function EvidenceView({
 
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error || "Evidence download failed.");
+        throw new Error(body.error || "File download failed.");
       }
 
       const blob = await response.blob();
@@ -2313,9 +2313,9 @@ function EvidenceView({
       anchor.download = item.originalFileName;
       anchor.click();
       URL.revokeObjectURL(url);
-      flash("Evidence file downloaded.");
+      flash("File downloaded.");
     } catch (error) {
-      flash(error instanceof Error ? error.message : "Evidence download failed.");
+      flash(error instanceof Error ? error.message : "File download failed.");
     } finally {
       setBusyEvidenceId("");
     }
@@ -2336,7 +2336,7 @@ function EvidenceView({
       description: item.description || "",
     }));
     downloadTextFile(
-      `evidence-index-${new Date().toISOString().slice(0, 10)}.csv`,
+      `file-index-${new Date().toISOString().slice(0, 10)}.csv`,
       rowsToCsv(rows),
       "text/csv"
     );
@@ -2346,23 +2346,23 @@ function EvidenceView({
         caseId,
         action: "exported",
         entityType: "evidenceIndex",
-        entityId: "evidence-index",
-        metadataSummary: "Evidence metadata index exported.",
+        entityId: "file-index",
+        metadataSummary: "File attachment metadata index exported.",
       })
     );
-    flash("Evidence index downloaded.");
+    flash("File index downloaded.");
   }
 
   function printEvidenceSheet(item: EvidenceItem) {
     const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
     if (!printWindow) {
-      flash("Popup blocked. Allow popups to print the evidence sheet.");
+      flash("Popup blocked. Allow popups to print the file sheet.");
       return;
     }
 
     const rows = [
       ["File name", item.originalFileName],
-      ["Evidence date", item.evidenceDate || ""],
+      ["Record date", item.evidenceDate || ""],
       ["Uploaded", item.uploadedAt],
       ["File type", item.fileType],
       ["File size", `${item.fileSize} bytes`],
@@ -2377,7 +2377,7 @@ function EvidenceView({
     printWindow.document.write(`<!doctype html>
       <html>
         <head>
-          <title>Evidence Sheet - ${escapeHtml(item.originalFileName)}</title>
+          <title>File Sheet - ${escapeHtml(item.originalFileName)}</title>
           <style>
             body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #0f172a; margin: 32px; }
             h1 { font-size: 22px; margin: 0 0 8px; }
@@ -2389,7 +2389,7 @@ function EvidenceView({
           </style>
         </head>
         <body>
-          <h1>Lost to Found Records Evidence Sheet</h1>
+          <h1>Lost to Found Records File Sheet</h1>
           <p>Private custody records workspace. Use privacy-friendly labels and verify the source document before submission.</p>
           <div class="notice">This sheet is metadata for organizing records. It is not legal advice and does not replace the original document.</div>
           <table>
@@ -2414,10 +2414,10 @@ function EvidenceView({
         action: "exported",
         entityType: "evidenceItem",
         entityId: item.id,
-        metadataSummary: "Evidence metadata print sheet opened.",
+        metadataSummary: "File attachment metadata print sheet opened.",
       })
     );
-    flash("Evidence print sheet opened.");
+    flash("File sheet opened.");
   }
 
   function updateEvidenceReviewStatus(item: EvidenceItem, reviewStatus: EvidenceReviewStatus) {
@@ -2446,11 +2446,11 @@ function EvidenceView({
           action: "updated",
           entityType: "evidenceItem",
           entityId: item.id,
-          metadataSummary: `Evidence review status changed to ${evidenceReviewStatusLabels[reviewStatus]}.`,
+          metadataSummary: `File review status changed to ${evidenceReviewStatusLabels[reviewStatus]}.`,
         }
       )
     );
-    flash(`Evidence marked ${evidenceReviewStatusLabels[reviewStatus].toLowerCase()}.`);
+    flash(`File marked ${evidenceReviewStatusLabels[reviewStatus].toLowerCase()}.`);
   }
 
   async function deleteEvidence(item: EvidenceItem) {
@@ -2466,10 +2466,10 @@ function EvidenceView({
 
         if (!response.ok) {
           const body = (await response.json().catch(() => ({}))) as { error?: string };
-          throw new Error(body.error || "Evidence file delete failed.");
+          throw new Error(body.error || "File delete failed.");
         }
       } catch (error) {
-        flash(error instanceof Error ? error.message : "Evidence file delete failed.");
+        flash(error instanceof Error ? error.message : "File delete failed.");
         setBusyEvidenceId("");
         return;
       } finally {
@@ -2493,18 +2493,18 @@ function EvidenceView({
           entityId: item.id,
           metadataSummary:
             recordsStorageMode === "supabase"
-              ? "Evidence file and metadata record deleted."
-              : "Evidence metadata record deleted.",
+              ? "Attached file and metadata record deleted."
+              : "Attached file metadata record deleted.",
         }
       )
     );
-    flash(recordsStorageMode === "supabase" ? "Evidence file and metadata deleted." : "Evidence metadata deleted.");
+    flash(recordsStorageMode === "supabase" ? "File and metadata deleted." : "File metadata deleted.");
   }
 
   return (
     <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
       <Panel
-        title="Private evidence record"
+        title="Private file attachment"
         action={recordsStorageMode === "supabase" ? "Authenticated storage" : "Safe dev adapter"}
       >
         <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
@@ -2522,7 +2522,7 @@ function EvidenceView({
               accept=".pdf,.png,.jpg,.jpeg,.heic,.txt,.csv"
             />
           </Field>
-          <Field label="Evidence date">
+          <Field label="Record date">
             <input name="evidenceDate" type="date" className="input" defaultValue="2026-06-10" />
           </Field>
           <Field label="Description">
@@ -2533,14 +2533,14 @@ function EvidenceView({
           </Field>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input name="includeInReports" type="checkbox" defaultChecked />
-            Include in evidence index for selected reports
+            Include in file index for selected reports
           </label>
           <button className="btn-primary" type="submit" disabled={uploading}>
             {uploading
               ? "Scanning and uploading..."
               : recordsStorageMode === "supabase"
-                ? "Upload evidence file"
-                : "Save evidence record"}
+                ? "Upload file"
+                : "Save file record"}
           </button>
         </form>
       </Panel>
@@ -2548,9 +2548,9 @@ function EvidenceView({
       <div className="space-y-4">
         <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
 
-        <Panel title="Evidence index" action={`${evidence.length} records`}>
+        <Panel title="File index" action={`${evidence.length} records`}>
           {evidence.length === 0 ? (
-            <Empty label="No evidence records yet." />
+            <Empty label="No files attached yet." />
           ) : (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -2608,7 +2608,7 @@ function EvidenceView({
                       </button>
                       <DeleteButton
                         label="Delete"
-                        ariaLabel={`Delete evidence ${item.originalFileName}`}
+                        ariaLabel={`Delete file ${item.originalFileName}`}
                         disabled={busyEvidenceId === item.id}
                         onClick={() => void deleteEvidence(item)}
                       />
@@ -3154,7 +3154,7 @@ function ExpensesView({
           <Panel title="Expenses by category" action={`${expenses.length} records`}>
             <ExpenseCategoryChart rows={expenseStats.byCategory} />
           </Panel>
-          <Panel title="Expense records" action="Evidence can be attached separately">
+          <Panel title="Expense records" action="Files can be attached separately">
             <Table
               headers={["Date", "Category", "Description", "Amount", "Reimbursement", "Action"]}
               rows={expenses.map((expense) => [
@@ -3354,7 +3354,7 @@ function ReportsView({
             />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-slate-950">Evidence index</h3>
+            <h3 className="text-sm font-semibold text-slate-950">File index</h3>
             <Table
               headers={["Index", "File", "Date", "Description", "Tags", "Scan", "Storage"]}
               rows={preview.evidenceIndex.map((item) => [
@@ -3652,7 +3652,7 @@ function SettingsView({
             <li>Create a custody matter with neutral labels for the children and parents.</li>
             <li>Add the standing exchange rules and any schedule exceptions from the order.</li>
             <li>Use the calendar to color custody days and log exchanges as they happen.</li>
-            <li>Attach evidence only when it supports a specific date, note, expense, or exchange.</li>
+            <li>Attach files only when they support a specific date, note, expense, or exchange.</li>
             <li>Review the Reports tab before exporting anything for another person or agency.</li>
           </ol>
         </Panel>
@@ -3661,7 +3661,7 @@ function SettingsView({
           <div className="space-y-3 text-sm leading-6 text-slate-600">
             <p>No child accounts, public profiles, social features, co-parent messaging, advertising trackers, or session replay are included.</p>
             <p>Cloud storage uses server-side auth routes and HttpOnly cookies instead of browser-stored access tokens.</p>
-            <p>Evidence files use server-mediated private object storage, require a clean malware scan before download, and never expose public or anonymous share links.</p>
+            <p>Attached files use server-mediated private object storage, require a clean malware scan before download, and never expose public or anonymous share links.</p>
           </div>
         </Panel>
 

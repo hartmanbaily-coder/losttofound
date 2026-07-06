@@ -132,7 +132,7 @@ describe("records calculations", () => {
       body: "Documented pickup time and after-school item transfer.",
       sourceLabel: "Date note",
     });
-    expect(evidence).toMatchObject({ type: "evidence_item", sourceLabel: "Evidence" });
+    expect(evidence).toMatchObject({ type: "evidence_item", sourceLabel: "File attachment" });
     expect(supportDue).toMatchObject({ type: "child_support_due", severity: "attention" });
     expect(expense).toMatchObject({ type: "expense_item", severity: "attention" });
   });
@@ -228,8 +228,8 @@ describe("privacy and safety helpers", () => {
           attention_level: "attention",
         }),
         expect.objectContaining({
-          type: "evidence item",
-          source: "Evidence",
+          type: "file attachment",
+          source: "File attachment",
         }),
       ])
     );
@@ -276,7 +276,7 @@ describe("privacy and safety helpers", () => {
         caseId: demoCaseId,
         date: "2026-06-12",
         type: "evidence_item",
-        title: "Evidence item: text-export.csv",
+        title: "File attachment: text-export.csv",
         tags: ["text_archive"],
         severity: "neutral",
       },

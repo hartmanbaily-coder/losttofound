@@ -492,7 +492,7 @@ export function buildCalendarEvents(
         time: timeFromIso(item.uploadedAt),
         sortAt: item.evidenceDate ? buildSortAt(item.evidenceDate, timeFromIso(item.uploadedAt)) : item.uploadedAt,
         type: "evidence_item" as const,
-        title: `Evidence item: ${item.originalFileName}`,
+        title: `File attachment: ${item.originalFileName}`,
         detail: item.description,
         summary: joinParts([
           `File type: ${item.fileType}`,
@@ -505,7 +505,7 @@ export function buildCalendarEvents(
           item.malwareScanStatus === "blocked" || item.malwareScanStatus === "failed"
             ? ("attention" as const)
             : ("neutral" as const),
-        sourceLabel: "Evidence",
+        sourceLabel: "File attachment",
         relatedIds: [
           item.id,
           item.relatedExchangeId,
@@ -762,5 +762,6 @@ export function labelNoteCategory(category: DateNote["category"]) {
 }
 
 export function labelEventType(type: CalendarEvent["type"]) {
+  if (type === "evidence_item") return "file attachment";
   return type.replaceAll("_", " ");
 }

@@ -34,7 +34,7 @@ export const sectionExportLabels: Record<SectionExportId, string> = {
   timeline: "Timeline Section Packet",
   exchanges: "Exchange Compliance Packet",
   notes: "Date Notes Packet",
-  evidence: "Evidence Index Packet",
+  evidence: "File Attachment Index Packet",
   child_support: "Child Support Packet",
   expenses: "Expense/Reimbursement Packet",
 };
@@ -259,7 +259,7 @@ export function buildSectionExportPacket(
         },
         {
           title: "Calendar records by source",
-          description: "Dated exchange, note, evidence, support, and expense records shown on the calendar.",
+          description: "Dated exchange, note, file, support, and expense records shown on the calendar.",
           unit: "records",
           rows: countBy(events, (event) => labelEventType(event.type)),
         },
@@ -303,7 +303,7 @@ export function buildSectionExportPacket(
       ...base,
       summaries: [
         `The timeline has ${events.length} dated record${events.length === 1 ? "" : "s"} in the selected range, with ${attentionEvents.length} marked for review.`,
-        "Timeline exports combine exchange, note, evidence, support, and expense records in chronological order.",
+        "Timeline exports combine exchange, note, file, support, and expense records in chronological order.",
       ],
       metrics: [
         { label: "Timeline records", value: events.length, detail: `${range.from} to ${range.to}` },
@@ -417,7 +417,7 @@ export function buildSectionExportPacket(
       ],
       suggestedUses: [
         "Show the ordered time compared with actual transition times.",
-        "Pair with screenshots/messages as evidence items when available.",
+        "Pair with screenshots/messages as file attachments when available.",
       ],
     };
   }
@@ -475,29 +475,29 @@ export function buildSectionExportPacket(
     return {
       ...base,
       summaries: [
-        `${evidence.length} evidence item${evidence.length === 1 ? "" : "s"} are indexed in this range. ${needsReview} need review before use.`,
-        "Evidence exports include metadata only. Download original files separately from the evidence section when needed.",
+        `${evidence.length} attached file${evidence.length === 1 ? "" : "s"} are indexed in this range. ${needsReview} need review before use.`,
+        "File exports include metadata only. Download original files separately from the Files section when needed.",
       ],
       metrics: [
-        { label: "Evidence items", value: evidence.length, detail: "Metadata records" },
+        { label: "Attached files", value: evidence.length, detail: "Metadata records" },
         { label: "Need review", value: needsReview, detail: "Review status" },
         { label: "Included", value: evidence.filter((item) => item.includeInReports).length, detail: "Selected for reports" },
       ],
       charts: [
         {
-          title: "Evidence review status",
+          title: "File review status",
           unit: "items",
           rows: countBy(evidence, (item) => (item.reviewStatus || "needs_review").replaceAll("_", " ")),
         },
         {
-          title: "Evidence scan status",
+          title: "File scan status",
           unit: "items",
           rows: countBy(evidence, (item) => item.malwareScanStatus || "pending"),
         },
       ],
       tables: [
         {
-          title: "Evidence index",
+          title: "File index",
           headers: ["Index", "File", "Date", "Description", "Tags", "Scan", "Storage"],
           rows: index.map((item) => [
             String(item.index),
@@ -511,7 +511,7 @@ export function buildSectionExportPacket(
         },
       ],
       suggestedUses: [
-        "Give counsel an evidence index before sending original files.",
+        "Give counsel a file index before sending original files.",
         "Use review and scan charts to show what is ready versus still pending.",
       ],
     };
@@ -626,7 +626,7 @@ export function buildSectionExportPacket(
     ],
     suggestedUses: [
       "Show custody-related expense totals and reimbursement status.",
-      "Pair with receipt evidence sheets when asking counsel to review support documents.",
+      "Pair with receipt file sheets when asking counsel to review support documents.",
     ],
   };
 }
