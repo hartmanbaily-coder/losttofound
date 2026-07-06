@@ -7,13 +7,17 @@ const requiredKeys = [
   "NEXT_PUBLIC_APP_URL",
   "NEXT_PUBLIC_RECORDS_HOST",
   "NEXT_PUBLIC_RECORDS_STORAGE_MODE",
+  "NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED",
   "RECORDS_STORAGE_MODE",
+  "RECORDS_SIGNUPS_ENABLED",
   "NEXT_PUBLIC_SUPABASE_URL",
   "EXPECTED_SUPABASE_PROJECT_REF",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
   "SUPABASE_MFA_POLICY",
   "RECORDS_ENFORCE_MFA",
+  "SUPABASE_CUSTOM_SMTP_ENABLED",
+  "SUPABASE_AUTH_REDIRECTS_VERIFIED_AT",
   "SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED",
   "SUPABASE_PASSWORD_MIN_LENGTH",
   "SUPABASE_PASSWORD_REAUTH_ENABLED",
@@ -22,6 +26,10 @@ const requiredKeys = [
   "RECORDS_EVIDENCE_BUCKET",
   "RECORDS_DATASET_MAX_BYTES",
   "RECORDS_ALLOW_BEARER_AUTH",
+  "RECORDS_AI_IMPORT_ENABLED",
+  "RECORDS_AI_IMPORT_MAX_CHARS",
+  "OPENAI_API_KEY",
+  "OPENAI_IMPORT_MODEL",
   "AUTH_SECRET",
   "AUTH_TRUST_HOST",
   "EVIDENCE_MAX_FILE_BYTES",
@@ -116,6 +124,11 @@ if (authSecretValue && !/^REPLACE_WITH_|^PLACEHOLDER/i.test(authSecretValue)) {
 const logSaltValue = String(entries.get("SECURITY_LOG_HASH_SALT") || "").trim();
 if (logSaltValue && !/^REPLACE_WITH_|^PLACEHOLDER/i.test(logSaltValue)) {
   findings.push("SECURITY_LOG_HASH_SALT must remain a placeholder in .env.production.example.");
+}
+
+const openAiKeyValue = String(entries.get("OPENAI_API_KEY") || "").trim();
+if (openAiKeyValue && !/^REPLACE_WITH_|^PLACEHOLDER/i.test(openAiKeyValue)) {
+  findings.push("OPENAI_API_KEY must remain a placeholder in .env.production.example.");
 }
 
 if (findings.length > 0) {

@@ -170,7 +170,7 @@ async function mfaResponse(input: {
   return response;
 }
 
-export async function POST(request: NextRequest) {
+async function handleLoginPost(request: NextRequest) {
   if (!isSupabaseRecordsMode()) return disabledResponse();
 
   const rateLimit = checkRateLimit(request, {
@@ -245,4 +245,22 @@ export async function POST(request: NextRequest) {
   );
   setRecordsSessionCookies(response, data.session, demoCaseId);
   return response;
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    return await handleLoginPost(request);
+  } catch (error) {
+    await recordSecurityEvent({
+      type: "auth_login_failed",
+      severity: "high",
+      request,
+      status: 503,
+      detail: error instanceof Error ? error.message : "Unhandled records login error.",
+    });
+    return NextResponse.json(
+      { error: "Authentication service is temporarily unavailable." },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
+  }
 }

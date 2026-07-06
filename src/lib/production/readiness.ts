@@ -35,8 +35,11 @@ export const supabaseFinalCheckIds = [
   "supabase-production-project",
   "supabase-anon-key",
   "supabase-service-role",
+  "records-signup-mode",
   "supabase-mfa-policy",
   "records-mfa-enforced",
+  "supabase-custom-smtp",
+  "supabase-auth-redirects",
   "supabase-leaked-passwords",
   "supabase-password-minimum",
   "supabase-password-reauth",
@@ -62,7 +65,13 @@ const placeholderValues = new Set([
 ]);
 
 function hasValue(value: string | undefined) {
-  return Boolean(value && !placeholderValues.has(value.trim().toLowerCase()));
+  const normalized = String(value || "").trim().toLowerCase();
+  return Boolean(
+    normalized &&
+      !placeholderValues.has(normalized) &&
+      !normalized.includes("replace_with") &&
+      !normalized.includes("placeholder")
+  );
 }
 
 function isHttpsUrl(value: string | undefined) {
@@ -83,8 +92,21 @@ function hasStrongSecret(value: string | undefined) {
   return hasValue(value) && (value || "").length >= 32;
 }
 
+function isUsableSupabasePublicKey(value: string | undefined) {
+  const key = String(value || "").trim();
+  return (
+    hasValue(key) &&
+    (key.startsWith("sb_publishable_") ||
+      /^eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/.test(key))
+  );
+}
+
 function isEnabled(value: string | undefined) {
   return ["true", "enabled", "yes", "1"].includes((value || "").trim().toLowerCase());
+}
+
+function isBooleanString(value: string | undefined) {
+  return ["true", "false"].includes((value || "").trim().toLowerCase());
 }
 
 function isOneOf(value: string | undefined, allowed: string[]) {
@@ -169,6 +191,9 @@ export function evaluateProductionReadiness(
   const securityEventSink = (env.SECURITY_EVENT_SINK || "").trim().toLowerCase();
   const configuredSupabaseRef = supabaseProjectRef(env.NEXT_PUBLIC_SUPABASE_URL);
   const expectedSupabaseRef = (env.EXPECTED_SUPABASE_PROJECT_REF || "").trim();
+  const aiImportEnabled = isEnabled(env.RECORDS_AI_IMPORT_ENABLED);
+  const recordsSignupsEnabled = isEnabled(env.RECORDS_SIGNUPS_ENABLED);
+  const publicRecordsSignupsEnabled = isEnabled(env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED);
 
   const checks = [
     check(
@@ -212,9 +237,9 @@ export function evaluateProductionReadiness(
     check(
       "supabase-anon-key",
       "Supabase public browser key is configured",
-      hasValue(env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+      isUsableSupabasePublicKey(env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
       "blocker",
-      "Set NEXT_PUBLIC_SUPABASE_ANON_KEY for browser-side authenticated requests."
+      "Set NEXT_PUBLIC_SUPABASE_ANON_KEY to a real Supabase publishable key or legacy anon JWT, not a placeholder."
     ),
     check(
       "supabase-service-role",
@@ -230,6 +255,15 @@ export function evaluateProductionReadiness(
       env.RECORDS_ALLOW_BEARER_AUTH !== "true",
       "blocker",
       "Do not enable RECORDS_ALLOW_BEARER_AUTH in production."
+    ),
+    check(
+      "records-signup-mode",
+      "Account creation gate is explicit",
+      isBooleanString(env.RECORDS_SIGNUPS_ENABLED) &&
+        isBooleanString(env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED) &&
+        recordsSignupsEnabled === publicRecordsSignupsEnabled,
+      "blocker",
+      "Set RECORDS_SIGNUPS_ENABLED and NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED to matching true or false values."
     ),
     check(
       "auth-secret",
@@ -251,6 +285,20 @@ export function evaluateProductionReadiness(
       isEnabled(env.RECORDS_ENFORCE_MFA),
       "blocker",
       "Set RECORDS_ENFORCE_MFA=true so production records APIs require an AAL2 Supabase session."
+    ),
+    check(
+      "supabase-custom-smtp",
+      "Supabase Auth uses production email delivery",
+      isEnabled(env.SUPABASE_CUSTOM_SMTP_ENABLED),
+      "blocker",
+      "Configure custom SMTP for Supabase Auth before relying on signup or password reset emails."
+    ),
+    check(
+      "supabase-auth-redirects",
+      "Supabase Auth redirect URLs were verified recently",
+      isRecentDate(env.SUPABASE_AUTH_REDIRECTS_VERIFIED_AT, generatedAt, 30),
+      "blocker",
+      "Verify losttofound.org auth redirects, /auth/confirm, and password reset recovery links, then set SUPABASE_AUTH_REDIRECTS_VERIFIED_AT."
     ),
     check(
       "supabase-leaked-passwords",
@@ -391,8 +439,24 @@ export function evaluateProductionReadiness(
       "vendor-security-review",
       "Vendor security review is complete",
       isEnabled(env.VENDOR_SECURITY_REVIEW_APPROVED),
-      "warning",
-      "Review Supabase, hosting, malware scanning, email, logging, and monitoring vendors."
+      aiImportEnabled ? "blocker" : "warning",
+      aiImportEnabled
+        ? "Vendor/security review must be complete before enabling AI import for production user data."
+        : "Review Supabase, hosting, malware scanning, email, logging, and monitoring vendors."
+    ),
+    check(
+      "ai-import-openai-key",
+      "AI import OpenAI key is server-only",
+      !aiImportEnabled || hasValue(env.OPENAI_API_KEY),
+      "blocker",
+      "Set OPENAI_API_KEY only in server-side secret storage when RECORDS_AI_IMPORT_ENABLED=true."
+    ),
+    check(
+      "ai-import-model",
+      "AI import model is configured",
+      !aiImportEnabled || hasValue(env.OPENAI_IMPORT_MODEL),
+      "blocker",
+      "Set OPENAI_IMPORT_MODEL when RECORDS_AI_IMPORT_ENABLED=true."
     ),
     check(
       "security-contact",

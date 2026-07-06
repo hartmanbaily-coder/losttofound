@@ -74,7 +74,9 @@ export type ReimbursementStatus =
 
 export type ReportType =
   | "exchange_compliance"
+  | "facetime_cancellations"
   | "incident_timeline"
+  | "filing_facetime_correlation"
   | "child_support_payment"
   | "expense_reimbursement"
   | "combined_attorney_summary"

@@ -1,13 +1,30 @@
 // src/lib/supabaseClient.ts
 import { createClient } from "@supabase/supabase-js";
 
-function getBrowserSupabaseConfig() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export function isPlaceholderSecret(value: string | undefined) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return (
+    !normalized ||
+    normalized.includes("replace_with") ||
+    normalized.includes("placeholder") ||
+    normalized.includes("changeme") ||
+    normalized.includes("change-me")
+  );
+}
 
-  if (!supabaseUrl || !supabaseUrl.startsWith("https://") || !supabaseAnonKey) {
+export function isUsableSupabasePublicKey(value: string | undefined) {
+  const key = String(value || "").trim();
+  if (isPlaceholderSecret(key)) return false;
+  return key.startsWith("sb_publishable_") || /^eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/.test(key);
+}
+
+function getBrowserSupabaseConfig() {
+  const supabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  const supabaseAnonKey = String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+
+  if (!supabaseUrl || !supabaseUrl.startsWith("https://") || !isUsableSupabasePublicKey(supabaseAnonKey)) {
     throw new Error(
-      "Missing production Supabase browser configuration. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY."
+      "Missing production Supabase browser configuration. Set NEXT_PUBLIC_SUPABASE_URL and a real NEXT_PUBLIC_SUPABASE_ANON_KEY."
     );
   }
 

@@ -33,6 +33,11 @@ export type RecordsSignInResult =
   | { status: "mfa_required" }
   | { status: "mfa_enrollment_required"; enrollment: RecordsMfaEnrollment };
 
+export type RecordsAuthMessage = {
+  ok: boolean;
+  message: string;
+};
+
 export const recordsStorageMode: RecordsStorageMode =
   process.env.NEXT_PUBLIC_RECORDS_STORAGE_MODE === "supabase" ? "supabase" : "local";
 
@@ -40,23 +45,22 @@ function cloneDataset(dataset: RecordsDataset): RecordsDataset {
   return JSON.parse(JSON.stringify(dataset)) as RecordsDataset;
 }
 
-function normalizeDataset(dataset: Partial<RecordsDataset>): RecordsDataset {
-  const seed = createRecordsSeed();
+function normalizeDataset(dataset: Partial<RecordsDataset>, fallback: RecordsDataset): RecordsDataset {
   return {
-    ...seed,
+    ...fallback,
     ...dataset,
-    users: dataset.users || seed.users,
-    matters: dataset.matters || seed.matters,
-    exchangeRules: dataset.exchangeRules || seed.exchangeRules,
-    scheduleExceptions: dataset.scheduleExceptions || seed.scheduleExceptions,
-    custodyDayAssignments: dataset.custodyDayAssignments || seed.custodyDayAssignments,
-    exchangeLogs: dataset.exchangeLogs || seed.exchangeLogs,
-    dateNotes: dataset.dateNotes || seed.dateNotes,
-    evidenceItems: dataset.evidenceItems || seed.evidenceItems,
-    childSupportOrders: dataset.childSupportOrders || seed.childSupportOrders,
-    childSupportPayments: dataset.childSupportPayments || seed.childSupportPayments,
-    expenseItems: dataset.expenseItems || seed.expenseItems,
-    auditLogs: dataset.auditLogs || seed.auditLogs,
+    users: dataset.users || fallback.users,
+    matters: dataset.matters || fallback.matters,
+    exchangeRules: dataset.exchangeRules || fallback.exchangeRules,
+    scheduleExceptions: dataset.scheduleExceptions || fallback.scheduleExceptions,
+    custodyDayAssignments: dataset.custodyDayAssignments || fallback.custodyDayAssignments,
+    exchangeLogs: dataset.exchangeLogs || fallback.exchangeLogs,
+    dateNotes: dataset.dateNotes || fallback.dateNotes,
+    evidenceItems: dataset.evidenceItems || fallback.evidenceItems,
+    childSupportOrders: dataset.childSupportOrders || fallback.childSupportOrders,
+    childSupportPayments: dataset.childSupportPayments || fallback.childSupportPayments,
+    expenseItems: dataset.expenseItems || fallback.expenseItems,
+    auditLogs: dataset.auditLogs || fallback.auditLogs,
   };
 }
 
@@ -66,7 +70,7 @@ function readLocalDataset() {
   if (!stored) return createRecordsSeed();
 
   try {
-    return normalizeDataset(JSON.parse(stored) as Partial<RecordsDataset>);
+    return normalizeDataset(JSON.parse(stored) as Partial<RecordsDataset>, createRecordsSeed());
   } catch {
     return createRecordsSeed();
   }
@@ -105,9 +109,10 @@ async function readRemoteDataset(session: RecordsSession) {
   }
 
   const body = (await response.json()) as { dataset: Partial<RecordsDataset> | null };
-  if (body.dataset) return normalizeDataset(body.dataset);
+  const emptyDataset = createEmptyRecordsDatasetForUser(session.userId, session.email);
+  if (body.dataset) return normalizeDataset(body.dataset, emptyDataset);
 
-  const initial = createEmptyRecordsDatasetForUser(session.userId, session.email);
+  const initial = emptyDataset;
   void persistRemoteDataset(initial);
   return initial;
 }
@@ -146,7 +151,24 @@ export function useRecordsStore() {
         setStorageStatus("Local demo storage.");
       }
     } catch (error) {
-      setDataset(createRecordsSeed());
+      if (recordsStorageMode === "supabase") {
+        setDataset({
+          users: [],
+          matters: [],
+          exchangeRules: [],
+          scheduleExceptions: [],
+          custodyDayAssignments: [],
+          exchangeLogs: [],
+          dateNotes: [],
+          evidenceItems: [],
+          childSupportOrders: [],
+          childSupportPayments: [],
+          expenseItems: [],
+          auditLogs: [],
+        });
+      } else {
+        setDataset(createRecordsSeed());
+      }
       setStorageStatus(error instanceof Error ? error.message : "Records storage unavailable.");
     } finally {
       setHydrated(true);
@@ -274,6 +296,104 @@ export async function signInRecordsSession(
   }
 
   return { status: "signed_in", session: body.session };
+}
+
+export async function signUpRecordsAccount(
+  email: string,
+  password: string,
+  adultConfirmed: boolean
+): Promise<RecordsAuthMessage> {
+  const response = await fetch("/api/records/auth/signup", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password, adultConfirmed }),
+  });
+
+  const body = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
+    message?: string;
+    error?: string;
+    detail?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error([body.error, body.detail].filter(Boolean).join(" ") || `Account creation failed with ${response.status}.`);
+  }
+
+  return {
+    ok: body.ok === true,
+    message: body.message || "Check your email to confirm the account before signing in.",
+  };
+}
+
+export async function requestRecordsPasswordReset(
+  email: string,
+  adultConfirmed: boolean
+): Promise<RecordsAuthMessage> {
+  const response = await fetch("/api/records/auth/password/reset", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, adultConfirmed }),
+  });
+
+  const body = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
+    message?: string;
+    error?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(body.error || `Password reset failed with ${response.status}.`);
+  }
+
+  return {
+    ok: body.ok === true,
+    message: body.message || "If an account exists for that email, a password reset link will be sent.",
+  };
+}
+
+export async function acceptRecordsRecoverySession(input: {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn?: string | number | null;
+}) {
+  const response = await fetch("/api/records/auth/recovery/session", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+  if (!response.ok) {
+    throw new Error(body.error || `Recovery session failed with ${response.status}.`);
+  }
+}
+
+export async function updateRecordsPassword(password: string): Promise<RecordsAuthMessage> {
+  const response = await fetch("/api/records/auth/password/update", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+
+  const body = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
+    message?: string;
+    error?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(body.error || `Password update failed with ${response.status}.`);
+  }
+
+  return {
+    ok: body.ok === true,
+    message: body.message || "Password updated. Sign in again with your new password.",
+  };
 }
 
 async function verifyMfaAt(endpoint: string, body: Record<string, string>) {

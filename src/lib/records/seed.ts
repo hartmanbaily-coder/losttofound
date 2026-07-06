@@ -428,56 +428,6 @@ export function createRecordsSeed(): RecordsDataset {
   };
 }
 
-export function createRecordsSeedForUser(userId: string, email: string): RecordsDataset {
-  const seed = createRecordsSeed();
-  const displayName = email.split("@")[0]?.replace(/[._-]+/g, " ") || "Records user";
-
-  return {
-    users: seed.users
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({
-        ...item,
-        id: `profile-${userId}`,
-        userId,
-        displayName,
-        email,
-      })),
-    matters: seed.matters
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({ ...item, userId })),
-    exchangeRules: seed.exchangeRules
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({ ...item, userId })),
-    scheduleExceptions: seed.scheduleExceptions
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({ ...item, userId })),
-    custodyDayAssignments: seed.custodyDayAssignments
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({ ...item, userId })),
-    exchangeLogs: seed.exchangeLogs
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({ ...item, userId })),
-    dateNotes: seed.dateNotes
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({ ...item, userId })),
-    evidenceItems: seed.evidenceItems
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({ ...item, userId, malwareScanStatus: "pending" })),
-    childSupportOrders: seed.childSupportOrders
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({ ...item, userId })),
-    childSupportPayments: seed.childSupportPayments
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({ ...item, userId })),
-    expenseItems: seed.expenseItems
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({ ...item, userId })),
-    auditLogs: seed.auditLogs
-      .filter((item) => item.userId === demoUserId)
-      .map((item) => ({ ...item, userId })),
-  };
-}
-
 export function createEmptyRecordsDatasetForUser(userId: string, email: string): RecordsDataset {
   const createdAt = new Date().toISOString();
   const displayName = email.split("@")[0]?.replace(/[._-]+/g, " ") || "Records user";

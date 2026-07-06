@@ -41,6 +41,50 @@ export function isRecordsMfaRequired(env: Record<string, string | undefined> = p
   );
 }
 
+export function isRecordsSignupEnabled(env: Record<string, string | undefined> = process.env) {
+  return env.RECORDS_SIGNUPS_ENABLED === "true" || env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED === "true";
+}
+
+export function recordsPasswordMinimumLength(env: Record<string, string | undefined> = process.env) {
+  const configured = Number(env.SUPABASE_PASSWORD_MIN_LENGTH || 12);
+  return Number.isFinite(configured) ? Math.max(12, configured) : 12;
+}
+
+export function isStrongRecordsPassword(
+  password: string,
+  env: Record<string, string | undefined> = process.env
+) {
+  return password.length >= recordsPasswordMinimumLength(env) && password.length <= 128;
+}
+
+export function recordsAppBaseUrl(request: NextRequest, env: Record<string, string | undefined> = process.env) {
+  const configured = env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
+  if (configured) {
+    try {
+      const url = new URL(configured);
+      if (url.protocol === "https:" || url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+        return url.origin;
+      }
+    } catch {
+      // Fall back to request origin below.
+    }
+  }
+
+  return request.nextUrl.origin;
+}
+
+export function safeRecordsAuthNextPath(value: string | null | undefined) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/records";
+
+  try {
+    const parsed = new URL(value, "https://losttofound.org");
+    if (!parsed.pathname.startsWith("/records")) return "/records";
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return "/records";
+  }
+}
+
 export function getAccessTokenAal(accessToken: string | undefined) {
   if (!accessToken) return null;
   const [, payload] = accessToken.split(".");

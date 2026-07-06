@@ -19,7 +19,13 @@ import {
   isTimelineVisibleEvent,
 } from "@/lib/records/calculations";
 import { createRecordsSeed, demoCaseId, demoUserId } from "@/lib/records/seed";
-import { buildReportPreview, buildSectionExportPacket, rowsToCsv, sectionExportToCsv } from "@/lib/records/reports";
+import {
+  buildReportPreview,
+  buildSectionExportPacket,
+  reportPreviewToCsv,
+  rowsToCsv,
+  sectionExportToCsv,
+} from "@/lib/records/reports";
 import type { CalendarEvent } from "@/lib/records/types";
 import { validateEvidenceFile } from "@/lib/records/validation";
 
@@ -183,7 +189,8 @@ describe("privacy and safety helpers", () => {
 
     expect(containsForbiddenGeneratedTerm(summaryText)).toBe(false);
     expect(containsForbiddenGeneratedTerm(exchangeSummary)).toBe(false);
-    expect(summaryText).toContain("Based on records entered in this app");
+    expect(summaryText).toContain("custody timeline issues");
+    expect(summaryText).toContain("does not include child support or expense sections");
   });
 
   it("includes custody schedule rows in combined report exports", () => {
@@ -222,20 +229,72 @@ describe("privacy and safety helpers", () => {
     expect(preview.rows).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: "logged exchange",
+          issue: "Late exchange",
           source: "Exchange log",
           title: "Logged exchange: completed late",
-          attention_level: "attention",
-        }),
-        expect.objectContaining({
-          type: "file attachment",
-          source: "File attachment",
         }),
       ])
     );
-    expect(preview.rows.some((row) => "type" in row && row.type === "custody day")).toBe(false);
-    expect(csv.split("\n")[0]).toContain("attention_level");
+    expect(preview.rows.some((row) => "source" in row && row.source === "File attachment")).toBe(false);
+    expect(preview.rows.some((row) => "source" in row && row.source === "Child support")).toBe(false);
+    expect(preview.rows.some((row) => "source" in row && row.source === "Expense")).toBe(false);
+    expect(csv.split("\n")[0]).toContain("issue");
     expect(csv).toContain("Recorded arrival at 6:32 PM.");
+  });
+
+  it("builds focused report previews with issue-specific charts", () => {
+    const dataset = createRecordsSeed();
+    const createdAt = "2026-05-10T12:00:00.000Z";
+    dataset.dateNotes.push(
+      {
+        id: "filing-note-test",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        noteDate: "2026-05-10",
+        category: "court",
+        title: "Motion filed",
+        body: "Motion filed with the court.",
+        tags: ["motion", "filed"],
+        includeInReports: true,
+        createdAt,
+        updatedAt: createdAt,
+      },
+      {
+        id: "facetime-note-test",
+        caseId: demoCaseId,
+        userId: demoUserId,
+        noteDate: "2026-05-12",
+        noteTime: "19:21",
+        category: "communication",
+        title: "No FaceTime conducted",
+        body: "Called first and no answer. Parent B later stated by text that there would be no FaceTime.",
+        tags: ["facetime", "no_facetime", "post_call_notice"],
+        includeInReports: true,
+        createdAt,
+        updatedAt: createdAt,
+      }
+    );
+
+    const exchangePreview = buildReportPreview(dataset, demoUserId, demoCaseId, range, "exchange_compliance");
+    const facetimePreview = buildReportPreview(dataset, demoUserId, demoCaseId, range, "facetime_cancellations");
+    const correlationPreview = buildReportPreview(
+      dataset,
+      demoUserId,
+      demoCaseId,
+      range,
+      "filing_facetime_correlation"
+    );
+    const csv = reportPreviewToCsv(facetimePreview);
+
+    expect(exchangePreview.charts.map((chart) => chart.title)).toContain("Late exchanges by direction");
+    expect(facetimePreview.metrics.map((metric) => metric.label)).toContain("After call/request");
+    expect(facetimePreview.charts.map((chart) => chart.title)).toContain("No FaceTime records by month");
+    expect(correlationPreview.charts.map((chart) => chart.title)).toContain(
+      "No FaceTime records after filing notes"
+    );
+    expect(correlationPreview.summaries.join(" ")).toContain("timing overlap only");
+    expect(csv).toContain("chart_data");
+    expect(csv).toContain("No FaceTime records");
   });
 
   it("derives dashboard counts from timeline records including imported text notes", () => {
@@ -246,7 +305,7 @@ describe("privacy and safety helpers", () => {
         date: "2026-03-20",
         type: "custody_note",
         title: "Late exchange documented",
-        body: "Andrea dropped kids off at 5:40; court order is 5.",
+        body: "Parent B dropped the children off at 5:40; court order is 5.",
         tags: ["late_exchange", "text_archive"],
         severity: "attention",
       },
@@ -256,7 +315,7 @@ describe("privacy and safety helpers", () => {
         date: "2026-03-20",
         type: "custody_note",
         title: "Exchange issue",
-        body: "Andrea refused to bring kids at 5.",
+        body: "Parent B refused to bring the children at 5.",
         tags: ["refused_exchange"],
         severity: "critical",
       },
@@ -267,7 +326,7 @@ describe("privacy and safety helpers", () => {
         time: "19:21",
         type: "custody_note",
         title: "No FaceTime conducted - no reason stated",
-        body: "FaceTimed about 30 minutes earlier. Andrea replied by text: No FT.",
+        body: "FaceTimed about 30 minutes earlier. Parent B replied by text: No FT.",
         tags: ["facetime", "no_facetime", "post_call_notice"],
         severity: "attention",
       },
@@ -286,7 +345,7 @@ describe("privacy and safety helpers", () => {
         date: "2026-02-20",
         type: "custody_note",
         title: "FaceTime delayed - napping",
-        body: "Andrea replied that Sadie was napping and would FaceTime when she was awake.",
+        body: "Parent B replied that Child 1 was napping and would FaceTime when awake.",
         tags: ["facetime", "delayed", "napping"],
         severity: "neutral",
       },

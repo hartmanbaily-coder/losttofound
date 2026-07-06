@@ -10,15 +10,21 @@ import {
   childSupportChartRows,
   formatMoney,
   generateExpectedExchangeEvents,
+  getMonthKey,
   getIsoDateFromDateTime,
+  isLateExchangeTimelineEvent,
+  isMissedExchangeTimelineEvent,
+  isNoFaceTimeTimelineEvent,
+  isPostCallFaceTimeNotice,
   isTimelineVisibleEvent,
   isWithinDateRange,
   labelEventType,
   labelExchangeStatus,
   labelNoteCategory,
   labelPaymentStatus,
+  timelineSearchText,
 } from "./calculations";
-import type { DateRange, RecordsDataset, ReportType } from "./types";
+import type { CalendarEvent, DateRange, ExchangeLog, RecordsDataset, ReportType } from "./types";
 
 export type SectionExportId =
   | "calendar"
@@ -81,13 +87,71 @@ export interface SectionExportPacket {
 }
 
 export const reportTypeLabels: Record<ReportType, string> = {
-  exchange_compliance: "Exchange Compliance Report",
-  incident_timeline: "Incident Timeline Report",
+  exchange_compliance: "Exchange Lateness Report",
+  facetime_cancellations: "FaceTime Cancellation Report",
+  incident_timeline: "Issue Timeline Report",
+  filing_facetime_correlation: "Filing / FaceTime Timing Report",
   child_support_payment: "Child Support Payment Report",
   expense_reimbursement: "Expense/Reimbursement Report",
-  combined_attorney_summary: "Combined Attorney Summary",
-  combined_court_packet: "Combined Court Packet",
+  combined_attorney_summary: "Attorney Issue Summary",
+  combined_court_packet: "Combined Court Issue Packet",
 };
+
+export const reportsTabReportTypes: Array<{ value: ReportType; label: string; description: string }> = [
+  {
+    value: "exchange_compliance",
+    label: reportTypeLabels.exchange_compliance,
+    description: "Shows ordered exchange times against recorded arrival times.",
+  },
+  {
+    value: "facetime_cancellations",
+    label: reportTypeLabels.facetime_cancellations,
+    description: "Summarizes no-FaceTime records and whether notice came after a call/request.",
+  },
+  {
+    value: "incident_timeline",
+    label: reportTypeLabels.incident_timeline,
+    description: "Filters the timeline to court-useful exchange and communication issues.",
+  },
+  {
+    value: "filing_facetime_correlation",
+    label: reportTypeLabels.filing_facetime_correlation,
+    description: "Compares court/attorney filing notes with nearby no-FaceTime records.",
+  },
+  {
+    value: "combined_attorney_summary",
+    label: reportTypeLabels.combined_attorney_summary,
+    description: "A concise issue packet for counsel review.",
+  },
+  {
+    value: "combined_court_packet",
+    label: reportTypeLabels.combined_court_packet,
+    description: "A broader packet with metrics, charts, and key rows.",
+  },
+];
+
+export type ReportChartKind = "bar" | "line";
+export type ReportChartOrientation = "vertical" | "horizontal";
+
+export interface ReportPreviewChart extends SectionExportChart {
+  kind: ReportChartKind;
+  orientation?: ReportChartOrientation;
+  emptyLabel?: string;
+}
+
+export interface ReportPreview {
+  title: string;
+  caseName: string;
+  generatedAt: string;
+  disclaimer: string;
+  focus: string;
+  summaries: string[];
+  metrics: SectionExportMetric[];
+  charts: ReportPreviewChart[];
+  tables: SectionExportTable[];
+  rows: Array<Record<string, unknown>>;
+  evidenceIndex: ReturnType<typeof buildEvidenceIndex>;
+}
 
 function escapeCsvCell(value: unknown) {
   const text = String(value ?? "");
@@ -130,6 +194,10 @@ function formatPercent(numerator: number, denominator: number) {
   return `${Math.round((numerator / denominator) * 100)}%`;
 }
 
+function includesAny(value: string, terms: string[]) {
+  return terms.some((term) => value.includes(term));
+}
+
 function eventSeverityLabel(value: string | undefined) {
   if (value === "critical") return "Critical";
   if (value === "attention") return "Needs review";
@@ -139,6 +207,159 @@ function eventSeverityLabel(value: string | undefined) {
 
 function evidenceRecordDate(item: RecordsDataset["evidenceItems"][number]) {
   return item.evidenceDate || item.uploadedAt.slice(0, 10);
+}
+
+function labelExchangeDirection(direction: ExchangeLog["direction"]) {
+  return direction === "other_parent_to_me" ? "Other parent to me" : "Me to other parent";
+}
+
+function formatMinutes(value: number) {
+  return `${value} min`;
+}
+
+function formatDateRangeWindow(days: number) {
+  return days === 0 ? "same day" : `within ${days} days`;
+}
+
+function dateDiffDays(from: string, to: string) {
+  return Math.round((new Date(`${to}T00:00:00.000Z`).getTime() - new Date(`${from}T00:00:00.000Z`).getTime()) / 86_400_000);
+}
+
+function monthKeysInRange(range: DateRange) {
+  const months: string[] = [];
+  const cursor = new Date(`${range.from.slice(0, 7)}-01T00:00:00.000Z`);
+  const end = new Date(`${range.to.slice(0, 7)}-01T00:00:00.000Z`);
+
+  while (cursor <= end) {
+    months.push(cursor.toISOString().slice(0, 7));
+    cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+  }
+
+  return months;
+}
+
+function sortByDateTime<T extends { date: string; time?: string }>(rows: T[]) {
+  return [...rows].sort((a, b) => `${a.date}T${a.time || "00:00"}`.localeCompare(`${b.date}T${b.time || "00:00"}`));
+}
+
+function eventMatchesFilingLanguage(event: CalendarEvent) {
+  if (event.type !== "custody_note") return false;
+  const text = timelineSearchText(event);
+  const courtContext = includesAny(text, ["court", "attorney", "lawyer", "motion", "response", "filing", "filed"]);
+  const filingAction = includesAny(text, [
+    "motion",
+    "motions",
+    "response",
+    "reply",
+    "opposition",
+    "filing",
+    "filed",
+    "petition",
+    "affidavit",
+    "declaration",
+    "hearing brief",
+  ]);
+
+  return courtContext && filingAction;
+}
+
+function issueLabelForEvent(event: CalendarEvent) {
+  if (isLateExchangeTimelineEvent(event)) return "Late exchange";
+  if (isMissedExchangeTimelineEvent(event)) return "Missed/refused exchange";
+  if (isPostCallFaceTimeNotice(event)) return "No FaceTime after call/request";
+  if (isNoFaceTimeTimelineEvent(event)) return "No FaceTime";
+  if (eventMatchesFilingLanguage(event)) return "Court/attorney filing note";
+  return eventSeverityLabel(event.severity);
+}
+
+function isIssueReportEvent(event: CalendarEvent) {
+  if (isLateExchangeTimelineEvent(event)) return true;
+  if (isMissedExchangeTimelineEvent(event)) return true;
+  if (isNoFaceTimeTimelineEvent(event)) return true;
+  if (eventMatchesFilingLanguage(event)) return true;
+
+  return (
+    (event.type === "logged_exchange" || event.type === "custody_note") &&
+    (event.severity === "attention" || event.severity === "critical")
+  );
+}
+
+function lateExchangeRows(exchangeLogs: ExchangeLog[]) {
+  return exchangeLogs.map((log) => {
+    const timing = calculateExchangeTiming(log);
+    return {
+      label: getIsoDateFromDateTime(log.orderedExchangeAt),
+      value: timing.minutesEarlyOrLate ?? 0,
+    };
+  });
+}
+
+function exchangeOutcomeRows(exchangeLogs: ExchangeLog[]) {
+  return countBy(exchangeLogs, (log) => labelExchangeStatus(log.status));
+}
+
+function exchangeDirectionRows(exchangeLogs: ExchangeLog[]) {
+  const labels = ["Other parent to me", "Me to other parent"];
+  return labels.map((label) => {
+    const logs = exchangeLogs.filter((log) => labelExchangeDirection(log.direction) === label);
+    const late = logs.filter((log) => calculateExchangeTiming(log).isLate).length;
+    return {
+      label,
+      value: late,
+      secondaryValue: Math.max(logs.length - late, 0),
+    };
+  });
+}
+
+function noFaceTimeRows(events: CalendarEvent[]) {
+  return sortByDateTime(events.filter(isNoFaceTimeTimelineEvent).map((event) => ({
+    date: event.date,
+    time: event.time,
+    type: issueLabelForEvent(event),
+    title: event.title,
+    detail: event.detail || "",
+    summary: event.summary || "",
+    notes: event.body || "",
+    tags: event.tags?.join("; ") || "",
+  })));
+}
+
+function timelineIssueRows(events: CalendarEvent[]) {
+  return sortByDateTime(events.map((event) => ({
+    date: event.date,
+    time: event.time,
+    issue: issueLabelForEvent(event),
+    source: event.sourceLabel || "",
+    title: event.title,
+    detail: event.detail || "",
+    summary: event.summary || "",
+    notes: event.body || "",
+    tags: event.tags?.join("; ") || "",
+  })));
+}
+
+function filingCorrelationRows(filingEvents: CalendarEvent[], noFaceTimeEvents: CalendarEvent[]) {
+  return sortByDateTime(filingEvents.map((event) => {
+    const sameDay = noFaceTimeEvents.filter((item) => dateDiffDays(event.date, item.date) === 0).length;
+    const within7 = noFaceTimeEvents.filter((item) => {
+      const diff = dateDiffDays(event.date, item.date);
+      return diff >= 0 && diff <= 7;
+    }).length;
+    const within14 = noFaceTimeEvents.filter((item) => {
+      const diff = dateDiffDays(event.date, item.date);
+      return diff >= 0 && diff <= 14;
+    }).length;
+
+    return {
+      date: event.date,
+      time: event.time,
+      filing_note: event.title,
+      same_day_no_facetime: sameDay,
+      within_7_days_no_facetime: within7,
+      within_14_days_no_facetime: within14,
+      note_text: event.body || event.summary || event.detail || "",
+    };
+  }));
 }
 
 function toTableRows<T>(records: T[], mapper: (record: T) => string[]) {
@@ -638,31 +859,33 @@ export function buildReportRows(
   range: DateRange,
   reportType: ReportType
 ) {
+  const events = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent);
+  const noFaceTimeEvents = events.filter(isNoFaceTimeTimelineEvent);
+  const filingEvents = events.filter(eventMatchesFilingLanguage);
+  const issueEvents = events.filter(isIssueReportEvent);
+
   const exchangeRows = dataset.exchangeLogs
     .filter((log) => log.userId === userId && log.caseId === caseId)
     .filter((log) => isWithinDateRange(getIsoDateFromDateTime(log.orderedExchangeAt), range))
-    .map((log) => ({
-      date: getIsoDateFromDateTime(log.orderedExchangeAt),
-      ordered_exchange_time: log.orderedExchangeAt.slice(11, 16),
-      actual_exchange_time: log.actualExchangeAt ? log.actualExchangeAt.slice(11, 16) : "",
-      status: labelExchangeStatus(log.status),
-      location: log.location || "",
-      reason_given: log.reasonGiven || "",
-      tags: log.tags.join("; "),
-    }));
+    .map((log) => {
+      const timing = calculateExchangeTiming(log);
+      return {
+        date: getIsoDateFromDateTime(log.orderedExchangeAt),
+        ordered_exchange_time: log.orderedExchangeAt.slice(11, 16),
+        actual_exchange_time: log.actualExchangeAt ? log.actualExchangeAt.slice(11, 16) : "",
+        direction: labelExchangeDirection(log.direction),
+        minutes_early_or_late: timing.minutesEarlyOrLate ?? "",
+        status: labelExchangeStatus(log.status),
+        location: log.location || "",
+        reason_given: log.reasonGiven || "",
+        notes: log.notes || "",
+        tags: log.tags.join("; "),
+      };
+    });
 
-  const timelineRows = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent).map((event) => ({
-    date: event.date,
-    time: event.time || "",
-    type: labelEventType(event.type),
-    source: event.sourceLabel || "",
-    title: event.title,
-    detail: event.detail || "",
-    summary: event.summary || "",
-    notes: event.body || "",
-    tags: event.tags?.join("; ") || "",
-    attention_level: event.severity || "neutral",
-  }));
+  const timelineRows = timelineIssueRows(issueEvents);
+  const facetimeRows = noFaceTimeRows(events);
+  const correlationRows = filingCorrelationRows(filingEvents, noFaceTimeEvents);
 
   const custodyScheduleRows = dataset.custodyDayAssignments
     .filter((assignment) => assignment.userId === userId && assignment.caseId === caseId)
@@ -702,16 +925,18 @@ export function buildReportRows(
     }));
 
   if (reportType === "exchange_compliance") return exchangeRows;
+  if (reportType === "facetime_cancellations") return facetimeRows;
   if (reportType === "incident_timeline") return timelineRows;
+  if (reportType === "filing_facetime_correlation") return correlationRows;
   if (reportType === "child_support_payment") return childSupportRows;
   if (reportType === "expense_reimbursement") return expenseRows;
 
   return [
     ...custodyScheduleRows.map((row) => ({ section: "custody_schedule", ...row })),
     ...exchangeRows.map((row) => ({ section: "exchange", ...row })),
-    ...timelineRows.map((row) => ({ section: "timeline", ...row })),
-    ...childSupportRows.map((row) => ({ section: "child_support", ...row })),
-    ...expenseRows.map((row) => ({ section: "expense", ...row })),
+    ...facetimeRows.map((row) => ({ section: "facetime", ...row })),
+    ...correlationRows.map((row) => ({ section: "filing_facetime_timing", ...row })),
+    ...timelineRows.map((row) => ({ section: "issue_timeline", ...row })),
   ];
 }
 
@@ -721,40 +946,436 @@ export function buildReportPreview(
   caseId: string,
   range: DateRange,
   reportType: ReportType
-) {
+): ReportPreview {
   const matter = dataset.matters.find((item) => item.id === caseId && item.userId === userId);
   const rules = dataset.exchangeRules.filter((item) => item.caseId === caseId && item.userId === userId);
   const expected = generateExpectedExchangeEvents(rules, range);
-  const exchangeLogs = dataset.exchangeLogs.filter((item) => item.caseId === caseId && item.userId === userId);
-  const payments = dataset.childSupportPayments.filter((item) => item.caseId === caseId && item.userId === userId);
-  const expenses = dataset.expenseItems.filter((item) => item.caseId === caseId && item.userId === userId);
+  const exchangeLogs = dataset.exchangeLogs
+    .filter((item) => item.caseId === caseId && item.userId === userId)
+    .filter((item) => isWithinDateRange(getIsoDateFromDateTime(item.orderedExchangeAt), range));
   const evidence = dataset.evidenceItems.filter((item) => item.caseId === caseId && item.userId === userId);
-
+  const events = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent);
+  const noFaceTimeEvents = events.filter(isNoFaceTimeTimelineEvent);
+  const postCallNoFaceTimeEvents = noFaceTimeEvents.filter(isPostCallFaceTimeNotice);
+  const filingEvents = events.filter(eventMatchesFilingLanguage);
+  const issueEvents = events.filter(isIssueReportEvent);
   const exchangeStats = calculateExchangeStats(exchangeLogs, expected, range);
-  const supportStats = calculateChildSupportStats(payments, range);
-  const expenseStats = calculateExpenseStats(expenses, range);
   const rows = buildReportRows(dataset, userId, caseId, range, reportType);
+  const generatedAt = new Date().toISOString();
+  const otherParentLabel = matter?.otherParentLabel || "Other parent";
+  const userRoleLabel = matter?.userRoleLabel || "Me";
+  const months = monthKeysInRange(range);
+  const lateExchangeEvents = issueEvents.filter(isLateExchangeTimelineEvent);
+  const missedExchangeEvents = issueEvents.filter(isMissedExchangeTimelineEvent);
+  const lateLogs = exchangeLogs.filter((log) => calculateExchangeTiming(log).isLate);
+  const loggedCount = exchangeLogs.length;
+  const lateShare = formatPercent(lateLogs.length, loggedCount);
+  const postCallShare = formatPercent(postCallNoFaceTimeEvents.length, noFaceTimeEvents.length);
+  const longestDelay = lateLogs.reduce((max, log) => {
+    const timing = calculateExchangeTiming(log);
+    return Math.max(max, timing.minutesEarlyOrLate || 0);
+  }, 0);
 
-  return {
-    title: reportTypeLabels[reportType],
+  const issueTrendRows = months.map((month) => ({
+    label: month,
+    value: lateExchangeEvents.filter((event) => getMonthKey(event.date) === month).length,
+    secondaryValue: noFaceTimeEvents.filter((event) => getMonthKey(event.date) === month).length,
+    tertiaryValue: missedExchangeEvents.filter((event) => getMonthKey(event.date) === month).length,
+  }));
+
+  const facetimeTrendRows = months.map((month) => ({
+    label: month,
+    value: noFaceTimeEvents.filter((event) => getMonthKey(event.date) === month).length,
+    secondaryValue: postCallNoFaceTimeEvents.filter((event) => getMonthKey(event.date) === month).length,
+  }));
+
+  const filingTrendRows = months.map((month) => ({
+    label: month,
+    value: filingEvents.filter((event) => getMonthKey(event.date) === month).length,
+    secondaryValue: noFaceTimeEvents.filter((event) => getMonthKey(event.date) === month).length,
+    tertiaryValue: postCallNoFaceTimeEvents.filter((event) => getMonthKey(event.date) === month).length,
+  }));
+
+  const filingWindowRows = filingEvents.map((event) => {
+    const sameDay = noFaceTimeEvents.filter((item) => dateDiffDays(event.date, item.date) === 0).length;
+    const within7 = noFaceTimeEvents.filter((item) => {
+      const diff = dateDiffDays(event.date, item.date);
+      return diff >= 0 && diff <= 7;
+    }).length;
+    const within14 = noFaceTimeEvents.filter((item) => {
+      const diff = dateDiffDays(event.date, item.date);
+      return diff >= 0 && diff <= 14;
+    }).length;
+
+    return {
+      label: event.date,
+      value: sameDay,
+      secondaryValue: within7,
+      tertiaryValue: within14,
+    };
+  });
+
+  const base = {
     caseName: matter?.caseName || "Selected custody matter",
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     disclaimer:
-      "This tool helps organize records and does not provide legal advice. Consult a qualified attorney about your situation.",
-    summaries: [
-      buildNeutralExchangeSummary(
-        range,
-        exchangeStats.scheduledCount,
-        exchangeStats.lateCount,
-        exchangeStats.averageLatenessMinutes,
-        exchangeStats.missedCount
-      ),
-      buildNeutralChildSupportSummary(range, supportStats),
-      `Based on records entered in this app, expenses in this range total ${expenseStats.totalExpenses.toFixed(
-        2
-      )}. Unpaid reimbursement based on user-entered records is ${expenseStats.unpaidReimbursement.toFixed(2)}.`,
-    ],
+      "This report organizes user-entered records. It is not legal advice; review with a qualified attorney before filing or sharing.",
     rows,
     evidenceIndex: buildEvidenceIndex(evidence, range),
   };
+
+  if (reportType === "exchange_compliance") {
+    const exchangeTable: SectionExportTable = {
+      title: "Logged exchange timing",
+      headers: ["Date", "Ordered", "Actual", "Direction", "Minutes late/early", "Status", "Reason", "Notes"],
+      rows: toTableRows(exchangeLogs, (log) => {
+        const timing = calculateExchangeTiming(log);
+        return [
+          getIsoDateFromDateTime(log.orderedExchangeAt),
+          log.orderedExchangeAt.slice(11, 16),
+          log.actualExchangeAt?.slice(11, 16) || "",
+          labelExchangeDirection(log.direction),
+          timing.minutesEarlyOrLate === null ? "" : String(timing.minutesEarlyOrLate),
+          labelExchangeStatus(log.status),
+          log.reasonGiven || "",
+          log.notes || "",
+        ];
+      }),
+    };
+
+    return {
+      ...base,
+      title: reportTypeLabels.exchange_compliance,
+      focus: "Exchange timing and lateness",
+      summaries: [
+        loggedCount === 0
+          ? `No logged exchanges are recorded from ${range.from} to ${range.to}.`
+          : `${lateLogs.length} of ${loggedCount} logged exchanges are marked late (${lateShare}). Average recorded delay is ${formatMinutes(exchangeStats.averageLatenessMinutes)}.`,
+        `${otherParentLabel} to ${userRoleLabel} and ${userRoleLabel} to ${otherParentLabel} are separated in the direction chart so the report shows which exchange direction is driving the count.`,
+        longestDelay > 0
+          ? `The longest recorded delay in this range is ${formatMinutes(longestDelay)}.`
+          : "No positive delay is recorded in this range.",
+      ],
+      metrics: [
+        { label: "Logged exchanges", value: loggedCount, detail: `${range.from} to ${range.to}` },
+        { label: "Late exchanges", value: lateLogs.length, detail: `${lateShare} of logged exchanges` },
+        { label: "Average delay", value: formatMinutes(exchangeStats.averageLatenessMinutes), detail: "Late records only" },
+        { label: "Longest delay", value: formatMinutes(longestDelay), detail: "Highest positive delay" },
+      ],
+      charts: [
+        {
+          kind: "bar",
+          title: "Minutes late/early by exchange date",
+          description: "Positive values are minutes after the ordered time; negative values are early.",
+          unit: "minutes",
+          rows: lateExchangeRows(exchangeLogs),
+          emptyLabel: "No logged exchange timing records in this range.",
+        },
+        {
+          kind: "bar",
+          orientation: "horizontal",
+          title: "Late exchanges by direction",
+          description: "Compares late count against not-late count for each exchange direction.",
+          unit: "exchanges",
+          seriesLabels: ["Late", "Not late"],
+          rows: exchangeDirectionRows(exchangeLogs),
+          emptyLabel: "No exchange direction data in this range.",
+        },
+        {
+          kind: "bar",
+          orientation: "horizontal",
+          title: "Exchange outcome counts",
+          unit: "records",
+          rows: exchangeOutcomeRows(exchangeLogs),
+          emptyLabel: "No exchange outcomes in this range.",
+        },
+      ],
+      tables: [exchangeTable],
+    };
+  }
+
+  if (reportType === "facetime_cancellations") {
+    const table: SectionExportTable = {
+      title: "No FaceTime records",
+      headers: ["Date", "Time", "Issue", "Title", "Detail", "Summary", "Notes", "Tags"],
+      rows: noFaceTimeRows(events).map((row) => [
+        row.date,
+        row.time || "",
+        row.type,
+        row.title,
+        row.detail,
+        row.summary,
+        row.notes,
+        row.tags,
+      ]),
+    };
+
+    return {
+      ...base,
+      title: reportTypeLabels.facetime_cancellations,
+      focus: "FaceTime cancellations and notice timing",
+      summaries: [
+        `${noFaceTimeEvents.length} no-FaceTime record${noFaceTimeEvents.length === 1 ? "" : "s"} are in this range.`,
+        `${postCallNoFaceTimeEvents.length} of those records (${postCallShare}) indicate notice after a call/request or unanswered call based on the entered notes/tags.`,
+        "The report separates post-call notice from other no-FaceTime records so the timing pattern is visible.",
+      ],
+      metrics: [
+        { label: "No FaceTime records", value: noFaceTimeEvents.length, detail: `${range.from} to ${range.to}` },
+        { label: "After call/request", value: postCallNoFaceTimeEvents.length, detail: postCallShare },
+        {
+          label: "Other no-FaceTime",
+          value: noFaceTimeEvents.length - postCallNoFaceTimeEvents.length,
+          detail: "No post-call marker found",
+        },
+        { label: "Monthly span", value: months.length, detail: "Months charted" },
+      ],
+      charts: [
+        {
+          kind: "line",
+          title: "No FaceTime records by month",
+          description: "Compares all no-FaceTime records with the subset marked after a call/request.",
+          unit: "records",
+          seriesLabels: ["No FaceTime", "After call/request"],
+          rows: facetimeTrendRows,
+          emptyLabel: "No no-FaceTime records in this range.",
+        },
+        {
+          kind: "bar",
+          orientation: "horizontal",
+          title: "Notice timing pattern",
+          unit: "records",
+          rows: [
+            { label: "Notice after call/request", value: postCallNoFaceTimeEvents.length },
+            { label: "Other no-FaceTime records", value: noFaceTimeEvents.length - postCallNoFaceTimeEvents.length },
+          ],
+          emptyLabel: "No no-FaceTime records in this range.",
+        },
+      ],
+      tables: [table],
+    };
+  }
+
+  if (reportType === "filing_facetime_correlation") {
+    const table: SectionExportTable = {
+      title: "Filing notes with nearby no-FaceTime counts",
+      headers: ["Date", "Time", "Filing note", "Same day", "Within 7 days", "Within 14 days", "Note text"],
+      rows: filingCorrelationRows(filingEvents, noFaceTimeEvents).map((row) => [
+        row.date,
+        row.time || "",
+        row.filing_note,
+        String(row.same_day_no_facetime),
+        String(row.within_7_days_no_facetime),
+        String(row.within_14_days_no_facetime),
+        row.note_text,
+      ]),
+    };
+    const within7Total = filingWindowRows.reduce((total, row) => total + (row.secondaryValue || 0), 0);
+
+    return {
+      ...base,
+      title: reportTypeLabels.filing_facetime_correlation,
+      focus: "Filing dates compared with no-FaceTime timing",
+      summaries: [
+        `${filingEvents.length} court/attorney filing note${filingEvents.length === 1 ? "" : "s"} are detected in this range.`,
+        `${within7Total} no-FaceTime record${within7Total === 1 ? "" : "s"} fall within seven days after those filing notes.`,
+        "This report shows timing overlap only; it does not claim why a FaceTime did or did not occur.",
+      ],
+      metrics: [
+        { label: "Filing notes", value: filingEvents.length, detail: "Court/attorney notes with filing language" },
+        { label: "No FaceTime records", value: noFaceTimeEvents.length, detail: `${range.from} to ${range.to}` },
+        { label: "Within 7 days", value: within7Total, detail: "After filing note dates" },
+        { label: "Post-call notices", value: postCallNoFaceTimeEvents.length, detail: "Subset of no-FaceTime records" },
+      ],
+      charts: [
+        {
+          kind: "bar",
+          title: "No FaceTime records after filing notes",
+          description: `For each filing note date, bars compare ${formatDateRangeWindow(0)}, within 7 days, and within 14 days.`,
+          unit: "records",
+          seriesLabels: ["Same day", "Within 7 days", "Within 14 days"],
+          rows: filingWindowRows,
+          emptyLabel: "No court/attorney filing notes detected in this range.",
+        },
+        {
+          kind: "line",
+          title: "Monthly filing notes and no-FaceTime records",
+          unit: "records",
+          seriesLabels: ["Filing notes", "No FaceTime", "After call/request"],
+          rows: filingTrendRows,
+          emptyLabel: "No filing or no-FaceTime records in this range.",
+        },
+      ],
+      tables: [table],
+    };
+  }
+
+  if (reportType === "incident_timeline") {
+    const table: SectionExportTable = {
+      title: "Issue timeline rows",
+      headers: ["Date", "Time", "Issue", "Source", "Title", "Detail", "Summary", "Notes", "Tags"],
+      rows: timelineIssueRows(issueEvents).map((row) => [
+        row.date,
+        row.time || "",
+        row.issue,
+        row.source,
+        row.title,
+        row.detail,
+        row.summary,
+        row.notes,
+        row.tags,
+      ]),
+    };
+
+    return {
+      ...base,
+      title: reportTypeLabels.incident_timeline,
+      focus: "Timeline issue pattern",
+      summaries: [
+        `${issueEvents.length} timeline record${issueEvents.length === 1 ? "" : "s"} match the issue filters in this range.`,
+        `${lateExchangeEvents.length} are marked late exchange records and ${noFaceTimeEvents.length} are no-FaceTime records.`,
+        "Custody-day color blocks are excluded from this report so the timeline only shows event records.",
+      ],
+      metrics: [
+        { label: "Issue records", value: issueEvents.length, detail: `${range.from} to ${range.to}` },
+        { label: "Late exchanges", value: lateExchangeEvents.length, detail: "Log or note pattern" },
+        { label: "No FaceTime", value: noFaceTimeEvents.length, detail: "Communication notes" },
+        { label: "Missed/refused", value: missedExchangeEvents.length, detail: "Exchange records" },
+      ],
+      charts: [
+        {
+          kind: "bar",
+          orientation: "horizontal",
+          title: "Issue counts by category",
+          unit: "records",
+          rows: countBy(issueEvents, issueLabelForEvent),
+          emptyLabel: "No issue records in this range.",
+        },
+        {
+          kind: "line",
+          title: "Monthly issue trend",
+          unit: "records",
+          seriesLabels: ["Late exchange", "No FaceTime", "Missed/refused exchange"],
+          rows: issueTrendRows,
+          emptyLabel: "No issue trend rows in this range.",
+        },
+      ],
+      tables: [table],
+    };
+  }
+
+  const issueTable: SectionExportTable = {
+    title: "Combined issue rows",
+    headers: ["Date", "Time", "Issue", "Source", "Title", "Detail", "Summary", "Notes", "Tags"],
+    rows: timelineIssueRows(issueEvents).map((row) => [
+      row.date,
+      row.time || "",
+      row.issue,
+      row.source,
+      row.title,
+      row.detail,
+      row.summary,
+      row.notes,
+      row.tags,
+    ]),
+  };
+
+  return {
+    ...base,
+    title: reportTypeLabels[reportType],
+    focus: reportType === "combined_court_packet" ? "Combined court issue packet" : "Attorney issue review",
+    summaries: [
+      `${issueEvents.length} issue record${issueEvents.length === 1 ? "" : "s"} are included from ${range.from} to ${range.to}.`,
+      `${lateExchangeEvents.length} late exchange record${lateExchangeEvents.length === 1 ? "" : "s"}, ${noFaceTimeEvents.length} no-FaceTime record${noFaceTimeEvents.length === 1 ? "" : "s"}, and ${filingEvents.length} court/attorney filing note${filingEvents.length === 1 ? "" : "s"} are detected.`,
+      "The combined packet prioritizes custody timeline issues and does not include child support or expense sections.",
+    ],
+    metrics: [
+      { label: "Issue records", value: issueEvents.length, detail: `${range.from} to ${range.to}` },
+      { label: "Late exchanges", value: lateExchangeEvents.length, detail: "Exchange logs/notes" },
+      { label: "No FaceTime", value: noFaceTimeEvents.length, detail: `${postCallNoFaceTimeEvents.length} after call/request` },
+      { label: "Filing notes", value: filingEvents.length, detail: "Court/attorney timing records" },
+    ],
+    charts: [
+      {
+        kind: "bar",
+        orientation: "horizontal",
+        title: "Issue counts by category",
+        unit: "records",
+        rows: countBy(issueEvents, issueLabelForEvent),
+        emptyLabel: "No issue records in this range.",
+      },
+      {
+        kind: "line",
+        title: "Monthly issue trend",
+        unit: "records",
+        seriesLabels: ["Late exchange", "No FaceTime", "Missed/refused exchange"],
+        rows: issueTrendRows,
+        emptyLabel: "No issue trend rows in this range.",
+      },
+      {
+        kind: "bar",
+        orientation: "horizontal",
+        title: "Late exchanges by direction",
+        unit: "exchanges",
+        seriesLabels: ["Late", "Not late"],
+        rows: exchangeDirectionRows(exchangeLogs),
+        emptyLabel: "No exchange direction data in this range.",
+      },
+    ],
+    tables: [issueTable],
+  };
+}
+
+export function reportPreviewToCsv(preview: ReportPreview) {
+  const rows: Array<Record<string, unknown>> = [];
+
+  for (const metric of preview.metrics) {
+    rows.push({
+      export_part: "metric",
+      report: preview.title,
+      item: metric.label,
+      value: metric.value,
+      detail: metric.detail || "",
+    });
+  }
+
+  for (const chart of preview.charts) {
+    for (const row of chart.rows) {
+      rows.push({
+        export_part: "chart_data",
+        report: preview.title,
+        chart: chart.title,
+        label: row.label,
+        value: row.value,
+        secondary_value: row.secondaryValue ?? "",
+        tertiary_value: row.tertiaryValue ?? "",
+        unit: chart.unit || "",
+      });
+    }
+  }
+
+  for (const table of preview.tables) {
+    for (const row of table.rows) {
+      const record: Record<string, unknown> = {
+        export_part: "table_row",
+        report: preview.title,
+        table: table.title,
+      };
+      table.headers.forEach((header, index) => {
+        record[header.toLowerCase().replaceAll(" ", "_").replaceAll("/", "_")] = row[index] || "";
+      });
+      rows.push(record);
+    }
+  }
+
+  if (rows.length === 0) {
+    rows.push({
+      export_part: "empty_report",
+      report: preview.title,
+      item: "No report data",
+      value: "",
+      detail: preview.focus,
+    });
+  }
+
+  return rowsToCsv(rows);
 }

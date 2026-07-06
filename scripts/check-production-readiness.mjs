@@ -12,7 +12,13 @@ const placeholderValues = new Set([
 ]);
 
 function hasValue(value) {
-  return Boolean(value && !placeholderValues.has(value.trim().toLowerCase()));
+  const normalized = String(value || "").trim().toLowerCase();
+  return Boolean(
+    normalized &&
+      !placeholderValues.has(normalized) &&
+      !normalized.includes("replace_with") &&
+      !normalized.includes("placeholder")
+  );
 }
 
 function isHttpsUrl(value) {
@@ -28,8 +34,21 @@ function hasStrongSecret(value) {
   return hasValue(value) && value.length >= 32;
 }
 
+function isUsableSupabasePublicKey(value) {
+  const key = String(value || "").trim();
+  return (
+    hasValue(key) &&
+    (key.startsWith("sb_publishable_") ||
+      /^eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/.test(key))
+  );
+}
+
 function isEnabled(value) {
   return ["true", "enabled", "yes", "1"].includes(String(value || "").trim().toLowerCase());
+}
+
+function isBooleanString(value) {
+  return ["true", "false"].includes(String(value || "").trim().toLowerCase());
 }
 
 function isOneOf(value, allowed) {
@@ -55,12 +74,16 @@ function numberAtLeast(value, minimum) {
 const mode = process.argv.includes("--pre-supabase") ? "pre-supabase" : "production";
 const supabaseFinalEnvNames = new Set([
   "RECORDS_STORAGE_MODE",
+  "NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED",
+  "RECORDS_SIGNUPS_ENABLED",
   "NEXT_PUBLIC_SUPABASE_URL",
   "EXPECTED_SUPABASE_PROJECT_REF",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
   "SUPABASE_MFA_POLICY",
   "RECORDS_ENFORCE_MFA",
+  "SUPABASE_CUSTOM_SMTP_ENABLED",
+  "SUPABASE_AUTH_REDIRECTS_VERIFIED_AT",
   "SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED",
   "SUPABASE_PASSWORD_MIN_LENGTH",
   "SUPABASE_PASSWORD_REAUTH_ENABLED",
@@ -87,6 +110,9 @@ const evidenceMaxBytes = Number(process.env.EVIDENCE_MAX_FILE_BYTES || 0);
 const securityEventSink = (process.env.SECURITY_EVENT_SINK || "").trim().toLowerCase();
 const configuredSupabaseRef = supabaseProjectRef(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const expectedSupabaseRef = (process.env.EXPECTED_SUPABASE_PROJECT_REF || "").trim();
+const aiImportEnabled = isEnabled(process.env.RECORDS_AI_IMPORT_ENABLED);
+const recordsSignupsEnabled = isEnabled(process.env.RECORDS_SIGNUPS_ENABLED);
+const publicRecordsSignupsEnabled = isEnabled(process.env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED);
 
 const checks = [
   ["NEXT_PUBLIC_APP_URL", isHttpsUrl(process.env.NEXT_PUBLIC_APP_URL), "must be an https:// URL"],
@@ -103,6 +129,13 @@ const checks = [
     "and NEXT_PUBLIC_RECORDS_STORAGE_MODE must both be set to supabase",
   ],
   [
+    "RECORDS_SIGNUPS_ENABLED",
+    isBooleanString(process.env.RECORDS_SIGNUPS_ENABLED) &&
+      isBooleanString(process.env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED) &&
+      recordsSignupsEnabled === publicRecordsSignupsEnabled,
+    "and NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED must be explicit matching true/false values",
+  ],
+  [
     "NEXT_PUBLIC_SUPABASE_URL",
     isHttpsUrl(process.env.NEXT_PUBLIC_SUPABASE_URL),
     "must be an https:// Supabase URL",
@@ -115,8 +148,8 @@ const checks = [
   ],
   [
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    hasValue(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
-    "must be configured",
+    isUsableSupabasePublicKey(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+    "must be a real Supabase publishable key or legacy anon JWT, not a placeholder",
   ],
   [
     "SUPABASE_SERVICE_ROLE_KEY",
@@ -126,6 +159,12 @@ const checks = [
   ["AUTH_SECRET", hasStrongSecret(process.env.AUTH_SECRET), "must be at least 32 characters"],
   ["SUPABASE_MFA_POLICY", process.env.SUPABASE_MFA_POLICY === "required", "must be required"],
   ["RECORDS_ENFORCE_MFA", isEnabled(process.env.RECORDS_ENFORCE_MFA), "must be true"],
+  ["SUPABASE_CUSTOM_SMTP_ENABLED", isEnabled(process.env.SUPABASE_CUSTOM_SMTP_ENABLED), "must be true"],
+  [
+    "SUPABASE_AUTH_REDIRECTS_VERIFIED_AT",
+    isRecentDate(process.env.SUPABASE_AUTH_REDIRECTS_VERIFIED_AT, 30),
+    "must be an ISO date within the last 30 days after password reset and /auth/confirm redirects are verified",
+  ],
   [
     "SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED",
     isEnabled(process.env.SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED),
@@ -203,6 +242,21 @@ const checks = [
     "SECURITY_CONTACT_EMAIL",
     hasValue(process.env.SECURITY_CONTACT_EMAIL) && process.env.SECURITY_CONTACT_EMAIL.includes("@"),
     "must be a monitored email address",
+  ],
+  [
+    "OPENAI_API_KEY",
+    !aiImportEnabled || hasValue(process.env.OPENAI_API_KEY),
+    "must be configured as a server-only secret when RECORDS_AI_IMPORT_ENABLED=true",
+  ],
+  [
+    "OPENAI_IMPORT_MODEL",
+    !aiImportEnabled || hasValue(process.env.OPENAI_IMPORT_MODEL),
+    "must name the model used for AI import when RECORDS_AI_IMPORT_ENABLED=true",
+  ],
+  [
+    "VENDOR_SECURITY_REVIEW_APPROVED",
+    !aiImportEnabled || isEnabled(process.env.VENDOR_SECURITY_REVIEW_APPROVED),
+    "must be true before enabling AI import for production user data",
   ],
 ];
 

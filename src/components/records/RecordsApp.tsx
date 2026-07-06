@@ -24,18 +24,20 @@ import {
   labelPaymentStatus,
 } from "@/lib/records/calculations";
 import {
+  acceptRecordsRecoverySession,
   clearFailedLoginAttempts,
   clearSession,
   createId,
   downloadTextFile,
   nowIso,
   parseTags,
-  readFailedLoginState,
   readRecordsSession,
   readSession,
-  recordFailedLoginAttempt,
+  requestRecordsPasswordReset,
   signInRecordsSession,
+  signUpRecordsAccount,
   signOutRecordsSession,
+  updateRecordsPassword,
   useRecordsStore,
   useSelectedRecords,
   verifyRecordsMfa,
@@ -48,7 +50,8 @@ import {
 import {
   buildReportPreview,
   buildSectionExportPacket,
-  reportTypeLabels,
+  reportPreviewToCsv,
+  reportsTabReportTypes,
   rowsToCsv,
   sectionExportToCsv,
   type SectionExportPacket,
@@ -59,6 +62,7 @@ import type {
   CustodyDayAssignment,
   DateRange,
   EvidenceItem,
+  ExchangeDirection,
   ExchangeStatus,
   NoteCategory,
   PaymentStatus,
@@ -81,6 +85,7 @@ import {
 import {
   ExchangeTimingChart,
   ExpenseCategoryChart,
+  ReportPreviewChartCard,
   SupportTrendLine,
 } from "./RecordsCharts";
 
@@ -90,6 +95,7 @@ const disclaimer =
 const navItems = [
   "Dashboard",
   "Calendar",
+  "Import",
   "Timeline",
   "Exchanges",
   "Notes",
@@ -107,6 +113,7 @@ type LoginFlowResult =
   | { status: "complete" }
   | { status: "mfa_required" }
   | { status: "mfa_enrollment_required"; enrollment: RecordsMfaEnrollment };
+type LoginScreenMode = "login" | "signup" | "reset" | "update_password";
 
 const defaultRange: DateRange = { from: "2026-05-01", to: "2026-06-15" };
 
@@ -178,6 +185,61 @@ const evidenceReviewStatusLabels: Record<EvidenceReviewStatus, string> = {
   rejected: "Rejected",
 };
 
+type ImportDraftKind = "note" | "exchange" | "custody_day" | "file";
+type ImportDraftConfidence = "high" | "medium" | "low";
+
+type ImportDraft = {
+  id: string;
+  kind: ImportDraftKind;
+  date: string;
+  time?: string;
+  title: string;
+  body: string;
+  category: NoteCategory;
+  tags: string[];
+  includeInReports: boolean;
+  confidence: ImportDraftConfidence;
+  sourceLabel: string;
+  selected: boolean;
+  orderedTime?: string;
+  actualTime?: string;
+  direction?: ExchangeDirection;
+  status?: ExchangeStatus;
+  caregiverLabel?: string;
+  color?: string;
+  file?: File;
+  fileType?: string;
+  fileSize?: number;
+};
+
+const importDraftKindLabels: Record<ImportDraftKind, string> = {
+  note: "Note",
+  exchange: "Exchange",
+  custody_day: "Calendar day",
+  file: "File",
+};
+
+type AiImportKind = "message_archive" | "pasted_notes" | "custody_calendar";
+type AiImportDraftPayload = {
+  kind: Exclude<ImportDraftKind, "file">;
+  date: string;
+  time: string | null;
+  title: string;
+  body: string;
+  category: NoteCategory;
+  tags: string[];
+  includeInReports: boolean;
+  confidence: ImportDraftConfidence;
+  orderedTime: string | null;
+  actualTime: string | null;
+  direction: ExchangeDirection | null;
+  status: ExchangeStatus | null;
+  caregiverLabel: string | null;
+  color: string | null;
+  sourceQuote: string;
+  reviewReason: string;
+};
+
 export default function RecordsApp() {
   const { dataset, hydrated, updateDataset, resetDemoData, reloadDataset, storageStatus, recordsStorageMode } =
     useRecordsStore();
@@ -187,7 +249,7 @@ export default function RecordsApp() {
   const [range, setRange] = useState<DateRange>(defaultRange);
   const [calendarMode, setCalendarMode] = useState<"month" | "list" | "timeline">("month");
   const [selectedDay, setSelectedDay] = useState("2026-05-08");
-  const [reportType, setReportType] = useState<ReportType>("combined_attorney_summary");
+  const [reportType, setReportType] = useState<ReportType>("exchange_compliance");
   const [toast, setToast] = useState("");
 
   useEffect(() => {
@@ -408,11 +470,11 @@ export default function RecordsApp() {
                 </h1>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <select
                   value={selectedCaseId}
                   onChange={(event) => setSelectedCaseId(event.target.value)}
-                  className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900"
+                  className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900"
                 >
                   {selected.matters.map((matter) => (
                     <option key={matter.id} value={matter.id}>
@@ -467,6 +529,15 @@ export default function RecordsApp() {
                 range={range}
                 sectionExport={sectionExportPackets.calendar}
                 onExportSection={exportSectionPacket}
+                flash={flash}
+              />
+            )}
+            {activeView === "Import" && (
+              <ImportView
+                updateDataset={updateDataset}
+                userId={userId}
+                caseId={effectiveCaseId}
+                recordsStorageMode={recordsStorageMode}
                 flash={flash}
               />
             )}
@@ -590,17 +661,75 @@ function LoginScreen({
   recordsStorageMode: "local" | "supabase";
 }) {
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [mode, setMode] = useState<LoginScreenMode>(() => {
+    if (typeof window === "undefined") return "login";
+    return new URLSearchParams(window.location.search).get("auth") === "recovery"
+      ? "update_password"
+      : "login";
+  });
   const [submitting, setSubmitting] = useState(false);
   const [mfaMode, setMfaMode] = useState<"verify" | "enroll" | null>(null);
   const [mfaEnrollment, setMfaEnrollment] = useState<RecordsMfaEnrollment | null>(null);
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
+  const [recoveryHydrating, setRecoveryHydrating] = useState(false);
+  const recoveryHandledRef = useRef(false);
+  const minimumPasswordLength = 12;
+  const signupsEnabled =
+    recordsStorageMode === "supabase" && process.env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED === "true";
+
+  useEffect(() => {
+    if (recordsStorageMode !== "supabase" || typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const authState = params.get("auth");
+    if (authState === "recovery") {
+      setMode("update_password");
+      setMessage("Choose a new password to finish account recovery.");
+    } else if (authState === "confirmed") {
+      setMessage("Email confirmed. Sign in to continue.");
+    } else if (authState === "confirm-error") {
+      setError("Confirmation link is invalid or expired.");
+    }
+
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const accessToken = hash.get("access_token");
+    const refreshToken = hash.get("refresh_token");
+    const expiresIn = hash.get("expires_in");
+
+    if (!accessToken || !refreshToken || recoveryHandledRef.current) return;
+    recoveryHandledRef.current = true;
+    setMode("update_password");
+    setRecoveryHydrating(true);
+    setError("");
+    setMessage("Preparing password recovery.");
+
+    void acceptRecordsRecoverySession({ accessToken, refreshToken, expiresIn })
+      .then(() => {
+        window.history.replaceState(null, "", "/records?auth=recovery");
+        setMessage("Choose a new password to finish account recovery.");
+      })
+      .catch((recoveryError: unknown) => {
+        window.history.replaceState(null, "", "/records?auth=confirm-error");
+        setError(recoveryError instanceof Error ? recoveryError.message : "Recovery link is invalid or expired.");
+      })
+      .finally(() => setRecoveryHydrating(false));
+  }, [recordsStorageMode]);
 
   function qrCodeSrc(qrCode: string) {
     if (qrCode.startsWith("data:image/")) return qrCode;
     return `data:image/svg+xml;utf-8,${encodeURIComponent(qrCode)}`;
   }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+  function switchMode(nextMode: LoginScreenMode) {
+    setMode(nextMode);
+    setError("");
+    setMessage("");
+    setMfaMode(null);
+    setMfaEnrollment(null);
+  }
+
+  async function onLoginSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!appReady) return;
 
@@ -608,27 +737,15 @@ function LoginScreen({
     const email = String(formData.get("email") || "").trim();
     const password = String(formData.get("password") || "");
     const adultConfirmed = formData.get("adult") === "on";
-    const failedState = readFailedLoginState();
-    const isLocked = failedState.lockedUntil > Date.now();
-    const minimumPasswordLength = 12;
 
-    if (isLocked) {
-      setError("Too many failed attempts. Try again in a few minutes.");
-      return;
-    }
-
-    if (!adultConfirmed || !email.includes("@") || password.length < minimumPasswordLength) {
-      const next = recordFailedLoginAttempt();
-      setError(
-        next.lockedUntil > Date.now()
-          ? "Too many failed attempts. This browser is temporarily limited."
-          : `Enter an email, a password with at least ${minimumPasswordLength} characters, and confirm adult use.`
-      );
+    if (!adultConfirmed || !email.includes("@") || !password) {
+      setError("Enter your email, password, and confirm adult use.");
       return;
     }
 
     setSubmitting(true);
     setError("");
+    setMessage("");
     try {
       const result = await onLogin(email, password, adultConfirmed);
       if (result.status === "mfa_required") {
@@ -640,8 +757,93 @@ function LoginScreen({
         setMfaEnrollment(result.enrollment);
       }
     } catch (loginError) {
-      recordFailedLoginAttempt();
       setError(loginError instanceof Error ? loginError.message : "Sign-in failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onSignupSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") || "").trim();
+    const password = String(formData.get("password") || "");
+    const confirmPassword = String(formData.get("confirmPassword") || "");
+    const adultConfirmed = formData.get("adult") === "on";
+
+    if (!adultConfirmed || !email.includes("@") || password.length < minimumPasswordLength) {
+      setError(`Enter an email, confirm adult use, and use at least ${minimumPasswordLength} characters.`);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await signUpRecordsAccount(email, password, adultConfirmed);
+      setMessage(result.message);
+      setMode("login");
+    } catch (signupError) {
+      setError(signupError instanceof Error ? signupError.message : "Account creation failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onResetSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") || "").trim();
+    const adultConfirmed = formData.get("adult") === "on";
+
+    if (!adultConfirmed || !email.includes("@")) {
+      setError("Enter your email and confirm adult use.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await requestRecordsPasswordReset(email, adultConfirmed);
+      setMessage(result.message);
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : "Password reset failed.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onPasswordUpdateSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const password = String(formData.get("password") || "");
+    const confirmPassword = String(formData.get("confirmPassword") || "");
+
+    if (password.length < minimumPasswordLength) {
+      setError(`Use at least ${minimumPasswordLength} characters.`);
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await updateRecordsPassword(password);
+      window.history.replaceState(null, "", "/records");
+      clearSession();
+      setMessage(result.message);
+      setMode("login");
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Password update failed.");
     } finally {
       setSubmitting(false);
     }
@@ -669,6 +871,20 @@ function LoginScreen({
       setMfaSubmitting(false);
     }
   }
+
+  const heading = mfaMode
+    ? mfaMode === "enroll"
+      ? "Set up authenticator"
+      : "Verify authenticator"
+    : mode === "signup"
+      ? "Create account"
+      : mode === "reset"
+        ? "Reset password"
+        : mode === "update_password"
+          ? "Choose new password"
+          : recordsStorageMode === "supabase"
+            ? "Secure sign in"
+            : "Local demo access";
 
   return (
     <main className="grid min-h-screen place-items-center bg-slate-100 px-4 py-10 text-slate-950">
@@ -703,13 +919,17 @@ function LoginScreen({
           </section>
 
           <section className="border-t border-slate-200 bg-slate-50 p-6 sm:p-8 lg:border-l lg:border-t-0">
-            <h2 className="text-lg font-semibold">
-              {recordsStorageMode === "supabase" ? "Secure sign in" : "Local demo access"}
-            </h2>
+            <h2 className="text-lg font-semibold">{heading}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Supabase mode signs in through server-managed HttpOnly cookies and requires
               authenticator verification. Local mode is limited to development demo data.
             </p>
+
+            {message && (
+              <div className="mt-4 rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-900">
+                {message}
+              </div>
+            )}
 
             {mfaMode ? (
               <form method="post" onSubmit={onMfaSubmit} className="mt-5 space-y-4">
@@ -746,9 +966,111 @@ function LoginScreen({
                 >
                   {mfaSubmitting ? "Verifying..." : "Verify authenticator"}
                 </button>
+                <p className="text-xs leading-5 text-slate-500">
+                  Lost authenticator access? Use the security contact for manual account recovery.
+                </p>
+              </form>
+            ) : mode === "reset" ? (
+              <form method="post" onSubmit={onResetSubmit} className="mt-5 space-y-4">
+                <Field label="Email">
+                  <input name="email" type="email" className="input" autoComplete="email" />
+                </Field>
+                <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
+                  <input name="adult" type="checkbox" defaultChecked className="mt-1" />
+                  <span>I am an adult user requesting access to my own records account.</span>
+                </label>
+                {error && <p className="text-sm font-medium text-red-700">{error}</p>}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="h-10 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
+                >
+                  {submitting ? "Sending..." : "Send reset link"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMode("login")}
+                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
+                >
+                  Back to sign in
+                </button>
+              </form>
+            ) : mode === "signup" ? (
+              <form method="post" onSubmit={onSignupSubmit} className="mt-5 space-y-4">
+                <Field label="Email">
+                  <input name="email" type="email" className="input" autoComplete="email" />
+                </Field>
+                <Field label="Password">
+                  <input name="password" type="password" className="input" autoComplete="new-password" />
+                </Field>
+                <Field label="Confirm password">
+                  <input
+                    name="confirmPassword"
+                    type="password"
+                    className="input"
+                    autoComplete="new-password"
+                  />
+                </Field>
+                <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
+                  <input name="adult" type="checkbox" defaultChecked className="mt-1" />
+                  <span>
+                    I am an adult user and will use privacy-friendly labels for sensitive records.
+                  </span>
+                </label>
+                {error && <p className="text-sm font-medium text-red-700">{error}</p>}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="h-10 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
+                >
+                  {submitting ? "Creating..." : "Create account"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMode("login")}
+                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
+                >
+                  Back to sign in
+                </button>
+              </form>
+            ) : mode === "update_password" ? (
+              <form method="post" onSubmit={onPasswordUpdateSubmit} className="mt-5 space-y-4">
+                <Field label="New password">
+                  <input
+                    name="password"
+                    type="password"
+                    className="input"
+                    autoComplete="new-password"
+                    disabled={recoveryHydrating}
+                  />
+                </Field>
+                <Field label="Confirm new password">
+                  <input
+                    name="confirmPassword"
+                    type="password"
+                    className="input"
+                    autoComplete="new-password"
+                    disabled={recoveryHydrating}
+                  />
+                </Field>
+                {error && <p className="text-sm font-medium text-red-700">{error}</p>}
+                <button
+                  type="submit"
+                  disabled={submitting || recoveryHydrating}
+                  className="h-10 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
+                >
+                  {recoveryHydrating ? "Preparing..." : submitting ? "Saving..." : "Update password"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMode("login")}
+                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
+                >
+                  Back to sign in
+                </button>
               </form>
             ) : (
-              <form method="post" onSubmit={onSubmit} className="mt-5 space-y-4">
+              <form method="post" onSubmit={onLoginSubmit} className="mt-5 space-y-4">
                 <Field label="Email">
                   <input
                     name="email"
@@ -781,6 +1103,26 @@ function LoginScreen({
                 >
                   {!appReady ? "Loading workspace..." : submitting ? "Signing in..." : "Enter records workspace"}
                 </button>
+                {recordsStorageMode === "supabase" && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => switchMode("reset")}
+                      className="font-semibold text-teal-700 hover:text-teal-900"
+                    >
+                      Forgot password?
+                    </button>
+                    {signupsEnabled && (
+                      <button
+                        type="button"
+                        onClick={() => switchMode("signup")}
+                        className="font-semibold text-teal-700 hover:text-teal-900"
+                      >
+                        Create account
+                      </button>
+                    )}
+                  </div>
+                )}
               </form>
             )}
           </section>
@@ -2157,6 +2499,895 @@ function NotesView({
   );
 }
 
+function importSubmitterValue(event: FormEvent<HTMLFormElement>) {
+  const submitter = (event.nativeEvent as SubmitEvent).submitter;
+  return submitter instanceof HTMLButtonElement ? submitter.value : "";
+}
+
+async function requestAiImportDrafts({
+  content,
+  sourceLabel,
+  defaultYear,
+  defaultOrderedTime,
+  importKind,
+}: {
+  content: string;
+  sourceLabel: string;
+  defaultYear: number;
+  defaultOrderedTime: string;
+  importKind: AiImportKind;
+}) {
+  const response = await fetch("/api/records/import/assist", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      content,
+      sourceLabel,
+      defaultYear,
+      defaultOrderedTime,
+      importKind,
+    }),
+  });
+
+  const parsed = (await response.json().catch(() => ({}))) as {
+    drafts?: AiImportDraftPayload[];
+    error?: string;
+    detail?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error([parsed.error, parsed.detail].filter(Boolean).join(" ") || "AI import failed.");
+  }
+
+  return (parsed.drafts || []).map(aiPayloadToImportDraft);
+}
+
+function aiPayloadToImportDraft(draft: AiImportDraftPayload): ImportDraft {
+  const sourceDetail = [
+    draft.sourceQuote ? `Source quote: ${draft.sourceQuote}` : "",
+    draft.reviewReason ? `Review note: ${draft.reviewReason}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return {
+    id: createId("import-ai"),
+    kind: draft.kind,
+    date: draft.date,
+    time: draft.time || undefined,
+    title: draft.title,
+    body: sourceDetail ? `${draft.body}\n\n${sourceDetail}` : draft.body,
+    category: draft.category,
+    tags: Array.from(new Set([...draft.tags, "ai_assisted"])).slice(0, 12),
+    includeInReports: draft.includeInReports,
+    confidence: draft.confidence,
+    sourceLabel: "AI assist",
+    selected: true,
+    orderedTime: draft.orderedTime || undefined,
+    actualTime: draft.actualTime || undefined,
+    direction: draft.direction || undefined,
+    status: draft.status || undefined,
+    caregiverLabel: draft.caregiverLabel || undefined,
+    color: draft.color || undefined,
+  };
+}
+
+function ImportView({
+  updateDataset,
+  userId,
+  caseId,
+  recordsStorageMode,
+  flash,
+}: {
+  updateDataset: ReturnType<typeof useRecordsStore>["updateDataset"];
+  userId: string;
+  caseId: string;
+  recordsStorageMode: "local" | "supabase";
+  flash: (message: string) => void;
+}) {
+  const [drafts, setDrafts] = useState<ImportDraft[]>([]);
+  const [parsing, setParsing] = useState(false);
+  const [assistBusy, setAssistBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const selectedCount = drafts.filter((draft) => draft.selected).length;
+
+  function queueDrafts(nextDrafts: ImportDraft[], sourceLabel: string) {
+    if (nextDrafts.length === 0) {
+      flash(`No import-ready records found in ${sourceLabel}.`);
+      return;
+    }
+
+    setDrafts((current) => [...nextDrafts, ...current]);
+    flash(`${nextDrafts.length} draft record${nextDrafts.length === 1 ? "" : "s"} queued.`);
+  }
+
+  async function reviewMessageArchive(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const useAiAssist = importSubmitterValue(event) === "ai";
+    const formData = new FormData(event.currentTarget);
+    const file = formData.get("archive");
+    if (!(file instanceof File) || file.size === 0) {
+      flash("Choose a CSV, TXT, or HTML message export.");
+      return;
+    }
+
+    if (useAiAssist) setAssistBusy(true);
+    else setParsing(true);
+    try {
+      const defaultYear = Number(text(formData, "defaultYear")) || new Date().getFullYear();
+      const defaultOrderedTime = text(formData, "defaultOrderedTime") || "17:00";
+      const content = await file.text();
+      const nextDrafts = useAiAssist
+        ? await requestAiImportDrafts({
+            content,
+            sourceLabel: file.name,
+            defaultYear,
+            defaultOrderedTime,
+            importKind: "message_archive",
+          })
+        : buildMessageImportDrafts({
+            content,
+            sourceLabel: file.name,
+            defaultYear,
+            defaultOrderedTime,
+          });
+      queueDrafts(
+        nextDrafts,
+        file.name
+      );
+      event.currentTarget.reset();
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Message import failed.");
+    } finally {
+      if (useAiAssist) setAssistBusy(false);
+      else setParsing(false);
+    }
+  }
+
+  async function reviewPastedNotes(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const useAiAssist = importSubmitterValue(event) === "ai";
+    const formData = new FormData(event.currentTarget);
+    const content = text(formData, "notes");
+    if (!content) {
+      flash("Paste notes before reviewing.");
+      return;
+    }
+
+    const defaultYear = Number(text(formData, "defaultYear")) || new Date().getFullYear();
+    const defaultOrderedTime = text(formData, "defaultOrderedTime") || "17:00";
+    const sourceLabel = text(formData, "sourceLabel") || "Pasted notes";
+
+    if (useAiAssist) setAssistBusy(true);
+    try {
+      const nextDrafts = useAiAssist
+        ? await requestAiImportDrafts({
+            content,
+            sourceLabel,
+            defaultYear,
+            defaultOrderedTime,
+            importKind: "pasted_notes",
+          })
+        : buildPastedNoteDrafts({
+            content,
+            sourceLabel,
+            defaultYear,
+            defaultOrderedTime,
+          });
+      queueDrafts(nextDrafts, "pasted notes");
+      event.currentTarget.reset();
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Pasted-note import failed.");
+    } finally {
+      if (useAiAssist) setAssistBusy(false);
+    }
+  }
+
+  function queueDocumentFiles(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File && entry.size > 0);
+    if (files.length === 0) {
+      flash("Choose one or more files.");
+      return;
+    }
+
+    const evidenceDate = text(formData, "evidenceDate");
+    const description = text(formData, "description");
+    const tags = parseTags(text(formData, "tags") || "document");
+    const includeInReports = formData.get("includeInReports") === "on";
+    const nextDrafts: ImportDraft[] = [];
+
+    for (const file of files) {
+      const validation = validateEvidenceFile({
+        originalFileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+      });
+      if (!validation.ok) {
+        flash(`${file.name}: ${validation.error}`);
+        continue;
+      }
+
+      nextDrafts.push({
+        id: createId("import-file"),
+        kind: "file",
+        date: evidenceDate || new Date().toISOString().slice(0, 10),
+        title: file.name,
+        body: description || `Imported document: ${file.name}`,
+        category: "other",
+        tags,
+        includeInReports,
+        confidence: "high",
+        sourceLabel: "Document upload",
+        selected: true,
+        file,
+        fileType: file.type,
+        fileSize: file.size,
+      });
+    }
+
+    queueDrafts(nextDrafts, "selected files");
+    event.currentTarget.reset();
+  }
+
+  function saveExchangeRule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const parsed = exchangeRuleSchema.safeParse({
+      ruleName: text(formData, "ruleName"),
+      dayOfWeek: text(formData, "dayOfWeek"),
+      orderedExchangeTime: text(formData, "orderedExchangeTime"),
+      direction: text(formData, "direction"),
+      location: text(formData, "location"),
+      effectiveStartDate: text(formData, "effectiveStartDate"),
+      effectiveEndDate: text(formData, "effectiveEndDate"),
+      orderProvisionNotes: text(formData, "orderProvisionNotes"),
+    });
+    if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the exchange rule.");
+
+    updateDataset((current) =>
+      withAudit(
+        {
+          ...current,
+          exchangeRules: [
+            {
+              id: createId("rule"),
+              caseId,
+              userId,
+              createdAt: nowIso(),
+              updatedAt: nowIso(),
+              ...emptyToUndefined(parsed.data),
+            },
+            ...current.exchangeRules,
+          ],
+        },
+        {
+          userId,
+          caseId,
+          action: "created",
+          entityType: "custodyExchangeRule",
+          entityId: "imported-rule",
+          metadataSummary: "Exchange rule created from import setup without court text in audit metadata.",
+        }
+      )
+    );
+    event.currentTarget.reset();
+    flash("Exchange rule saved.");
+  }
+
+  async function reviewCustodyCalendarRows(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const useAiAssist = importSubmitterValue(event) === "ai";
+    const formData = new FormData(event.currentTarget);
+    const content = text(formData, "calendarRows");
+    if (!content) {
+      flash("Paste calendar rows before reviewing.");
+      return;
+    }
+
+    const sourceLabel = text(formData, "sourceLabel") || "Custody calendar rows";
+
+    if (useAiAssist) setAssistBusy(true);
+    try {
+      const nextDrafts = useAiAssist
+        ? await requestAiImportDrafts({
+            content,
+            sourceLabel,
+            defaultYear: new Date().getFullYear(),
+            defaultOrderedTime: "17:00",
+            importKind: "custody_calendar",
+          })
+        : buildCustodyCalendarDrafts({ content, sourceLabel });
+      queueDrafts(nextDrafts, "custody calendar rows");
+      event.currentTarget.reset();
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Calendar import failed.");
+    } finally {
+      if (useAiAssist) setAssistBusy(false);
+    }
+  }
+
+  function updateDraft(draftId: string, patch: Partial<ImportDraft>) {
+    setDrafts((current) =>
+      current.map((draft) => (draft.id === draftId ? { ...draft, ...patch } : draft))
+    );
+  }
+
+  function removeDraft(draftId: string) {
+    setDrafts((current) => current.filter((draft) => draft.id !== draftId));
+  }
+
+  async function uploadImportEvidenceFile(file: File, evidenceId: string) {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("caseId", caseId);
+    body.append("evidenceId", evidenceId);
+
+    const response = await fetch("/api/records/evidence/upload", {
+      method: "POST",
+      credentials: "same-origin",
+      body,
+    });
+    const parsed = (await response.json().catch(() => ({}))) as {
+      evidence?: Partial<EvidenceItem>;
+      error?: string;
+      blockers?: string[];
+    };
+
+    if (!response.ok) {
+      const details = parsed.blockers?.length ? ` ${parsed.blockers.join(" ")}` : "";
+      throw new Error(`${parsed.error || "File upload failed."}${details}`);
+    }
+
+    if (!parsed.evidence?.storagePath || parsed.evidence.malwareScanStatus !== "clean") {
+      throw new Error("File upload response was incomplete.");
+    }
+
+    return parsed.evidence;
+  }
+
+  async function saveApprovedDrafts() {
+    const approved = drafts.filter((draft) => draft.selected);
+    if (approved.length === 0) {
+      flash("Select at least one draft to save.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const savedDraftIds = new Set<string>();
+      const now = nowIso();
+      const noteRecords: RecordsDataset["dateNotes"] = [];
+      const exchangeRecords: RecordsDataset["exchangeLogs"] = [];
+      const custodyDayRecords: RecordsDataset["custodyDayAssignments"] = [];
+      const evidenceRecords: RecordsDataset["evidenceItems"] = [];
+
+      for (const draft of approved) {
+        if (draft.kind === "note") {
+          const parsed = dateNoteSchema.safeParse({
+            noteDate: draft.date,
+            noteTime: draft.time || "",
+            category: draft.category,
+            title: draft.title,
+            body: draft.body,
+            tags: draft.tags,
+            includeInReports: draft.includeInReports,
+          });
+          if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "Check note drafts.");
+
+          noteRecords.push({
+            id: createId("note"),
+            userId,
+            caseId,
+            createdAt: now,
+            updatedAt: now,
+            ...emptyToUndefined(parsed.data),
+          });
+          savedDraftIds.add(draft.id);
+        }
+
+        if (draft.kind === "exchange") {
+          const parsed = exchangeLogSchema.safeParse({
+            orderedExchangeAt: `${draft.date}T${draft.orderedTime || "17:00"}:00.000Z`,
+            actualExchangeAt: draft.actualTime ? `${draft.date}T${draft.actualTime}:00.000Z` : null,
+            direction: draft.direction || "other_parent_to_me",
+            status: draft.status || "other",
+            location: "",
+            reasonGiven: "",
+            notes: draft.body,
+            tags: draft.tags,
+            witnesses: "",
+          });
+          if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "Check exchange drafts.");
+
+          exchangeRecords.push({
+            id: createId("exchange"),
+            userId,
+            caseId,
+            createdAt: now,
+            updatedAt: now,
+            ...emptyToUndefined(parsed.data),
+          });
+          savedDraftIds.add(draft.id);
+        }
+
+        if (draft.kind === "custody_day") {
+          const parsed = custodyDayAssignmentSchema.safeParse({
+            date: draft.date,
+            caregiverLabel: draft.caregiverLabel || "Parent A",
+            color: draft.color || custodyDayColors[0],
+            startsAt: "",
+            endsAt: "",
+            exchangeTime: "",
+            exchangeDirection: "",
+            exchangeLocation: "",
+            notes: draft.body,
+          });
+          if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "Check calendar drafts.");
+          const parsedCustodyDay = emptyToUndefined(parsed.data);
+
+          custodyDayRecords.push({
+            id: createId("custody-day"),
+            userId,
+            caseId,
+            createdAt: now,
+            updatedAt: now,
+            ...parsedCustodyDay,
+            exchangeDirection: parsedCustodyDay.exchangeDirection || undefined,
+          });
+          savedDraftIds.add(draft.id);
+        }
+
+        if (draft.kind === "file") {
+          if (!draft.file) throw new Error(`Missing file for ${draft.title}.`);
+          const validation = validateEvidenceFile({
+            originalFileName: draft.file.name,
+            fileType: draft.file.type,
+            fileSize: draft.file.size,
+          });
+          if (!validation.ok) throw new Error(`${draft.file.name}: ${validation.error}`);
+
+          const id = createId("evidence");
+          const uploaded =
+            recordsStorageMode === "supabase" ? await uploadImportEvidenceFile(draft.file, id) : undefined;
+
+          evidenceRecords.push({
+            id,
+            userId,
+            caseId,
+            originalFileName: draft.file.name,
+            storedFileName:
+              uploaded?.storedFileName || buildStoredEvidenceName({ id, originalFileName: draft.file.name }),
+            fileType: draft.file.type,
+            fileSize: draft.file.size,
+            storageBucket: uploaded?.storageBucket,
+            storagePath: uploaded?.storagePath,
+            storageUploadedAt: uploaded?.storageUploadedAt,
+            storageSha256: uploaded?.storageSha256,
+            uploadedAt: now,
+            evidenceDate: draft.date,
+            description: draft.body,
+            tags: draft.tags,
+            includeInReports: draft.includeInReports,
+            reviewStatus: "needs_review",
+            malwareScanStatus: uploaded?.malwareScanStatus || "pending",
+            createdAt: now,
+            updatedAt: now,
+          });
+          savedDraftIds.add(draft.id);
+        }
+      }
+
+      updateDataset((current) =>
+        withAudit(
+          {
+            ...current,
+            dateNotes: [...noteRecords, ...current.dateNotes],
+            exchangeLogs: [...exchangeRecords, ...current.exchangeLogs],
+            custodyDayAssignments: [
+              ...custodyDayRecords,
+              ...current.custodyDayAssignments.filter(
+                (item) =>
+                  !custodyDayRecords.some(
+                    (record) =>
+                      record.userId === item.userId &&
+                      record.caseId === item.caseId &&
+                      record.date === item.date
+                  )
+              ),
+            ],
+            evidenceItems: [...evidenceRecords, ...current.evidenceItems],
+          },
+          {
+            userId,
+            caseId,
+            action: "created",
+            entityType: "importBatch",
+            entityId: createId("import-batch"),
+            metadataSummary: `${savedDraftIds.size} approved import draft records saved to this case.`,
+          }
+        )
+      );
+      setDrafts((current) => current.filter((draft) => !savedDraftIds.has(draft.id)));
+      flash(`${savedDraftIds.size} import draft${savedDraftIds.size === 1 ? "" : "s"} saved.`);
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Import save failed.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
+      <div className="space-y-4">
+        <Panel title="Message archive" action="CSV, TXT, HTML">
+          <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+            AI review sends this import text to the configured server-side model and returns editable drafts only.
+          </div>
+          <form onSubmit={reviewMessageArchive} className="grid gap-3">
+            <Field label="Archive file">
+              <input name="archive" type="file" className="input" accept=".csv,.txt,.html,text/csv,text/plain,text/html" />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Default year">
+                <input name="defaultYear" type="number" className="input" defaultValue={new Date().getFullYear()} />
+              </Field>
+              <Field label="Default exchange time">
+                <input name="defaultOrderedTime" type="time" className="input" defaultValue="17:00" />
+              </Field>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button className="btn-primary" type="submit" value="rules" disabled={parsing || assistBusy}>
+                {parsing ? "Reviewing..." : "Review message file"}
+              </button>
+              <button className="btn-secondary" type="submit" value="ai" disabled={parsing || assistBusy}>
+                {assistBusy ? "AI reviewing..." : "AI review file"}
+              </button>
+            </div>
+          </form>
+        </Panel>
+
+        <Panel title="Paste notes" action="Dated entries">
+          <form onSubmit={reviewPastedNotes} className="grid gap-3">
+            <Field label="Source label">
+              <input name="sourceLabel" className="input" defaultValue="Pasted notes" />
+            </Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Default year">
+                <input name="defaultYear" type="number" className="input" defaultValue={new Date().getFullYear()} />
+              </Field>
+              <Field label="Default exchange time">
+                <input name="defaultOrderedTime" type="time" className="input" defaultValue="17:00" />
+              </Field>
+            </div>
+            <Field label="Notes">
+              <textarea name="notes" className="input min-h-44" />
+            </Field>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button className="btn-primary" type="submit" value="rules" disabled={assistBusy}>
+                Review pasted notes
+              </button>
+              <button className="btn-secondary" type="submit" value="ai" disabled={assistBusy}>
+                {assistBusy ? "AI reviewing..." : "AI review notes"}
+              </button>
+            </div>
+          </form>
+        </Panel>
+
+        <Panel title="Document intake" action={recordsStorageMode === "supabase" ? "Private storage" : "Metadata only"}>
+          <form onSubmit={queueDocumentFiles} className="grid gap-3">
+            <Field label="Files">
+              <input
+                name="files"
+                type="file"
+                multiple
+                className="input"
+                accept=".pdf,.png,.jpg,.jpeg,.heic,.txt,.csv"
+              />
+            </Field>
+            <Field label="Record date">
+              <input name="evidenceDate" type="date" className="input" defaultValue={new Date().toISOString().slice(0, 10)} />
+            </Field>
+            <Field label="Description">
+              <textarea name="description" className="input min-h-20" />
+            </Field>
+            <Field label="Tags">
+              <input name="tags" className="input" defaultValue="document" />
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input name="includeInReports" type="checkbox" defaultChecked />
+              Include in report file index
+            </label>
+            <button className="btn-primary" type="submit">
+              Queue files
+            </button>
+          </form>
+        </Panel>
+
+        <Panel title="Custody order setup" action="Rules + calendar">
+          <div className="space-y-5">
+            <form onSubmit={saveExchangeRule} className="grid gap-3">
+              <Field label="Rule name">
+                <input name="ruleName" className="input" placeholder="Standing exchange rule" />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Day">
+                  <select name="dayOfWeek" className="input" defaultValue="5">
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                  </select>
+                </Field>
+                <Field label="Ordered time">
+                  <input name="orderedExchangeTime" type="time" className="input" defaultValue="17:00" />
+                </Field>
+              </div>
+              <Field label="Direction">
+                <select name="direction" className="input" defaultValue="other_parent_to_me">
+                  <option value="other_parent_to_me">Other Parent to Me</option>
+                  <option value="me_to_other_parent">Me to Other Parent</option>
+                </select>
+              </Field>
+              <Field label="Effective start">
+                <input name="effectiveStartDate" type="date" className="input" />
+              </Field>
+              <Field label="Effective end">
+                <input name="effectiveEndDate" type="date" className="input" />
+              </Field>
+              <Field label="Location">
+                <input name="location" className="input" />
+              </Field>
+              <Field label="Order notes">
+                <textarea name="orderProvisionNotes" className="input min-h-20" />
+              </Field>
+              <button className="btn-secondary" type="submit">
+                Save exchange rule
+              </button>
+            </form>
+
+            <form onSubmit={reviewCustodyCalendarRows} className="grid gap-3 border-t border-slate-200 pt-5">
+              <Field label="Source label">
+                <input name="sourceLabel" className="input" defaultValue="Custody calendar" />
+              </Field>
+              <Field label="Calendar rows">
+                <textarea
+                  name="calendarRows"
+                  className="input min-h-32"
+                  placeholder="2026-07-05, Parent A, #0f766e"
+                />
+              </Field>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button className="btn-secondary" type="submit" value="rules" disabled={assistBusy}>
+                  Review calendar rows
+                </button>
+                <button className="btn-secondary" type="submit" value="ai" disabled={assistBusy}>
+                  {assistBusy ? "AI reviewing..." : "AI review calendar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </Panel>
+      </div>
+
+      <Panel title="Assisted review queue" action={`${drafts.length} drafts`}>
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="text-sm font-medium text-slate-700">
+              {selectedCount} selected for save
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setDrafts((current) => current.map((draft) => ({ ...draft, selected: true })))}
+                disabled={drafts.length === 0}
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setDrafts((current) => current.map((draft) => ({ ...draft, selected: false })))}
+                disabled={drafts.length === 0}
+              >
+                Select none
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => void saveApprovedDrafts()}
+                disabled={saving || selectedCount === 0}
+              >
+                {saving ? "Saving..." : "Save approved records"}
+              </button>
+            </div>
+          </div>
+
+          {drafts.length === 0 ? (
+            <Empty label="No import drafts are queued." />
+          ) : (
+            <div className="space-y-3">
+              {drafts.map((draft) => (
+                <div key={draft.id} className="rounded-md border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                      <input
+                        type="checkbox"
+                        checked={draft.selected}
+                        onChange={(event) => updateDraft(draft.id, { selected: event.target.checked })}
+                      />
+                      {importDraftKindLabels[draft.kind]}
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <StatusPill label={draft.confidence} />
+                      <StatusPill label={draft.sourceLabel} />
+                      <DeleteButton
+                        label="Remove"
+                        ariaLabel={`Remove import draft ${draft.title}`}
+                        onClick={() => removeDraft(draft.id)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    <Field label="Date">
+                      <input
+                        type="date"
+                        className="input"
+                        value={draft.date}
+                        onChange={(event) => updateDraft(draft.id, { date: event.target.value })}
+                      />
+                    </Field>
+                    <Field label="Time">
+                      <input
+                        type="time"
+                        className="input"
+                        value={draft.time || ""}
+                        onChange={(event) => updateDraft(draft.id, { time: event.target.value })}
+                        disabled={draft.kind === "file" || draft.kind === "custody_day"}
+                      />
+                    </Field>
+                  </div>
+
+                  {draft.kind === "exchange" && (
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <Field label="Ordered time">
+                        <input
+                          type="time"
+                          className="input"
+                          value={draft.orderedTime || "17:00"}
+                          onChange={(event) => updateDraft(draft.id, { orderedTime: event.target.value })}
+                        />
+                      </Field>
+                      <Field label="Actual time">
+                        <input
+                          type="time"
+                          className="input"
+                          value={draft.actualTime || ""}
+                          onChange={(event) => updateDraft(draft.id, { actualTime: event.target.value })}
+                        />
+                      </Field>
+                      <Field label="Status">
+                        <select
+                          className="input"
+                          value={draft.status || "other"}
+                          onChange={(event) => updateDraft(draft.id, { status: event.target.value as ExchangeStatus })}
+                        >
+                          {exchangeStatuses.map((status) => (
+                            <option key={status} value={status}>
+                              {labelExchangeStatus(status)}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Direction">
+                        <select
+                          className="input"
+                          value={draft.direction || "other_parent_to_me"}
+                          onChange={(event) => updateDraft(draft.id, { direction: event.target.value as ExchangeDirection })}
+                        >
+                          <option value="other_parent_to_me">Other Parent to Me</option>
+                          <option value="me_to_other_parent">Me to Other Parent</option>
+                        </select>
+                      </Field>
+                    </div>
+                  )}
+
+                  {draft.kind === "custody_day" && (
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <Field label="Caregiver label">
+                        <input
+                          className="input"
+                          value={draft.caregiverLabel || "Parent A"}
+                          onChange={(event) => updateDraft(draft.id, { caregiverLabel: event.target.value })}
+                        />
+                      </Field>
+                      <Field label="Color">
+                        <input
+                          type="color"
+                          className="input h-10"
+                          value={draft.color || custodyDayColors[0]}
+                          onChange={(event) => updateDraft(draft.id, { color: event.target.value })}
+                        />
+                      </Field>
+                    </div>
+                  )}
+
+                  <div className="mt-3 grid gap-3">
+                    <Field label="Title">
+                      <input
+                        className="input"
+                        value={draft.title}
+                        onChange={(event) => updateDraft(draft.id, { title: event.target.value })}
+                      />
+                    </Field>
+                    {draft.kind === "note" && (
+                      <Field label="Category">
+                        <select
+                          className="input"
+                          value={draft.category}
+                          onChange={(event) => updateDraft(draft.id, { category: event.target.value as NoteCategory })}
+                        >
+                          {[
+                            "exchange",
+                            "communication",
+                            "school",
+                            "medical",
+                            "expense",
+                            "child_support",
+                            "safety",
+                            "schedule_change",
+                            "child_item",
+                            "attorney",
+                            "court",
+                            "other",
+                          ].map((category) => (
+                            <option key={category} value={category}>
+                              {labelNoteCategory(category as NoteCategory)}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    )}
+                    <Field label={draft.kind === "file" ? "Description" : "Record text"}>
+                      <textarea
+                        className="input min-h-24"
+                        value={draft.body}
+                        onChange={(event) => updateDraft(draft.id, { body: event.target.value })}
+                      />
+                    </Field>
+                    <Field label="Tags">
+                      <input
+                        className="input"
+                        value={draft.tags.join(", ")}
+                        onChange={(event) => updateDraft(draft.id, { tags: parseTags(event.target.value) })}
+                      />
+                    </Field>
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={draft.includeInReports}
+                        onChange={(event) => updateDraft(draft.id, { includeInReports: event.target.checked })}
+                      />
+                      Include in reports
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
 function EvidenceView({
   updateDataset,
   userId,
@@ -3203,10 +4434,8 @@ function ReportsView({
     notes: false,
   });
   const exportReviewComplete = exportReviewItems.every((item) => exportReview[item.key]);
-  const previewHeaders = useMemo(
-    () => Array.from(new Set(preview.rows.flatMap((row) => Object.keys(row)))),
-    [preview.rows]
-  );
+  const selectedReportOption =
+    reportsTabReportTypes.find((item) => item.value === reportType) || reportsTabReportTypes[0];
 
   function toggleExportReview(key: ExportReviewKey, checked: boolean) {
     setExportReview((current) => ({ ...current, [key]: checked }));
@@ -3217,7 +4446,7 @@ function ReportsView({
       flash("Complete the pre-export review first.");
       return;
     }
-    const csv = rowsToCsv(preview.rows);
+    const csv = reportPreviewToCsv(preview);
     downloadTextFile(`lost-to-found-records-${reportType}-${range.from}-${range.to}.csv`, csv, "text/csv");
     updateDataset((current) =>
       withAudit(current, {
@@ -3275,8 +4504,8 @@ function ReportsView({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
-      <Panel title="Report builder" action="Neutral summaries">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[360px_1fr]">
+      <Panel title="Report builder" action="Issue-focused">
         <div className="grid gap-3">
           <Field label="Report type">
             <select
@@ -3284,13 +4513,19 @@ function ReportsView({
               onChange={(event) => setReportType(event.target.value as ReportType)}
               className="input"
             >
-              {Object.entries(reportTypeLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
+              {reportsTabReportTypes.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
                 </option>
               ))}
             </select>
           </Field>
+          {selectedReportOption && (
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+              <p className="font-semibold text-slate-950">{selectedReportOption.label}</p>
+              <p>{selectedReportOption.description}</p>
+            </div>
+          )}
           <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
             <p className="text-sm font-semibold text-amber-950">Pre-export privacy review</p>
             <div className="mt-3 space-y-2">
@@ -3317,8 +4552,8 @@ function ReportsView({
             Download report JSON
           </button>
           <p className="text-xs leading-5 text-slate-500">
-            PDF output uses your browser print dialog. Downloaded reports leave the app&apos;s protected
-            storage and should be kept somewhere private.
+            CSV includes report metrics, chart data, and table rows. PDF output uses your browser print dialog.
+            Downloaded reports leave protected storage.
           </p>
         </div>
       </Panel>
@@ -3332,8 +4567,14 @@ function ReportsView({
             <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
               {preview.title}
             </h2>
+            <p className="mt-2 text-sm font-semibold text-slate-800">{preview.focus}</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">{preview.disclaimer}</p>
             <p className="mt-2 text-xs text-slate-500">Generated {preview.generatedAt}</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {preview.metrics.map((metric) => (
+              <StatMini key={metric.label} label={metric.label} value={String(metric.value)} />
+            ))}
           </div>
           <div className="grid gap-3">
             {preview.summaries.map((summary) => (
@@ -3342,32 +4583,41 @@ function ReportsView({
               </p>
             ))}
           </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-950">Report rows</h3>
-            <Table
-              headers={previewHeaders}
-              rows={preview.rows
-                .slice(0, 12)
-                .map((row) =>
-                  previewHeaders.map((header) => String((row as Record<string, unknown>)[header] ?? ""))
+          <div className="grid gap-3">
+            {preview.charts.map((chart) => (
+              <ReportPreviewChartCard key={chart.title} chart={chart} />
+            ))}
+          </div>
+          <div className="space-y-4">
+            {preview.tables.map((table) => (
+              <div key={table.title}>
+                <h3 className="mb-2 text-sm font-semibold text-slate-950">{table.title}</h3>
+                <Table headers={table.headers} rows={table.rows.slice(0, 24)} />
+                {table.rows.length > 24 && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    {table.rows.length - 24} more rows included in CSV/JSON export.
+                  </p>
                 )}
-            />
+              </div>
+            ))}
           </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-950">File index</h3>
-            <Table
-              headers={["Index", "File", "Date", "Description", "Tags", "Scan", "Storage"]}
-              rows={preview.evidenceIndex.map((item) => [
-                item.index,
-                item.fileName,
-                item.evidenceDate,
-                item.description,
-                item.tags,
-                item.scanStatus,
-                item.storageStatus,
-              ])}
-            />
-          </div>
+          {preview.evidenceIndex.length > 0 && (
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-slate-950">Supporting file index</h3>
+              <Table
+                headers={["Index", "File", "Date", "Description", "Tags", "Scan", "Storage"]}
+                rows={preview.evidenceIndex.map((item) => [
+                  item.index,
+                  item.fileName,
+                  item.evidenceDate,
+                  item.description,
+                  item.tags,
+                  item.scanStatus,
+                  item.storageStatus,
+                ])}
+              />
+            </div>
+          )}
         </article>
       </Panel>
     </div>
@@ -3697,9 +4947,9 @@ function RangeToolbar({
   setRange: (range: DateRange) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-w-0 flex-wrap items-center gap-2">
       <select
-        className="h-10 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
+        className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
         onChange={(event) => {
           const value = event.target.value;
           if (value === "last30") setRange({ from: "2026-05-16", to: "2026-06-15" });
@@ -3722,14 +4972,14 @@ function RangeToolbar({
         type="date"
         value={range.from}
         onChange={(event) => setRange({ ...range, from: event.target.value })}
-        className="h-10 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
+        className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
       />
       <input
         aria-label="To date"
         type="date"
         value={range.to}
         onChange={(event) => setRange({ ...range, to: event.target.value })}
-        className="h-10 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
+        className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
       />
     </div>
   );
@@ -3745,7 +4995,7 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-slate-950">{title}</h2>
         {action && <span className="text-xs font-medium text-slate-500">{action}</span>}
@@ -4304,6 +5554,676 @@ function Empty({ label }: { label: string }) {
       {label}
     </div>
   );
+}
+
+function buildMessageImportDrafts({
+  content,
+  sourceLabel,
+  defaultYear,
+  defaultOrderedTime,
+}: {
+  content: string;
+  sourceLabel: string;
+  defaultYear: number;
+  defaultOrderedTime: string;
+}) {
+  const normalizedContent = stripImportHtml(content);
+  const rows = parseDelimitedRows(normalizedContent);
+  const records = delimitedRowsToRecords(rows);
+  const drafts: ImportDraft[] = [];
+
+  if (records.length > 0) {
+    for (const record of records) {
+      const body = pickImportField(record, ["message", "text", "body", "content", "sms", "imessage"]);
+      if (!body) continue;
+
+      const sender = pickImportField(record, ["sender", "from", "contact", "name", "handle", "phone"]);
+      const dateRaw = pickImportField(record, ["date", "datetime", "timestamp", "sent_at", "created_at"]);
+      const timeRaw = pickImportField(record, ["time"]);
+      const date = parseImportDate(dateRaw || body, defaultYear);
+      if (!date) continue;
+
+      const time =
+        extractImportTime(`${dateRaw} ${timeRaw}`, defaultOrderedTime) ||
+        extractImportTime(body, defaultOrderedTime);
+      const draft = inferImportDraft({
+        rawText: sender ? `Sender: ${sender}\n${body}` : body,
+        date,
+        time,
+        sourceLabel,
+        defaultOrderedTime,
+        includeGeneric: false,
+      });
+      if (draft) drafts.push(draft);
+    }
+  }
+
+  if (drafts.length > 0) return drafts;
+
+  return splitTextIntoDatedEntries(normalizedContent, defaultYear, defaultOrderedTime)
+    .map((entry) =>
+      inferImportDraft({
+        rawText: entry.text,
+        date: entry.date,
+        time: entry.time,
+        sourceLabel,
+        defaultOrderedTime,
+        includeGeneric: false,
+      })
+    )
+    .filter((draft): draft is ImportDraft => Boolean(draft));
+}
+
+function buildPastedNoteDrafts({
+  content,
+  sourceLabel,
+  defaultYear,
+  defaultOrderedTime,
+}: {
+  content: string;
+  sourceLabel: string;
+  defaultYear: number;
+  defaultOrderedTime: string;
+}) {
+  return splitTextIntoDatedEntries(content, defaultYear, defaultOrderedTime)
+    .map((entry) =>
+      inferImportDraft({
+        rawText: entry.text,
+        date: entry.date,
+        time: entry.time,
+        sourceLabel,
+        defaultOrderedTime,
+        includeGeneric: true,
+      })
+    )
+    .filter((draft): draft is ImportDraft => Boolean(draft));
+}
+
+function buildCustodyCalendarDrafts({
+  content,
+  sourceLabel,
+}: {
+  content: string;
+  sourceLabel: string;
+}) {
+  const rows = parseDelimitedRows(content);
+  const records = delimitedRowsToRecords(rows);
+  const defaultYear = new Date().getFullYear();
+  const drafts: ImportDraft[] = [];
+
+  if (records.length > 0) {
+    for (const record of records) {
+      const date = parseImportDate(pickImportField(record, ["date", "day"]), defaultYear);
+      if (!date) continue;
+      const caregiverLabel = pickImportField(record, ["caregiver", "parent", "label", "owner"]) || "Parent A";
+      const color = normalizeImportColor(pickImportField(record, ["color", "hex"])) || custodyDayColors[0];
+      const notes = pickImportField(record, ["notes", "note", "description"]);
+      drafts.push(createCustodyDayDraft({ date, caregiverLabel, color, notes, sourceLabel }));
+    }
+
+    return drafts;
+  }
+
+  for (const row of rows) {
+    const date = parseImportDate(row[0] || "", defaultYear);
+    if (!date) continue;
+    drafts.push(
+      createCustodyDayDraft({
+        date,
+        caregiverLabel: row[1]?.trim() || "Parent A",
+        color: normalizeImportColor(row[2] || "") || custodyDayColors[0],
+        notes: row.slice(3).join(", ").trim(),
+        sourceLabel,
+      })
+    );
+  }
+
+  return drafts;
+}
+
+function createCustodyDayDraft({
+  date,
+  caregiverLabel,
+  color,
+  notes,
+  sourceLabel,
+}: {
+  date: string;
+  caregiverLabel: string;
+  color: string;
+  notes?: string;
+  sourceLabel: string;
+}): ImportDraft {
+  return {
+    id: createId("import-day"),
+    kind: "custody_day",
+    date,
+    title: `${caregiverLabel} custody day`,
+    body: notes || "",
+    category: "schedule_change",
+    tags: ["calendar", "custody_day"],
+    includeInReports: false,
+    confidence: "high",
+    sourceLabel,
+    selected: true,
+    caregiverLabel,
+    color,
+  };
+}
+
+function inferImportDraft({
+  rawText,
+  date,
+  time,
+  sourceLabel,
+  defaultOrderedTime,
+  includeGeneric,
+}: {
+  rawText: string;
+  date: string;
+  time?: string;
+  sourceLabel: string;
+  defaultOrderedTime: string;
+  includeGeneric: boolean;
+}): ImportDraft | null {
+  const cleanText = truncateImportText(normalizeImportWhitespace(rawText), 4_900);
+  if (!date || !cleanText) return null;
+  const lower = cleanText.toLowerCase();
+
+  if (hasNoFaceTimeSignal(lower)) {
+    const postCallNotice = hasPostCallNoticeSignal(lower);
+    return {
+      id: createId("import-note"),
+      kind: "note",
+      date,
+      time,
+      title: "No FaceTime conducted",
+      body: postCallNotice
+        ? `No FaceTime conducted. The source indicates the notice was provided after a call or FaceTime attempt was not answered.\n\nSource note: ${cleanText}`
+        : `No FaceTime conducted. The source states that FaceTime did not occur or was not available.\n\nSource note: ${cleanText}`,
+      category: "communication",
+      tags: postCallNotice ? ["facetime", "no_facetime", "post_call_notice"] : ["facetime", "no_facetime"],
+      includeInReports: true,
+      confidence: postCallNotice ? "high" : "medium",
+      sourceLabel,
+      selected: true,
+    };
+  }
+
+  const actualTime = extractActualExchangeTime(cleanText, defaultOrderedTime);
+  const orderedTime = extractOrderedExchangeTime(cleanText, defaultOrderedTime);
+  const minutesLate = actualTime ? minutesBetweenImportTimes(orderedTime, actualTime) : 0;
+  if (hasExchangeSignal(lower) && actualTime && (minutesLate > 0 || hasLateExchangeSignal(lower))) {
+    return {
+      id: createId("import-exchange"),
+      kind: "exchange",
+      date,
+      time: actualTime,
+      title: minutesLate > 0 ? `Late exchange recorded (${minutesLate} min)` : "Exchange issue recorded",
+      body: `Source note: ${cleanText}`,
+      category: "exchange",
+      tags: minutesLate > 0 ? ["exchange", "late_exchange"] : ["exchange", "needs_review"],
+      includeInReports: true,
+      confidence: minutesLate > 0 ? "high" : "medium",
+      sourceLabel,
+      selected: true,
+      orderedTime,
+      actualTime,
+      direction: "other_parent_to_me",
+      status: minutesLate > 0 ? "completed_late" : "other",
+    };
+  }
+
+  if (hasCourtOrFilingSignal(lower)) {
+    return createNoteImportDraft({
+      date,
+      time,
+      title: "Court or filing note",
+      body: cleanText,
+      category: "court",
+      tags: ["court", "filing"],
+      sourceLabel,
+      confidence: "medium",
+    });
+  }
+
+  if (!includeGeneric) return null;
+
+  const category = inferGenericNoteCategory(lower);
+  return createNoteImportDraft({
+    date,
+    time,
+    title: buildGenericImportTitle(cleanText, category),
+    body: cleanText,
+    category,
+    tags: [category.replaceAll("_", "-"), "imported"],
+    sourceLabel,
+    confidence: "low",
+  });
+}
+
+function createNoteImportDraft({
+  date,
+  time,
+  title,
+  body,
+  category,
+  tags,
+  sourceLabel,
+  confidence,
+}: {
+  date: string;
+  time?: string;
+  title: string;
+  body: string;
+  category: NoteCategory;
+  tags: string[];
+  sourceLabel: string;
+  confidence: ImportDraftConfidence;
+}): ImportDraft {
+  return {
+    id: createId("import-note"),
+    kind: "note",
+    date,
+    time,
+    title: truncateImportText(title, 120),
+    body: truncateImportText(body, 4_900),
+    category,
+    tags,
+    includeInReports: true,
+    confidence,
+    sourceLabel,
+    selected: true,
+  };
+}
+
+function splitTextIntoDatedEntries(content: string, defaultYear: number, defaultOrderedTime: string) {
+  const lines = stripImportHtml(content)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const entries: Array<{ date: string; time?: string; text: string }> = [];
+  let current: { date: string; time?: string; text: string } | null = null;
+
+  for (const line of lines) {
+    const date = parseImportDate(line, defaultYear);
+    if (date) {
+      if (current) entries.push(current);
+      current = {
+        date,
+        time: extractImportTime(line, defaultOrderedTime),
+        text: line,
+      };
+      continue;
+    }
+
+    if (current) {
+      current.text = `${current.text}\n${line}`;
+    }
+  }
+
+  if (current) entries.push(current);
+  return entries;
+}
+
+function stripImportHtml(content: string) {
+  return content
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'");
+}
+
+function parseDelimitedRows(input: string) {
+  const sample = input.slice(0, 1_000);
+  const delimiter = (sample.match(/\t/g) || []).length > (sample.match(/,/g) || []).length ? "\t" : ",";
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+
+  for (let index = 0; index < input.length; index += 1) {
+    const char = input[index];
+    const next = input[index + 1];
+
+    if (char === '"' && quoted && next === '"') {
+      field += '"';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      quoted = !quoted;
+      continue;
+    }
+
+    if (char === delimiter && !quoted) {
+      row.push(field.trim());
+      field = "";
+      continue;
+    }
+
+    if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(field.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+      field = "";
+      continue;
+    }
+
+    field += char;
+  }
+
+  row.push(field.trim());
+  if (row.some(Boolean)) rows.push(row);
+  return rows;
+}
+
+function delimitedRowsToRecords(rows: string[][]) {
+  if (rows.length < 2) return [];
+  const headers = rows[0].map(normalizeImportHeader);
+  const recognized = new Set([
+    "date",
+    "datetime",
+    "timestamp",
+    "sent_at",
+    "created_at",
+    "time",
+    "message",
+    "text",
+    "body",
+    "content",
+    "sender",
+    "from",
+    "contact",
+    "name",
+    "caregiver",
+    "parent",
+    "label",
+    "color",
+    "hex",
+    "notes",
+    "description",
+  ]);
+  if (!headers.some((header) => recognized.has(header))) return [];
+
+  return rows.slice(1).map((row) =>
+    Object.fromEntries(headers.map((header, index) => [header, row[index] || ""]))
+  );
+}
+
+function normalizeImportHeader(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function pickImportField(record: Record<string, string>, keys: string[]) {
+  for (const key of keys) {
+    if (record[key]) return record[key].trim();
+  }
+
+  for (const [field, value] of Object.entries(record)) {
+    if (keys.some((key) => field.includes(key)) && value.trim()) return value.trim();
+  }
+
+  return "";
+}
+
+const importMonthLookup: Map<string, number> = new Map(
+  [
+    ["jan", 1],
+    ["january", 1],
+    ["feb", 2],
+    ["february", 2],
+    ["mar", 3],
+    ["march", 3],
+    ["apr", 4],
+    ["april", 4],
+    ["may", 5],
+    ["jun", 6],
+    ["june", 6],
+    ["jul", 7],
+    ["july", 7],
+    ["aug", 8],
+    ["august", 8],
+    ["sep", 9],
+    ["sept", 9],
+    ["september", 9],
+    ["oct", 10],
+    ["october", 10],
+    ["nov", 11],
+    ["november", 11],
+    ["dec", 12],
+    ["december", 12],
+  ] as const
+);
+
+function parseImportDate(value: string, defaultYear: number) {
+  const clean = value.trim();
+  if (!clean) return "";
+
+  const ymd = clean.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+  if (ymd) return isoDateFromParts(Number(ymd[1]), Number(ymd[2]), Number(ymd[3]));
+
+  const slash = clean.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
+  if (slash) {
+    return isoDateFromParts(
+      normalizeImportYear(slash[3], defaultYear),
+      Number(slash[1]),
+      Number(slash[2])
+    );
+  }
+
+  const monthPattern = Array.from(importMonthLookup.keys()).join("|");
+  const month = clean.match(
+    new RegExp(`\\b(?:sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)?\\s*(${monthPattern})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i")
+  );
+  if (month) {
+    return isoDateFromParts(
+      normalizeImportYear(month[3], defaultYear),
+      importMonthLookup.get(month[1].toLowerCase()) || 1,
+      Number(month[2])
+    );
+  }
+
+  const parsed = new Date(clean);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return "";
+}
+
+function normalizeImportYear(value: string | undefined, defaultYear: number) {
+  const year = Number(value || defaultYear);
+  if (!Number.isFinite(year)) return defaultYear;
+  if (year < 100) return year >= 70 ? 1900 + year : 2000 + year;
+  return year;
+}
+
+function isoDateFromParts(year: number, month: number, day: number) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return "";
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function extractImportTime(value: string, defaultOrderedTime: string) {
+  return collectImportTimes(value, defaultOrderedTime)[0]?.time || "";
+}
+
+function extractActualExchangeTime(value: string, defaultOrderedTime: string) {
+  const times = collectImportTimes(value, defaultOrderedTime);
+  if (times.length === 0) return "";
+  const lower = value.toLowerCase();
+  const anchors = [
+    "showed up",
+    "dropped off",
+    "dropped",
+    "drops kids",
+    "drops children",
+    "drops",
+    "drop",
+    "drop off",
+    "arrived",
+    "pulling into",
+    "here",
+    "got to",
+  ];
+
+  for (const anchor of anchors) {
+    const anchorIndex = lower.indexOf(anchor);
+    if (anchorIndex >= 0) {
+      const afterAnchor = times.find((time) => time.index >= anchorIndex);
+      if (afterAnchor) return afterAnchor.time;
+    }
+  }
+
+  return times.at(-1)?.time || "";
+}
+
+function extractOrderedExchangeTime(value: string, defaultOrderedTime: string) {
+  const lower = value.toLowerCase();
+  const phrases = [
+    "court order",
+    "ordered",
+    "refused to bring",
+    "refused",
+    "exchange time",
+    "drop off time",
+    "bring kids at",
+    "agreed to bring",
+  ];
+
+  for (const phrase of phrases) {
+    const index = lower.indexOf(phrase);
+    if (index < 0) continue;
+    const segment = value.slice(index, index + 90);
+    const explicitTime = extractImportTime(segment, defaultOrderedTime);
+    if (explicitTime) return explicitTime;
+    const bareHour = segment.match(/\b(?:is|at|by|for|before)\s+(1[0-2]|0?[1-9])\b/i);
+    if (bareHour) return normalizeImportTime(bareHour[1], "00", undefined, defaultOrderedTime);
+  }
+
+  return defaultOrderedTime;
+}
+
+function collectImportTimes(value: string, defaultOrderedTime: string) {
+  const times: Array<{ time: string; index: number }> = [];
+  const colonRegex = /\b([01]?\d|2[0-3]):([0-5]\d)\s*([ap]\.?m\.?)?\b/gi;
+  for (const match of value.matchAll(colonRegex)) {
+    times.push({
+      time: normalizeImportTime(match[1], match[2], match[3], defaultOrderedTime),
+      index: match.index || 0,
+    });
+  }
+
+  const ampmRegex = /\b(1[0-2]|0?[1-9])\s*([ap]\.?m\.?)\b/gi;
+  for (const match of value.matchAll(ampmRegex)) {
+    const index = match.index || 0;
+    const alreadyCaptured = times.some((time) => Math.abs(time.index - index) < 4);
+    if (alreadyCaptured) continue;
+    times.push({
+      time: normalizeImportTime(match[1], "00", match[2], defaultOrderedTime),
+      index,
+    });
+  }
+
+  return times.sort((left, right) => left.index - right.index);
+}
+
+function normalizeImportTime(
+  hourValue: string,
+  minuteValue: string,
+  meridiem: string | undefined,
+  defaultOrderedTime: string
+) {
+  let hour = Number(hourValue);
+  const minute = Number(minuteValue);
+  const defaultHour = Number(defaultOrderedTime.slice(0, 2));
+  const normalizedMeridiem = meridiem?.toLowerCase().replaceAll(".", "");
+
+  if (normalizedMeridiem === "pm" && hour < 12) hour += 12;
+  if (normalizedMeridiem === "am" && hour === 12) hour = 0;
+  if (!normalizedMeridiem && defaultHour >= 12 && hour >= 1 && hour <= 7) hour += 12;
+
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function minutesBetweenImportTimes(start: string, end: string) {
+  const startMinutes = minutesFromImportTime(start);
+  const endMinutes = minutesFromImportTime(end);
+  return endMinutes - startMinutes;
+}
+
+function minutesFromImportTime(time: string) {
+  const [hour, minute] = time.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function hasNoFaceTimeSignal(lower: string) {
+  return (
+    /\b(no|not|unable|cannot|can't|won't|will not)\b.{0,55}\bfacetime\b/i.test(lower) ||
+    /\bfacetime\b.{0,55}\b(no|not|unable|cannot|can't|asleep|tonight|available)\b/i.test(lower) ||
+    /\basleep\b.{0,55}\bfacetime\b/i.test(lower)
+  );
+}
+
+function hasPostCallNoticeSignal(lower: string) {
+  return /\b(call|called|calling|rang|no answer|did not answer|didn't answer|after i)\b/i.test(lower);
+}
+
+function hasExchangeSignal(lower: string) {
+  return (
+    /\b(exchange|transition|showed up|arrived|here|pick up|pickup)\b/i.test(lower) ||
+    /\bdrop(?:s|ped)?(?:\s+\w+){0,4}\s+off\b/i.test(lower)
+  );
+}
+
+function hasLateExchangeSignal(lower: string) {
+  return /\b(late|court order|refused|unannounced|wait for|showed up|dropped off)\b/i.test(lower);
+}
+
+function hasCourtOrFilingSignal(lower: string) {
+  return /\b(court|motion|response|filed|filing|order|hearing|testified|attorney)\b/i.test(lower);
+}
+
+function inferGenericNoteCategory(lower: string): NoteCategory {
+  if (hasExchangeSignal(lower)) return "exchange";
+  if (hasCourtOrFilingSignal(lower)) return "court";
+  if (/\b(daycare|child care|childcare|schedule)\b/i.test(lower)) return "schedule_change";
+  if (/\b(sick|doctor|medical|appointment)\b/i.test(lower)) return "medical";
+  if (/\b(school|teacher|daycare)\b/i.test(lower)) return "school";
+  if (/\b(safety|unsafe|danger)\b/i.test(lower)) return "safety";
+  return "other";
+}
+
+function buildGenericImportTitle(body: string, category: NoteCategory) {
+  const firstSentence = body.split(/[.!?\n]/)[0]?.trim() || labelNoteCategory(category);
+  return truncateImportText(firstSentence, 90) || "Imported note";
+}
+
+function normalizeImportColor(value: string) {
+  const color = value.trim();
+  return /^#[0-9a-fA-F]{6}$/.test(color) ? color : "";
+}
+
+function normalizeImportWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function truncateImportText(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 1).trim()}...`;
 }
 
 function buildMonthDays(monthKey: string) {

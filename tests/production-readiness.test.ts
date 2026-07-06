@@ -10,13 +10,17 @@ const readyEnv = {
   NEXT_PUBLIC_RECORDS_HOST: "losttofound.org",
   RECORDS_STORAGE_MODE: "supabase",
   NEXT_PUBLIC_RECORDS_STORAGE_MODE: "supabase",
+  RECORDS_SIGNUPS_ENABLED: "false",
+  NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: "false",
   NEXT_PUBLIC_SUPABASE_URL: "https://project-ref.supabase.co",
   EXPECTED_SUPABASE_PROJECT_REF: "project-ref",
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: "publishable-key",
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_test_key",
   SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
   AUTH_SECRET: "12345678901234567890123456789012",
   SUPABASE_MFA_POLICY: "required",
   RECORDS_ENFORCE_MFA: "true",
+  SUPABASE_CUSTOM_SMTP_ENABLED: "true",
+  SUPABASE_AUTH_REDIRECTS_VERIFIED_AT: "2026-06-10",
   SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED: "true",
   SUPABASE_PASSWORD_MIN_LENGTH: "12",
   SUPABASE_PASSWORD_REAUTH_ENABLED: "true",
@@ -76,6 +80,8 @@ describe("production readiness", () => {
         SUPABASE_SERVICE_ROLE_KEY: "",
         SUPABASE_MFA_POLICY: "",
         RECORDS_ENFORCE_MFA: "",
+        SUPABASE_CUSTOM_SMTP_ENABLED: "",
+        SUPABASE_AUTH_REDIRECTS_VERIFIED_AT: "",
         SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED: "",
         SUPABASE_PASSWORD_MIN_LENGTH: "",
         SUPABASE_PASSWORD_REAUTH_ENABLED: "",
@@ -103,6 +109,8 @@ describe("production readiness", () => {
         "supabase-url",
         "supabase-production-project",
         "records-mfa-enforced",
+        "supabase-custom-smtp",
+        "supabase-auth-redirects",
         "records-evidence-bucket",
         "supabase-auth-hardening-verified",
         "two-user-isolation-tested",
@@ -151,6 +159,33 @@ describe("production readiness", () => {
     expect(report.blockers.map((item) => item.id)).toContain("supabase-production-project");
   });
 
+  it("blocks placeholder Supabase public keys", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_REPLACE_WITH_DEFAULT_PUBLISHABLE_KEY",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("supabase-anon-key");
+  });
+
+  it("blocks mismatched public and server signup gates", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        RECORDS_SIGNUPS_ENABLED: "true",
+        NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: "false",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("records-signup-mode");
+  });
+
   it("blocks the non-production mock malware scanner", () => {
     const report = evaluateProductionReadiness(
       {
@@ -170,6 +205,8 @@ describe("production readiness", () => {
         ...readyEnv,
         SUPABASE_MFA_POLICY: "optional",
         RECORDS_ENFORCE_MFA: "false",
+        SUPABASE_CUSTOM_SMTP_ENABLED: "false",
+        SUPABASE_AUTH_REDIRECTS_VERIFIED_AT: "2026-01-01",
         SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED: "false",
         SUPABASE_AUTH_HARDENING_VERIFIED_AT: "2026-01-01",
         MALWARE_SCANNER_TESTED_AT: "2026-01-01",
@@ -193,6 +230,8 @@ describe("production readiness", () => {
       expect.arrayContaining([
         "supabase-mfa-policy",
         "records-mfa-enforced",
+        "supabase-custom-smtp",
+        "supabase-auth-redirects",
         "supabase-leaked-passwords",
         "supabase-auth-hardening-verified",
         "malware-scanner-tested",
