@@ -1,6 +1,23 @@
 import { expect, test } from "@playwright/test";
 
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function localDateParts(date = new Date()) {
+  const monthKey = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
+  const today = `${monthKey}-${pad2(date.getDate())}`;
+  const monthLabel = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+  }).format(date);
+  return { monthKey, monthLabel, today };
+}
+
 test("records login and report workflow", async ({ page }) => {
+  const currentCalendar = localDateParts();
+  const calendarDay = (day: number) => `${currentCalendar.monthKey}-${pad2(day)}`;
+
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Lost to Found Records" })).toBeVisible();
@@ -14,21 +31,22 @@ test("records login and report workflow", async ({ page }) => {
 
   await page.getByRole("button", { name: "Calendar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Calendar", exact: true })).toBeVisible();
-  await expect(page.getByText("Monthly custody calendar")).toBeVisible();
+  await expect(page.getByText(`Monthly custody calendar: ${currentCalendar.monthLabel}`)).toBeVisible();
+  await expect(page.getByRole("button", { name: `Edit calendar day ${currentCalendar.today}` })).toBeVisible();
   await expect(page.getByText("Color selected day")).toBeVisible();
   await page.getByLabel("Child will be with").fill("Parent C");
   await page.getByRole("button", { name: "Save color" }).click();
   await expect(page.getByText("Custody day color saved.")).toBeVisible();
-  const paintedDay = page.getByRole("button", { name: "Edit calendar day 2026-05-08" });
+  const paintedDay = page.getByRole("button", { name: `Edit calendar day ${currentCalendar.today}` });
   await expect(paintedDay).toBeVisible();
   await expect(paintedDay.getByText("Parent C", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Clear selected day" }).click();
   await expect(page.getByText("Custody day color cleared.")).toBeVisible();
   await expect(paintedDay.getByText("Parent C", { exact: true })).toHaveCount(0);
   await page.getByLabel("Caregiver label").fill("Drag Parent");
-  const dragStartDay = page.getByRole("button", { name: "Edit calendar day 2026-05-09" });
-  const dragMiddleDay = page.getByRole("button", { name: "Edit calendar day 2026-05-10" });
-  const dragEndDay = page.getByRole("button", { name: "Edit calendar day 2026-05-11" });
+  const dragStartDay = page.getByRole("button", { name: `Edit calendar day ${calendarDay(9)}` });
+  const dragMiddleDay = page.getByRole("button", { name: `Edit calendar day ${calendarDay(10)}` });
+  const dragEndDay = page.getByRole("button", { name: `Edit calendar day ${calendarDay(11)}` });
   await dragStartDay.dragTo(dragEndDay);
   await expect(page.getByText("3 custody days colored.")).toBeVisible();
   await expect(dragStartDay.getByText("Drag Parent", { exact: true })).toBeVisible();
@@ -59,6 +77,8 @@ test("records login and report workflow", async ({ page }) => {
   await page.getByRole("button", { name: "Save file record" }).click();
   await expect(page.getByText("File metadata saved with allow-list validation.")).toBeVisible();
   await expect(page.getByText("files-tab-document.txt")).toBeVisible();
+  await page.getByLabel("From date").fill("2026-05-01");
+  await page.getByLabel("To date").fill("2026-06-15");
 
   await page.locator("nav").getByRole("button", { name: /^Timeline/ }).click();
   await expect(page.getByRole("heading", { name: "Timeline", exact: true })).toBeVisible();

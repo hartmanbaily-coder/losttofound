@@ -58,6 +58,15 @@ import {
   sectionExportToCsv,
   type SectionExportPacket,
 } from "@/lib/records/reports";
+import {
+  buildDateRangePreset,
+  buildMonthDays,
+  formatLocalDate,
+  formatMonthLabel,
+  getMonthBounds,
+  monthKeyFromDate,
+  type DateRangePreset,
+} from "@/lib/records/dateRanges";
 import { demoCaseId, demoUserId } from "@/lib/records/seed";
 import type {
   CalendarEvent,
@@ -117,7 +126,7 @@ type LoginFlowResult =
   | { status: "mfa_enrollment_required"; enrollment: RecordsMfaEnrollment };
 type LoginScreenMode = "login" | "signup" | "reset" | "update_password";
 
-const defaultRange: DateRange = { from: "2026-05-01", to: "2026-06-15" };
+const defaultRangePreset: DateRangePreset = "currentMonth";
 
 const exchangeStatuses: ExchangeStatus[] = [
   "completed_on_time",
@@ -299,9 +308,9 @@ export default function RecordsApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("Dashboard");
   const [selectedCaseId, setSelectedCaseId] = useState(demoCaseId);
-  const [range, setRange] = useState<DateRange>(defaultRange);
+  const [range, setRange] = useState<DateRange>(() => buildDateRangePreset(defaultRangePreset));
   const [calendarMode, setCalendarMode] = useState<"month" | "list" | "timeline">("month");
-  const [selectedDay, setSelectedDay] = useState("2026-05-08");
+  const [selectedDay, setSelectedDay] = useState(() => formatLocalDate());
   const [reportType, setReportType] = useState<ReportType>("exchange_compliance");
   const [toast, setToast] = useState("");
   const toastTimeoutRef = useRef<number | null>(null);
@@ -1322,8 +1331,10 @@ function CalendarView({
   onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
-  const monthKey = range.from.slice(0, 7);
+  const monthKey = monthKeyFromDate(range.from);
+  const monthRange = getMonthBounds(monthKey);
   const monthDays = buildMonthDays(monthKey);
+  const today = formatLocalDate();
   const [paintCaregiverLabel, setPaintCaregiverLabel] = useState("Parent A");
   const [paintColor, setPaintColor] = useState<(typeof custodyDayColors)[number] | string>(
     custodyDayColors[0]
@@ -1339,10 +1350,7 @@ function CalendarView({
   for (const event of visibleEvents) {
     eventsByDate.set(event.date, [...(eventsByDate.get(event.date) || []), event]);
   }
-  const custodyDayMap = buildCustodyDayMap(custodyDayAssignments, {
-    from: `${monthKey}-01`,
-    to: `${monthKey}-31`,
-  });
+  const custodyDayMap = buildCustodyDayMap(custodyDayAssignments, monthRange);
   const selectedAssignment = custodyDayMap.get(selectedDay);
   const dayEvents = eventsByDate.get(selectedDay) || [];
 
@@ -1676,7 +1684,7 @@ function CalendarView({
 
       {mode === "month" && (
         <section className="grid gap-4 xl:grid-cols-[1fr_400px]">
-          <Panel title={`Monthly custody calendar: ${monthKey}`} action="Editable color blocks">
+          <Panel title={`Monthly custody calendar: ${formatMonthLabel(monthKey)}`} action="Editable color blocks">
             <div className="mb-4 grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[1fr_auto] lg:items-end">
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
                 <Field label="Caregiver label">
@@ -1757,6 +1765,7 @@ function CalendarView({
                 );
                 const assignment = day ? custodyDayMap.get(day) : undefined;
                 const isPaintDraft = day ? paintDraftDates.has(day) : false;
+                const isToday = day === today;
                 const visibleColor = isPaintDraft ? paintColor : assignment?.color;
                 const visibleLabel = isPaintDraft
                   ? paintCaregiverLabel.trim() || "Parent A"
@@ -1786,17 +1795,24 @@ function CalendarView({
                       day === selectedDay
                         ? "ring-2 ring-teal-500 ring-offset-1"
                         : "border-slate-200 bg-white hover:border-teal-300"
-                    } ${day ? "cursor-crosshair" : ""} ${!day ? "bg-transparent hover:border-slate-200" : ""}`}
+                    } ${isToday ? "shadow-[inset_0_0_0_2px_rgba(15,118,110,0.35)]" : ""} ${day ? "cursor-crosshair" : ""} ${!day ? "bg-transparent hover:border-slate-200" : ""}`}
                   >
                     {day && (
                       <>
                         <div className="flex items-start justify-between gap-1">
                           <p className="text-sm font-semibold text-slate-900">{Number(day.slice(-2))}</p>
-                          {assignment?.exchangeTime && (
-                            <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
-                              {assignment.exchangeTime}
-                            </span>
-                          )}
+                          <div className="flex flex-wrap justify-end gap-1">
+                            {isToday && (
+                              <span className="rounded bg-teal-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                Today
+                              </span>
+                            )}
+                            {assignment?.exchangeTime && (
+                              <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+                                {assignment.exchangeTime}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {visibleColor && visibleLabel && (
                           <div
@@ -2882,7 +2898,7 @@ function ImportView({
   const selectedSetupPreset =
     parentingSchedulePresets.find((preset) => preset.id === setupSchedulePreset) ||
     parentingSchedulePresets[0];
-  const setupToday = new Date().toISOString().slice(0, 10);
+  const setupToday = formatLocalDate();
   const setupDefaultEndDate = addDays(setupToday, 90);
 
   function queueDrafts(nextDrafts: ImportDraft[], sourceLabel: string) {
@@ -3497,7 +3513,7 @@ function ImportView({
               />
             </Field>
             <Field label="Record date">
-              <input name="evidenceDate" type="date" className="input" defaultValue={new Date().toISOString().slice(0, 10)} />
+              <input name="evidenceDate" type="date" className="input" defaultValue={formatLocalDate()} />
             </Field>
             <Field label="Description">
               <textarea name="description" className="input min-h-20" />
@@ -4067,7 +4083,7 @@ function EvidenceView({
       description: item.description || "",
     }));
     downloadTextFile(
-      `file-index-${new Date().toISOString().slice(0, 10)}.csv`,
+      `file-index-${formatLocalDate()}.csv`,
       rowsToCsv(rows),
       "text/csv"
     );
@@ -5446,39 +5462,45 @@ function RangeToolbar({
   range: DateRange;
   setRange: (range: DateRange) => void;
 }) {
+  const [preset, setPreset] = useState<DateRangePreset | "custom">(defaultRangePreset);
+
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
       <select
         className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
         onChange={(event) => {
-          const value = event.target.value;
-          if (value === "last30") setRange({ from: "2026-05-16", to: "2026-06-15" });
-          if (value === "last90") setRange({ from: "2026-03-17", to: "2026-06-15" });
-          if (value === "currentMonth") setRange({ from: "2026-06-01", to: "2026-06-30" });
-          if (value === "priorMonth") setRange({ from: "2026-05-01", to: "2026-05-31" });
-          if (value === "ytd") setRange({ from: "2026-01-01", to: "2026-06-15" });
+          const value = event.target.value as DateRangePreset | "custom";
+          setPreset(value);
+          if (value !== "custom") setRange(buildDateRangePreset(value));
         }}
-        defaultValue="last90"
+        value={preset}
         aria-label="Date range preset"
       >
+        <option value="currentMonth">Current month</option>
         <option value="last30">Last 30 days</option>
         <option value="last90">Last 90 days</option>
-        <option value="currentMonth">Current month</option>
         <option value="priorMonth">Prior month</option>
         <option value="ytd">Year to date</option>
+        <option value="custom">Custom range</option>
       </select>
       <input
         aria-label="From date"
         type="date"
         value={range.from}
-        onChange={(event) => setRange({ ...range, from: event.target.value })}
+        onChange={(event) => {
+          setPreset("custom");
+          setRange({ ...range, from: event.target.value });
+        }}
         className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
       />
       <input
         aria-label="To date"
         type="date"
         value={range.to}
-        onChange={(event) => setRange({ ...range, to: event.target.value })}
+        onChange={(event) => {
+          setPreset("custom");
+          setRange({ ...range, to: event.target.value });
+        }}
         className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
       />
     </div>
@@ -6724,18 +6746,6 @@ function normalizeImportWhitespace(value: string) {
 function truncateImportText(value: string, maxLength: number) {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, maxLength - 1).trim()}...`;
-}
-
-function buildMonthDays(monthKey: string) {
-  const first = new Date(`${monthKey}-01T00:00:00.000Z`);
-  const firstDay = first.getUTCDay();
-  const daysInMonth = new Date(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + 1, 0)).getUTCDate();
-  const days: Array<string | null> = Array.from({ length: firstDay }, () => null);
-  for (let day = 1; day <= daysInMonth; day += 1) {
-    days.push(`${monthKey}-${String(day).padStart(2, "0")}`);
-  }
-  while (days.length % 7 !== 0) days.push(null);
-  return days;
 }
 
 function text(formData: FormData, key: string) {
