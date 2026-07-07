@@ -38,11 +38,14 @@ test("records login and report workflow", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
   await expect(page.getByText("This tool helps organize records and does not provide legal advice.")).toBeVisible();
   await expect(page.getByText("Late exchanges").first()).toBeVisible();
+  await page.getByLabel("From date").fill("2026-01-01");
+  await page.getByLabel("To date").fill("2026-01-31");
 
   await page.getByRole("button", { name: "Calendar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Calendar", exact: true })).toBeVisible();
   await expect(page.getByText(`Monthly custody calendar: ${currentCalendar.monthLabel}`)).toBeVisible();
   await expect(page.getByText("Case timezone: America/Anchorage")).toBeVisible();
+  await expect(page.getByLabel("Calendar month")).toHaveValue(currentCalendar.monthKey);
   await expect(page.getByRole("button", { name: `Edit calendar day ${currentCalendar.today}` })).toBeVisible();
   await expect(page.getByText("Color selected day")).toBeVisible();
   await page.getByLabel("Child will be with").fill("Parent C");
@@ -58,7 +61,16 @@ test("records login and report workflow", async ({ page }) => {
   const dragStartDay = page.getByRole("button", { name: `Edit calendar day ${calendarDay(9)}` });
   const dragMiddleDay = page.getByRole("button", { name: `Edit calendar day ${calendarDay(10)}` });
   const dragEndDay = page.getByRole("button", { name: `Edit calendar day ${calendarDay(11)}` });
-  await dragStartDay.dragTo(dragEndDay);
+  await dragStartDay.scrollIntoViewIfNeeded();
+  const startBox = await dragStartDay.boundingBox();
+  const middleBox = await dragMiddleDay.boundingBox();
+  const endBox = await dragEndDay.boundingBox();
+  if (!startBox || !middleBox || !endBox) throw new Error("Calendar drag test days are not visible.");
+  await page.mouse.move(startBox.x + startBox.width / 2, startBox.y + startBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(middleBox.x + middleBox.width / 2, middleBox.y + middleBox.height / 2, { steps: 4 });
+  await page.mouse.move(endBox.x + endBox.width / 2, endBox.y + endBox.height / 2, { steps: 4 });
+  await page.mouse.up();
   await expect(page.getByText("3 custody days colored.")).toBeVisible();
   await expect(dragStartDay.getByText("Drag Parent", { exact: true })).toBeVisible();
   await expect(dragMiddleDay.getByText("Drag Parent", { exact: true })).toBeVisible();

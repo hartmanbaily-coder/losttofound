@@ -87,6 +87,17 @@ export function buildDateRangePreset(preset: DateRangePreset, now = new Date(), 
   return getMonthBounds(today.slice(0, 7));
 }
 
+export function currentMonthKey(now = new Date(), timeZone?: string) {
+  return formatLocalDate(now, timeZone).slice(0, 7);
+}
+
+export function shiftMonthKey(monthKey: string, offset: number, timeZone?: string) {
+  const bounds = getMonthBounds(monthKey, timeZone);
+  const [year, month] = bounds.from.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1 + offset, 1));
+  return `${shifted.getUTCFullYear()}-${pad2(shifted.getUTCMonth() + 1)}`;
+}
+
 export function buildMonthDays(monthKey: string) {
   const monthRange = getMonthBounds(monthKey);
   const firstDay = toUtcDate(monthRange.from).getUTCDay();

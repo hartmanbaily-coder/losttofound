@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildDateRangePreset,
   buildMonthDays,
+  currentMonthKey,
   formatLocalDate,
   formatMonthLabel,
   getMonthBounds,
+  shiftMonthKey,
 } from "@/lib/records/dateRanges";
 
 describe("records date ranges", () => {
@@ -42,6 +44,8 @@ describe("records date ranges", () => {
 
     expect(formatLocalDate(earlyUtc, "America/Anchorage")).toBe("2026-06-30");
     expect(formatLocalDate(earlyUtc, "UTC")).toBe("2026-07-01");
+    expect(currentMonthKey(earlyUtc, "America/Anchorage")).toBe("2026-06");
+    expect(currentMonthKey(earlyUtc, "UTC")).toBe("2026-07");
     expect(buildDateRangePreset("currentMonth", earlyUtc, "America/Anchorage")).toEqual({
       from: "2026-06-01",
       to: "2026-06-30",
@@ -50,6 +54,11 @@ describe("records date ranges", () => {
       from: "2026-07-01",
       to: "2026-07-31",
     });
+  });
+
+  it("shifts calendar month keys across year boundaries", () => {
+    expect(shiftMonthKey("2026-01", -1)).toBe("2025-12");
+    expect(shiftMonthKey("2026-12", 1)).toBe("2027-01");
   });
 
   it("places calendar days on their real weekdays", () => {

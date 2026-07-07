@@ -61,11 +61,13 @@ import {
 import {
   buildDateRangePreset,
   buildMonthDays,
+  currentMonthKey,
   defaultRecordsTimezone,
   formatLocalDate,
   formatMonthLabel,
   getMonthBounds,
   monthKeyFromDate,
+  shiftMonthKey,
   type DateRangePreset,
 } from "@/lib/records/dateRanges";
 import { demoCaseId, demoUserId } from "@/lib/records/seed";
@@ -325,6 +327,9 @@ export default function RecordsApp() {
   const [range, setRange] = useState<DateRange>(() =>
     buildDateRangePreset(defaultRangePreset, new Date(), defaultRecordsTimezone)
   );
+  const [calendarMonthKey, setCalendarMonthKey] = useState(() =>
+    currentMonthKey(new Date(), defaultRecordsTimezone)
+  );
   const [calendarMode, setCalendarMode] = useState<"month" | "list" | "timeline">("month");
   const [selectedDay, setSelectedDay] = useState(() => formatLocalDate(new Date(), defaultRecordsTimezone));
   const [reportType, setReportType] = useState<ReportType>("exchange_compliance");
@@ -345,9 +350,19 @@ export default function RecordsApp() {
   }, [dataset.matters, dataset.users, userId]);
 
   const selectCase = useCallback((caseId: string) => {
+    const nextTimezone = getCaseTimezone(caseId);
     setSelectedCaseId(caseId);
-    setSelectedDay(formatLocalDate(new Date(), getCaseTimezone(caseId)));
+    setCalendarMonthKey(currentMonthKey(new Date(), nextTimezone));
+    setSelectedDay(formatLocalDate(new Date(), nextTimezone));
   }, [getCaseTimezone]);
+
+  const openView = useCallback((view: ActiveView) => {
+    setActiveView(view);
+    if (view === "Calendar") {
+      setCalendarMonthKey(currentMonthKey(new Date(), caseTimezone));
+      setSelectedDay(formatLocalDate(new Date(), caseTimezone));
+    }
+  }, [caseTimezone]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -392,6 +407,14 @@ export default function RecordsApp() {
     () => buildCalendarEvents(dataset, userId, effectiveCaseId, range),
     [dataset, userId, effectiveCaseId, range]
   );
+  const calendarViewRange = useMemo(
+    () => getMonthBounds(calendarMonthKey, caseTimezone),
+    [calendarMonthKey, caseTimezone]
+  );
+  const calendarViewEvents = useMemo(
+    () => buildCalendarEvents(dataset, userId, effectiveCaseId, calendarViewRange).filter(isTimelineVisibleEvent),
+    [dataset, userId, effectiveCaseId, calendarViewRange]
+  );
   const timelineEvents = useMemo(
     () => calendarEvents.filter(isTimelineVisibleEvent),
     [calendarEvents]
@@ -406,7 +429,7 @@ export default function RecordsApp() {
   );
   const sectionExportPackets = useMemo(
     () => ({
-      calendar: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "calendar"),
+      calendar: buildSectionExportPacket(dataset, userId, effectiveCaseId, calendarViewRange, "calendar"),
       timeline: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "timeline"),
       exchanges: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "exchanges"),
       notes: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "notes"),
@@ -414,7 +437,7 @@ export default function RecordsApp() {
       childSupport: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "child_support"),
       expenses: buildSectionExportPacket(dataset, userId, effectiveCaseId, range, "expenses"),
     }),
-    [dataset, userId, effectiveCaseId, range]
+    [dataset, userId, effectiveCaseId, range, calendarViewRange]
   );
 
   function flash(message: string) {
@@ -538,7 +561,7 @@ export default function RecordsApp() {
                 <button
                   key={item}
                   type="button"
-                  onClick={() => setActiveView(item)}
+                  onClick={() => openView(item)}
                   className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium transition ${
                     activeView === item
                       ? "bg-teal-700 text-white"
@@ -553,7 +576,7 @@ export default function RecordsApp() {
                   )}
                   {item === "Timeline" && (
                     <span className="rounded bg-white/20 px-1.5 text-[11px]">
-                      {calendarEvents.length}
+                      {timelineEvents.length}
                     </span>
                   )}
                 </button>
@@ -593,7 +616,7 @@ export default function RecordsApp() {
                 <RangeToolbar range={range} setRange={setRange} timezone={caseTimezone} />
                 <button
                   type="button"
-                  onClick={() => setActiveView("Reports")}
+                  onClick={() => openView("Reports")}
                   className="h-10 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
                 >
                   Export
@@ -625,7 +648,7 @@ export default function RecordsApp() {
             )}
             {activeView === "Calendar" && (
               <CalendarView
-                events={timelineEvents}
+                events={calendarViewEvents}
                 custodyDayAssignments={selected.custodyDayAssignments}
                 updateDataset={updateDataset}
                 userId={userId}
@@ -634,7 +657,8 @@ export default function RecordsApp() {
                 setMode={setCalendarMode}
                 selectedDay={selectedDay}
                 setSelectedDay={setSelectedDay}
-                range={range}
+                calendarMonthKey={calendarMonthKey}
+                setCalendarMonthKey={setCalendarMonthKey}
                 timezone={caseTimezone}
                 sectionExport={sectionExportPackets.calendar}
                 onExportSection={exportSectionPacket}
@@ -1345,7 +1369,8 @@ function CalendarView({
   setMode,
   selectedDay,
   setSelectedDay,
-  range,
+  calendarMonthKey,
+  setCalendarMonthKey,
   timezone,
   sectionExport,
   onExportSection,
@@ -1360,13 +1385,14 @@ function CalendarView({
   setMode: (mode: "month" | "list" | "timeline") => void;
   selectedDay: string;
   setSelectedDay: (day: string) => void;
-  range: DateRange;
+  calendarMonthKey: string;
+  setCalendarMonthKey: (monthKey: string) => void;
   timezone: string;
   sectionExport: SectionExportPacket;
   onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
-  const monthKey = monthKeyFromDate(range.from, timezone);
+  const monthKey = monthKeyFromDate(`${calendarMonthKey}-01`, timezone);
   const monthRange = getMonthBounds(monthKey, timezone);
   const monthDays = buildMonthDays(monthKey);
   const today = formatLocalDate(new Date(), timezone);
@@ -1380,6 +1406,7 @@ function CalendarView({
   const paintAnchorDateRef = useRef<string | null>(null);
   const activePaintPointerIdRef = useRef<number | null>(null);
   const paintDraftDatesRef = useRef<Set<string>>(new Set());
+  const suppressNextCalendarClickRef = useRef(false);
   const visibleEvents = useMemo(() => events.filter(isTimelineVisibleEvent), [events]);
   const eventsByDate = new Map<string, CalendarEvent[]>();
   for (const event of visibleEvents) {
@@ -1388,6 +1415,18 @@ function CalendarView({
   const custodyDayMap = buildCustodyDayMap(custodyDayAssignments, monthRange);
   const selectedAssignment = custodyDayMap.get(selectedDay);
   const dayEvents = eventsByDate.get(selectedDay) || [];
+
+  function showCalendarMonth(nextMonthKey: string) {
+    const nextRange = getMonthBounds(nextMonthKey, timezone);
+    setCalendarMonthKey(nextMonthKey);
+    setSelectedDay(nextRange.from);
+  }
+
+  function showCurrentMonth() {
+    const nextMonthKey = currentMonthKey(new Date(), timezone);
+    setCalendarMonthKey(nextMonthKey);
+    setSelectedDay(formatLocalDate(new Date(), timezone));
+  }
 
   const setPaintDraft = useCallback((dates: Set<string>) => {
     paintDraftDatesRef.current = dates;
@@ -1507,7 +1546,7 @@ function CalendarView({
   );
 
   const finishPaint = useCallback(
-    (event?: globalThis.PointerEvent | ReactPointerEvent<HTMLElement>) => {
+    (event?: globalThis.PointerEvent) => {
       if (!paintingRef.current) return;
       if (
         event &&
@@ -1517,21 +1556,12 @@ function CalendarView({
         return;
       }
 
-      const pointerId = activePaintPointerIdRef.current;
-      const target = event?.currentTarget;
-      if (pointerId !== null && target instanceof HTMLElement) {
-        try {
-          if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
-        } catch {
-          // Pointer capture can already be released by the browser on cancel/lost-capture.
-        }
-      }
-
       paintingRef.current = false;
       paintAnchorDateRef.current = null;
       activePaintPointerIdRef.current = null;
       setIsPainting(false);
       const dates = Array.from(paintDraftDatesRef.current);
+      suppressNextCalendarClickRef.current = dates.length > 0;
       setPaintDraft(new Set());
       applyCustodyDayPaint(dates);
     },
@@ -1547,6 +1577,7 @@ function CalendarView({
       ) {
         return;
       }
+      event.preventDefault();
       const target = document.elementFromPoint(event.clientX, event.clientY);
       const day = target instanceof Element
         ? target.closest<HTMLElement>("[data-calendar-day]")?.dataset.calendarDay
@@ -1554,7 +1585,7 @@ function CalendarView({
       if (day) extendPaint(day);
     }
 
-    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointermove", handlePointerMove, { passive: false });
     window.addEventListener("pointerup", finishPaint);
     window.addEventListener("pointercancel", finishPaint);
     return () => {
@@ -1566,17 +1597,21 @@ function CalendarView({
 
   function beginPaint(day: string, event: ReactPointerEvent<HTMLButtonElement>) {
     event.preventDefault();
+    suppressNextCalendarClickRef.current = false;
     paintingRef.current = true;
     paintAnchorDateRef.current = day;
     activePaintPointerIdRef.current = event.pointerId;
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      // Some browsers may reject capture if the pointer is no longer active.
-    }
     setIsPainting(true);
     setSelectedDay(day);
     setPaintDraft(new Set([day]));
+  }
+
+  function handleCalendarDayClick(day: string) {
+    if (suppressNextCalendarClickRef.current) {
+      suppressNextCalendarClickRef.current = false;
+      return;
+    }
+    setSelectedDay(day);
   }
 
   function saveCustodyDay(event: FormEvent<HTMLFormElement>) {
@@ -1720,6 +1755,44 @@ function CalendarView({
       {mode === "month" && (
         <section className="grid gap-4 xl:grid-cols-[1fr_400px]">
           <Panel title={`Monthly custody calendar: ${formatMonthLabel(monthKey, timezone)}`} action={`Case timezone: ${timezone}`}>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white p-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary h-9 px-3"
+                  onClick={() => showCalendarMonth(shiftMonthKey(monthKey, -1, timezone))}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary h-9 px-3"
+                  onClick={showCurrentMonth}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary h-9 px-3"
+                  onClick={() => showCalendarMonth(shiftMonthKey(monthKey, 1, timezone))}
+                >
+                  Next
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="calendar-month">
+                  Month
+                </label>
+                <input
+                  id="calendar-month"
+                  aria-label="Calendar month"
+                  type="month"
+                  className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
+                  value={monthKey}
+                  onChange={(event) => showCalendarMonth(event.target.value || currentMonthKey(new Date(), timezone))}
+                />
+              </div>
+            </div>
             <div className="mb-4 grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[1fr_auto] lg:items-end">
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
                 <Field label="Caregiver label">
@@ -1813,18 +1886,19 @@ function CalendarView({
                     data-calendar-day={day || undefined}
                     aria-label={day ? `Edit calendar day ${day}` : undefined}
                     onPointerDown={(event) => day && beginPaint(day, event)}
-                    onPointerEnter={() => day && extendPaint(day)}
-                    onPointerUp={(event) => day && finishPaint(event)}
-                    onPointerCancel={(event) => day && finishPaint(event)}
-                    onLostPointerCapture={(event) => day && finishPaint(event)}
-                    onClick={() => day && setSelectedDay(day)}
+                    onClick={() => day && handleCalendarDayClick(day)}
                     style={
                       visibleColor
                         ? {
                             backgroundColor: withAlpha(visibleColor, isPaintDraft ? 0.16 : 0.1),
                             borderColor: visibleColor,
+                            touchAction: "none",
+                            userSelect: "none",
                           }
-                        : undefined
+                        : {
+                            touchAction: "none",
+                            userSelect: "none",
+                          }
                     }
                     className={`min-h-28 select-none rounded-md border p-2 text-left transition ${
                       day === selectedDay
