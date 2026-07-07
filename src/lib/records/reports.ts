@@ -221,6 +221,17 @@ function formatDateRangeWindow(days: number) {
   return days === 0 ? "same day" : `within ${days} days`;
 }
 
+function formatGeneratedAt(date = new Date()) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+}
+
 function dateDiffDays(from: string, to: string) {
   return Math.round((new Date(`${to}T00:00:00.000Z`).getTime() - new Date(`${from}T00:00:00.000Z`).getTime()) / 86_400_000);
 }
@@ -420,7 +431,7 @@ export function buildSectionExportPacket(
 ): SectionExportPacket {
   const matter = dataset.matters.find((item) => item.id === caseId && item.userId === userId);
   const caseName = matter?.caseName || "Selected custody matter";
-  const generatedAt = new Date().toISOString();
+  const generatedAt = formatGeneratedAt();
   const disclaimer =
     "This export organizes user-entered records. It is not legal advice; review with a qualified attorney before filing or sharing.";
   const events = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent);
@@ -961,7 +972,7 @@ export function buildReportPreview(
   const issueEvents = events.filter(isIssueReportEvent);
   const exchangeStats = calculateExchangeStats(exchangeLogs, expected, range);
   const rows = buildReportRows(dataset, userId, caseId, range, reportType);
-  const generatedAt = new Date().toISOString();
+  const generatedAt = formatGeneratedAt();
   const otherParentLabel = matter?.otherParentLabel || "Other parent";
   const userRoleLabel = matter?.userRoleLabel || "Me";
   const months = monthKeysInRange(range);

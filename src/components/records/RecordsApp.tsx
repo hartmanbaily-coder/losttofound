@@ -5269,8 +5269,8 @@ function ReportsView({
   }
 
   return (
-    <div className="grid min-w-0 gap-4 xl:grid-cols-[360px_1fr]">
-      <Panel title="Report builder" action="Issue-focused">
+    <div className="report-print-layout grid min-w-0 gap-4 xl:grid-cols-[360px_1fr]">
+      <Panel title="Report builder" action="Issue-focused" className="report-builder-panel no-print">
         <div className="grid gap-3">
           <Field label="Report type">
             <select
@@ -5323,7 +5323,7 @@ function ReportsView({
         </div>
       </Panel>
 
-      <Panel title={preview.title} action={preview.caseName}>
+      <Panel title={preview.title} action={preview.caseName} className="report-preview-panel">
         <article className="report-surface space-y-5">
           <div className="border-b border-slate-200 pb-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -5355,9 +5355,12 @@ function ReportsView({
           </div>
           <div className="space-y-4">
             {preview.tables.map((table) => (
-              <div key={table.title}>
+              <div key={table.title} className="report-table-section">
                 <h3 className="mb-2 text-sm font-semibold text-slate-950">{table.title}</h3>
-                <Table headers={table.headers} rows={table.rows.slice(0, 24)} />
+                <div className="screen-only">
+                  <Table headers={table.headers} rows={table.rows.slice(0, 24)} />
+                </div>
+                <ReportPrintRows headers={table.headers} rows={table.rows.slice(0, 24)} />
                 {table.rows.length > 24 && (
                   <p className="mt-2 text-xs text-slate-500">
                     {table.rows.length - 24} more rows included in CSV/JSON export.
@@ -5367,11 +5370,11 @@ function ReportsView({
             ))}
           </div>
           {preview.evidenceIndex.length > 0 && (
-            <div>
+            <div className="report-table-section">
               <h3 className="mb-2 text-sm font-semibold text-slate-950">Supporting file index</h3>
-              <Table
-                headers={["Index", "File", "Date", "Description", "Tags", "Scan", "Storage"]}
-                rows={preview.evidenceIndex.map((item) => [
+              {(() => {
+                const headers = ["Index", "File", "Date", "Description", "Tags", "Scan", "Storage"];
+                const rows = preview.evidenceIndex.map((item) => [
                   item.index,
                   item.fileName,
                   item.evidenceDate,
@@ -5379,8 +5382,16 @@ function ReportsView({
                   item.tags,
                   item.scanStatus,
                   item.storageStatus,
-                ])}
-              />
+                ]);
+                return (
+                  <>
+                    <div className="screen-only">
+                      <Table headers={headers} rows={rows} />
+                    </div>
+                    <ReportPrintRows headers={headers} rows={rows} />
+                  </>
+                );
+              })()}
             </div>
           )}
         </article>
@@ -5856,7 +5867,7 @@ function SettingsView({
 
 function Disclaimer() {
   return (
-    <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+    <div className="no-print rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
       {disclaimer}
     </div>
   );
@@ -5926,13 +5937,15 @@ function Panel({
   title,
   action,
   children,
+  className = "",
 }: {
   title: string;
   action?: string;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <section className={`min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm ${className}`}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-slate-950">{title}</h2>
         {action && <span className="text-xs font-medium text-slate-500">{action}</span>}
@@ -6438,6 +6451,73 @@ function Table({
       </table>
     </div>
   );
+}
+
+function ReportPrintRows({
+  headers,
+  rows,
+}: {
+  headers: string[];
+  rows: Array<Array<ReactNode>>;
+}) {
+  if (headers.length === 0 || rows.length === 0) {
+    return <p className="print-only text-sm text-slate-500">No rows to show.</p>;
+  }
+
+  const normalizedHeaders = headers.map((header) => header.toLowerCase());
+  const findHeader = (...names: string[]) =>
+    names
+      .map((name) => normalizedHeaders.indexOf(name))
+      .find((index): index is number => index >= 0);
+  const dateIndex = findHeader("date");
+  const timeIndex = findHeader("time");
+  const titleIndex = findHeader("title", "file", "issue");
+  const secondaryIndex = findHeader("issue", "source", "description");
+
+  return (
+    <div className="print-only report-print-record-list">
+      {rows.map((row, rowIndex) => {
+        const title = formatReportCell(row[titleIndex ?? -1]) || `Record ${rowIndex + 1}`;
+        const secondary = secondaryIndex === titleIndex ? "" : formatReportCell(row[secondaryIndex ?? -1]);
+        const dateParts = [formatReportCell(row[dateIndex ?? -1]), formatReportCell(row[timeIndex ?? -1])].filter(Boolean);
+
+        return (
+          <section key={rowIndex} className="report-print-record">
+            <div className="report-print-record-heading">
+              <div>
+                <p className="report-print-record-title">{title}</p>
+                {secondary && <p className="report-print-record-subtitle">{secondary}</p>}
+              </div>
+              {dateParts.length > 0 && (
+                <p className="report-print-record-date">{dateParts.join(" ")}</p>
+              )}
+            </div>
+            <dl>
+              {headers.map((header, cellIndex) => {
+                const cell = row[cellIndex];
+                if (isEmptyReportCell(cell)) return null;
+                return (
+                  <div key={`${header}-${cellIndex}`}>
+                    <dt>{header}</dt>
+                    <dd>{cell}</dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function isEmptyReportCell(cell: ReactNode) {
+  return cell === null || cell === undefined || cell === false || cell === "";
+}
+
+function formatReportCell(cell: ReactNode) {
+  if (typeof cell === "string" || typeof cell === "number") return String(cell);
+  return "";
 }
 
 function StatusPill({ label }: { label: string }) {

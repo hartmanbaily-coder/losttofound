@@ -13,6 +13,10 @@ body {
     "SF Pro Display", ui-sans-serif, sans-serif;
 }
 
+.print-only {
+  display: none;
+}
+
 @layer components {
   .input {
     @apply min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100;
@@ -28,22 +32,204 @@ body {
 }
 
 @media print {
+  @page {
+    size: letter;
+    margin: 0.55in;
+  }
+
+  html,
   body {
     background: white !important;
+    width: auto !important;
   }
 
   aside,
   header,
   button,
+  nav,
+  select,
+  input,
+  textarea,
   .no-print {
     display: none !important;
   }
 
   main {
     display: block !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    background: white !important;
+  }
+
+  .report-print-layout {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  .report-builder-panel {
+    display: none !important;
+  }
+
+  .report-preview-panel {
+    display: block !important;
+    width: 100% !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  .report-preview-panel > div:first-child {
+    display: none !important;
   }
 
   .report-surface {
     color: #0f172a !important;
+    font-size: 10pt !important;
+    line-height: 1.45 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .report-surface h2 {
+    font-size: 18pt !important;
+    line-height: 1.2 !important;
+  }
+
+  .report-surface h3 {
+    break-after: avoid;
+    font-size: 11pt !important;
+  }
+
+  .screen-only {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .report-surface p {
+    orphans: 3;
+    widows: 3;
+  }
+
+  .report-surface .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  .report-surface table {
+    border-collapse: collapse !important;
+    font-size: 8pt !important;
+    table-layout: fixed !important;
+    width: 100% !important;
+  }
+
+  .report-surface th,
+  .report-surface td {
+    max-width: none !important;
+    overflow-wrap: anywhere !important;
+    padding: 4pt 5pt !important;
+    vertical-align: top !important;
+  }
+
+  .report-surface tr {
+    break-inside: avoid;
+  }
+
+  .report-table-section {
+    break-inside: auto !important;
+  }
+
+  .report-print-record-list {
+    display: grid !important;
+    gap: 8pt !important;
+  }
+
+  .report-print-record {
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 6pt !important;
+    break-inside: avoid !important;
+    padding: 8pt !important;
+  }
+
+  .report-print-record-heading {
+    align-items: flex-start !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    display: flex !important;
+    gap: 12pt !important;
+    justify-content: space-between !important;
+    margin-bottom: 7pt !important;
+    padding-bottom: 5pt !important;
+  }
+
+  .report-print-record-title {
+    color: #0f172a !important;
+    font-size: 11pt !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+  }
+
+  .report-print-record-subtitle {
+    color: #475569 !important;
+    font-size: 9pt !important;
+    line-height: 1.3 !important;
+    margin: 2pt 0 0 !important;
+  }
+
+  .report-print-record-date {
+    color: #475569 !important;
+    flex: 0 0 auto !important;
+    font-size: 9pt !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    margin: 0 !important;
+    text-align: right !important;
+  }
+
+  .report-print-record dl {
+    display: grid !important;
+    gap: 4pt 10pt !important;
+    grid-template-columns: 82pt minmax(0, 1fr) !important;
+    margin: 0 !important;
+  }
+
+  .report-print-record dl > div {
+    display: contents !important;
+  }
+
+  .report-print-record dt {
+    color: #64748b !important;
+    font-size: 7.5pt !important;
+    font-weight: 700 !important;
+    letter-spacing: 0 !important;
+    line-height: 1.35 !important;
+    text-transform: uppercase !important;
+  }
+
+  .report-print-record dd {
+    color: #1e293b !important;
+    font-size: 9pt !important;
+    line-height: 1.35 !important;
+    margin: 0 !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  .report-surface svg {
+    max-width: 100% !important;
+  }
+
+  .report-surface .recharts-responsive-container {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+
+  .report-surface > div,
+  .report-surface .recharts-wrapper {
+    break-inside: avoid;
   }
 }
