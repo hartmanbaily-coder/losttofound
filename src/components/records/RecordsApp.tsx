@@ -585,8 +585,22 @@ export default function RecordsApp() {
               ))}
             </nav>
 
-            <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950 lg:mt-auto">
-              Records are private by default. Use labels such as Child 1 and Parent B instead of real names.
+            <div className="mt-4 space-y-3 lg:mt-auto">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
+                Records are private by default. Use labels such as Child 1 and Parent B instead of real names.
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Policy center
+                </p>
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5">
+                  {publicPolicyLinks.map((item) => (
+                    <Link key={item.href} href={item.href} className="font-medium text-slate-600 hover:text-teal-800">
+                      {item.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </aside>
