@@ -20,6 +20,9 @@ jobs:
           node <<'NODE'
           const baseUrl = process.env.RECORDS_APP_BASE_URL.replace(/\/$/, "");
           const expectedKnownBlockers = new Set([
+            "records-signup-mode",
+            "supabase-custom-smtp",
+            "supabase-auth-redirects",
             "supabase-leaked-passwords",
             "supabase-auth-hardening-verified",
             "security-monitoring",
@@ -99,6 +102,7 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           existing_issue="$(gh issue list --state open --label live-monitor --json number --jq '.[0].number // empty')"
