@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { FormEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -97,6 +98,7 @@ import {
   timezoneSchema,
   validateEvidenceFile,
 } from "@/lib/records/validation";
+import { publicPolicyLinks, recordsTagline, supportEmail, supportMailto } from "@/lib/site";
 import {
   ExchangeTimingChart,
   ExpenseCategoryChart,
@@ -106,7 +108,6 @@ import {
 
 const disclaimer =
   "This tool helps organize records and does not provide legal advice. Consult a qualified attorney about your situation.";
-const recordsTagline = "Remove the emotion. Track the data.";
 
 const navItems = [
   "Dashboard",
@@ -1103,7 +1104,11 @@ function LoginScreen({
                   {mfaSubmitting ? "Verifying..." : "Verify authenticator"}
                 </button>
                 <p className="text-xs leading-5 text-slate-500">
-                  Lost authenticator access? Use the security contact for manual account recovery.
+                  Lost authenticator access? Email{" "}
+                  <a href={supportMailto} className="font-semibold text-teal-700 hover:text-teal-900">
+                    {supportEmail}
+                  </a>{" "}
+                  for manual account recovery.
                 </p>
               </form>
             ) : mode === "reset" ? (
@@ -1262,6 +1267,15 @@ function LoginScreen({
               </form>
             )}
           </section>
+        </div>
+        <div className="border-t border-slate-200 bg-white px-6 py-4 text-xs leading-5 text-slate-500 sm:px-8">
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {publicPolicyLinks.map((item) => (
+              <Link key={item.href} href={item.href} className="font-medium text-slate-600 hover:text-teal-800">
+                {item.label}
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
     </main>
@@ -5793,6 +5807,20 @@ function SettingsView({
             <p>No child accounts, public profiles, social features, co-parent messaging, advertising trackers, or session replay are included.</p>
             <p>Cloud storage uses server-side auth routes and HttpOnly cookies instead of browser-stored access tokens.</p>
             <p>Attached files use server-mediated private object storage, require a clean malware scan before download, and never expose public or anonymous share links.</p>
+          </div>
+        </Panel>
+
+        <Panel title="Policy center" action="Public pages">
+          <div className="flex flex-wrap gap-2 text-sm">
+            {publicPolicyLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="rounded-md border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:border-teal-500 hover:text-teal-800"
+              >
+                {item.label}
+              </Link>
+            ))}
           </div>
         </Panel>
 

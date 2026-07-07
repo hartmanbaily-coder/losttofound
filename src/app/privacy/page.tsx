@@ -1,122 +1,130 @@
-import Link from "next/link";
+import { PolicyPage, type PolicySection } from "@/components/PolicyPage";
+import { supportEmail, supportMailto } from "@/lib/site";
 
-const lastUpdated = "June 16, 2026";
-
-const sections = [
+const sections: PolicySection[] = [
   {
     title: "Information we collect",
     body: [
-      "Account information such as email address, authentication identifiers, profile labels, and timezone.",
-      "Records you choose to enter, including custody matter labels, parenting-time schedules, exchange logs, notes, child support records, expense records, evidence metadata, audit events, and report selections.",
-      "Evidence files you choose to upload, such as PDFs, images, text files, or CSV files.",
-      "Operational information needed to secure and run the service, such as route, status code, request id, timestamps, and security event metadata.",
+      "Account information such as email address, authentication identifiers, session state, account status, and timezone.",
+      "Records you choose to enter, including custody matter labels, parenting-time schedules, exchange logs, notes, support records, expense records, document requests, report settings, and audit history.",
+      "Files you choose to upload, including PDFs, images, text files, CSV files, message exports, court orders, parenting plans, receipts, screenshots, and related file metadata.",
+      "Operational information needed to run and secure the service, including request route, status code, request id, timestamp, security event metadata, rate-limit events, and diagnostic logs.",
     ],
   },
   {
-    title: "Sensitive information",
+    title: "Sensitive records",
     body: [
-      "Custody, child-related, court, school, health-adjacent, financial, child support, and evidence records can be sensitive.",
-      "The service is designed for adult users. We do not offer child accounts, child profiles, public social features, or co-parent messaging.",
-      "Users should avoid entering Social Security numbers, full bank account numbers, full card numbers, bank login credentials, unrelated third-party details, or unnecessary medical detail.",
+      "Custody, parenting-time, court, school, health-adjacent, financial, child support, expense, and evidence records can be sensitive.",
+      "The service is designed for adult users organizing their own records. It does not offer child accounts, child-facing features, public profiles, public social features, or co-parent messaging.",
+      "Users should avoid entering Social Security numbers, full bank account numbers, full card numbers, login credentials, unrelated third-party details, or unnecessary medical detail.",
     ],
   },
   {
     title: "How we use information",
     body: [
-      "To provide the private records workspace, evidence index, calendar, support/expense tools, and report exports.",
-      "To authenticate users, protect accounts, enforce authorization, prevent abuse, monitor reliability, and investigate security incidents.",
-      "To comply with legal obligations, enforce terms, respond to user requests, and protect the service.",
+      "To provide the private records workspace, calendar, timeline, files area, import tools, reports, exports, and account settings.",
+      "To authenticate users, protect accounts, enforce authorization, prevent abuse, monitor reliability, investigate security events, and maintain backups.",
+      "To respond to support, privacy, security, accessibility, deletion, export, and account recovery requests.",
+      "To comply with legal obligations, enforce terms, respond to valid legal process, and protect rights, safety, security, and service integrity.",
     ],
   },
   {
-    title: "Evidence files",
+    title: "AI-assisted import",
     body: [
-      "Evidence files are stored in private object storage.",
-      "Uploads are validated by file type and size, scanned for malware before storage, and downloaded only through authenticated server routes.",
-      "We do not intentionally expose public evidence links or anonymous share links.",
+      "If AI-assisted import is enabled, the app may send selected user-provided text or documents to the configured AI provider so the service can draft structured timeline entries, calendar items, file summaries, or report inputs.",
+      "AI-assisted output is not legal advice, not a court finding, and not a substitute for reviewing the original source material.",
+      "Users should review, edit, and approve imported records before relying on them, exporting them, or sharing them with an attorney, court, agency, or other third party.",
+      "The AI data use page explains what may be sent, what should not be uploaded, and how provider data controls are expected to work.",
     ],
   },
   {
-    title: "Sharing",
+    title: "Files and evidence",
     body: [
-      "We do not sell user records or evidence files.",
-      "We do not use advertising trackers or third-party session replay in this records workspace.",
-      "We may share information with service providers that help operate hosting, authentication, storage, malware scanning, logging, monitoring, email, or security operations.",
+      "Files are intended to be stored in private object storage and downloaded through authenticated server routes rather than public links.",
+      "Uploads may be limited by type, size, malware scan result, authorization, or security policy.",
+      "File names, descriptions, tags, and extracted text may be visible inside your account and may be included in exports you choose to create.",
+      "Users are responsible for preserving originals and protecting any downloaded exports after they leave the protected app environment.",
+    ],
+  },
+  {
+    title: "Sharing and service providers",
+    body: [
+      "We do not sell custody records, evidence files, or account data.",
+      "We do not use advertising trackers or third-party session replay in the records workspace.",
+      "We may share limited information with service providers that help operate hosting, authentication, database, private storage, malware scanning, logging, monitoring, email delivery, support, security operations, or AI-assisted import if enabled.",
       "We may disclose information if required by law, court order, subpoena, valid legal process, or to protect rights, safety, security, and service integrity.",
+    ],
+  },
+  {
+    title: "Cookies and tracking",
+    body: [
+      "The service uses authentication and session cookies needed to keep users signed in and protect account access.",
+      "The records workspace is not designed around advertising cookies, behavioral advertising, public social sharing, or third-party session replay.",
+      "Because browser privacy signals such as Do Not Track are not standardized, the app does not currently change functionality in response to those signals.",
     ],
   },
   {
     title: "Retention and deletion",
     body: [
-      "Records are retained while the account or case remains active unless deleted earlier by the user or as required by policy.",
-      "Evidence files should be deleted from private storage when the related evidence item, case, or account is deleted, subject to backup aging and legal holds.",
-      "Backups may retain deleted information until they expire under the backup retention schedule.",
-      "Deletion and retention details may vary where legal holds, backup aging, or security investigation duties apply.",
+      "Records are retained while the account or case remains active unless deleted earlier by the user or under an approved retention process.",
+      "Evidence files should be deleted from private storage when the related file item, case, or account is deleted, subject to backup aging, legal holds, and security investigation needs.",
+      "Backups may retain deleted information until the applicable backup retention period expires.",
+      "Deletion may be delayed or limited where legal obligations, account security, valid process, or incident response require retention.",
     ],
   },
   {
-    title: "Security",
+    title: "Your choices and requests",
     body: [
-      "The service uses server-managed HttpOnly cookies, Supabase Auth, private storage, server-side authorization checks, and malware scanning.",
-      "Access tokens, service role keys, and raw storage paths should not be exposed in browser URLs or logs.",
-      "No internet service can guarantee absolute security, so users should keep their own exports and downloaded files protected.",
+      "Users can use privacy-friendly labels instead of real names and can avoid entering unnecessary sensitive identifiers.",
+      "Users can export records and download files where export/download controls are available.",
+      "Users can request access, correction, deletion, account support, privacy review, or security review by emailing the support address below.",
+      "Some requests may require identity verification before action is taken.",
     ],
   },
   {
-    title: "Your choices",
+    title: "Children's information",
     body: [
-      "You can use privacy-friendly labels instead of real names.",
-      "You can export records and evidence files where export/download controls are available.",
-      "You can request deletion of account or case records where deletion controls or support workflows are available.",
-      "You can contact us with privacy or security questions.",
+      "The app is for adult account holders and is not directed to children under 13.",
+      "Adults may store records that refer to children when those records are part of their custody or parenting-time documentation.",
+      "Do not create an account for a child, invite a child to use the service, or upload unnecessary child identifiers.",
+    ],
+  },
+  {
+    title: "Security and incidents",
+    body: [
+      "The app is designed around server-managed cookies, private storage, server-side authorization checks, file validation, malware scanning, rate limits, and security event logging.",
+      "No internet service can guarantee absolute security, so users should protect their devices, passwords, authenticator apps, and downloaded exports.",
+      "If we learn of a security incident involving personal information, we will evaluate notice obligations under applicable law and the approved incident response process.",
+    ],
+  },
+  {
+    title: "Policy changes",
+    body: [
+      "We may update this policy as the app, vendors, features, security practices, or legal requirements change.",
+      "The updated date on this page identifies the current version.",
+      "Material changes should be posted in the app or on the site before they take effect when practical.",
     ],
   },
 ];
 
 export default function PrivacyPage() {
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
-          Lost to Found Records
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">Privacy Policy</h1>
-        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-          Last updated {lastUpdated}. This policy describes the privacy posture
-          for the records workspace and should be reviewed periodically as the
-          service and legal requirements change.
-        </p>
-      </section>
-
-      <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-        This records workspace is for adult users organizing private records. It
-        does not provide legal advice, emergency services, child accounts,
-        public profiles, payment processing, or bank scraping.
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2">
-        {sections.map((section) => (
-          <article key={section.title} className="rounded-lg border border-slate-200 bg-white p-5">
-            <h2 className="text-base font-semibold text-slate-950">{section.title}</h2>
-            <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
-              {section.body.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
-          </article>
-        ))}
-      </section>
-
+    <PolicyPage
+      title="Privacy Policy"
+      description="This policy explains how the records workspace handles account data, custody records, uploaded files, support requests, security events, and AI-assisted import if enabled."
+      notice="This page is a product privacy notice for adult users organizing private records. It is not legal advice and should be reviewed by qualified counsel before broad public launch."
+      sections={sections}
+    >
       <section className="rounded-lg border border-slate-200 bg-white p-6 text-sm leading-6 text-slate-600">
-        <h2 className="text-base font-semibold text-slate-950">Contact</h2>
+        <h2 className="text-base font-semibold text-slate-950">Privacy Requests</h2>
         <p className="mt-2">
-          For privacy or security questions, use the{" "}
-          <Link href="/contact" className="font-semibold text-emerald-700">
-            contact page
-          </Link>
-          .
+          Send privacy, deletion, access, correction, or account-data requests to{" "}
+          <a href={supportMailto} className="font-mono font-semibold text-emerald-700 underline underline-offset-2">
+            {supportEmail}
+          </a>
+          . Include the email address associated with the account and do not include sensitive case details in the subject line.
         </p>
       </section>
-    </div>
+    </PolicyPage>
   );
 }

@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { recordsTagline } from "@/lib/site";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Lost to Found Records",
-  description: "Remove the emotion. Track the data.",
+  description: recordsTagline,
   metadataBase: new URL("https://losttofound.org"),
 };
 

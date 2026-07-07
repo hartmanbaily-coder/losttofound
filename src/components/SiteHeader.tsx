@@ -3,14 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const navItems = [
-  { href: "/records", label: "Records" },
-  { href: "/privacy", label: "Privacy" },
-  { href: "/terms", label: "Terms" },
-  { href: "/contact", label: "Contact" },
-];
+import { publicPolicyLinks, recordsTagline } from "@/lib/site";
 
-const recordsTagline = "Remove the emotion. Track the data.";
+const navItems = [{ href: "/records", label: "Records" }, ...publicPolicyLinks];
 
 export default function SiteHeader() {
   const pathname = usePathname();
