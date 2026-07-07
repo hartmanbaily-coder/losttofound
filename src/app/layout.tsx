@@ -4,8 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Lost to Found Records",
-  description:
-    "A privacy-first custody, parenting-time, child support, expense, evidence, and court-ready records workspace.",
+  description: "Remove the emotion. Track the data.",
   metadataBase: new URL("https://losttofound.org"),
 };
 

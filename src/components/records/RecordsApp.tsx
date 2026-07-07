@@ -106,6 +106,7 @@ import {
 
 const disclaimer =
   "This tool helps organize records and does not provide legal advice. Consult a qualified attorney about your situation.";
+const recordsTagline = "Remove the emotion. Track the data.";
 
 const navItems = [
   "Dashboard",
@@ -552,7 +553,7 @@ export default function RecordsApp() {
                 <p className="text-sm font-semibold tracking-tight text-slate-950">
                   Lost to Found Records
                 </p>
-                <p className="text-xs text-slate-500">losttofound.org</p>
+                <p className="text-xs text-slate-500">{recordsTagline}</p>
               </div>
             </div>
 
@@ -594,7 +595,7 @@ export default function RecordsApp() {
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
-                  Private documentation workspace
+                  {recordsTagline}
                 </p>
                 <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
                   {activeView}
@@ -1032,7 +1033,7 @@ function LoginScreen({
               </div>
               <div>
                 <h1 className="text-2xl font-semibold tracking-tight">Lost to Found Records</h1>
-                <p className="text-sm text-slate-500">Privacy-first custody records workspace</p>
+                <p className="text-sm text-slate-500">{recordsTagline}</p>
               </div>
             </div>
 

@@ -10,6 +10,8 @@ const navItems = [
   { href: "/contact", label: "Contact" },
 ];
 
+const recordsTagline = "Remove the emotion. Track the data.";
+
 export default function SiteHeader() {
   const pathname = usePathname();
 
@@ -25,7 +27,7 @@ export default function SiteHeader() {
               Lost to Found Records
             </span>
             <span className="block text-xs text-slate-500">
-              Custody documentation
+              {recordsTagline}
             </span>
           </span>
         </Link>
