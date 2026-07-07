@@ -87,6 +87,13 @@ test("records login and report workflow", async ({ page }) => {
   await expect(dragStartDay.getByText("Drag Parent", { exact: true })).toBeVisible();
   await expect(dragMiddleDay.getByText("Drag Parent", { exact: true })).toBeVisible();
   await expect(dragEndDay.getByText("Drag Parent", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await expect(page.getByLabel("Calendar month")).toHaveValue(currentCalendar.monthKey);
+  await expect(page.getByRole("button", { name: `Edit calendar day ${calendarDay(9)}` }).getByText("Drag Parent", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Edit calendar day ${calendarDay(10)}` }).getByText("Drag Parent", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Edit calendar day ${calendarDay(11)}` }).getByText("Drag Parent", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Import", exact: true })).toBeVisible();

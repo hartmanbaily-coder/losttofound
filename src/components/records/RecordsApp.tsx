@@ -1403,6 +1403,7 @@ function CalendarView({
   const [isPainting, setIsPainting] = useState(false);
   const [paintDraftDates, setPaintDraftDates] = useState<Set<string>>(() => new Set());
   const [paintSelectionDates, setPaintSelectionDates] = useState<Set<string>>(() => new Set());
+  const [optimisticPaintAssignments, setOptimisticPaintAssignments] = useState<CustodyDayAssignment[]>([]);
   const paintingRef = useRef(false);
   const paintAnchorDateRef = useRef<string | null>(null);
   const activePaintPointerIdRef = useRef<number | null>(null);
@@ -1416,7 +1417,8 @@ function CalendarView({
     eventsByDate.set(event.date, [...(eventsByDate.get(event.date) || []), event]);
   }
   const custodyDayMap = buildCustodyDayMap(custodyDayAssignments, monthRange);
-  const selectedAssignment = custodyDayMap.get(selectedDay);
+  const optimisticCustodyDayMap = buildCustodyDayMap(optimisticPaintAssignments, monthRange);
+  const selectedAssignment = optimisticCustodyDayMap.get(selectedDay) || custodyDayMap.get(selectedDay);
   const dayEvents = eventsByDate.get(selectedDay) || [];
 
   function showCalendarMonth(nextMonthKey: string) {
@@ -1475,8 +1477,30 @@ function CalendarView({
 
       const now = nowIso();
       const targetDates = new Set(uniqueDates);
+      const optimisticAssignments = uniqueDates.map((date) => ({
+        id: createId("custody-day-optimistic"),
+        caseId,
+        userId,
+        date,
+        caregiverLabel,
+        color: parsedPaint.data.color,
+        startsAt: "00:00",
+        endsAt: "23:59",
+        createdAt: now,
+        updatedAt: now,
+      })) satisfies CustodyDayAssignment[];
 
-      updateDataset((current) => {
+      setOptimisticPaintAssignments((current) => [
+        ...optimisticAssignments,
+        ...current.filter(
+          (item) =>
+            item.userId !== userId ||
+            item.caseId !== caseId ||
+            !targetDates.has(item.date)
+        ),
+      ]);
+
+      void updateDataset((current) => {
         const existingByDate = new Map(
           current.custodyDayAssignments
             .filter((item) => item.userId === userId && item.caseId === caseId)
@@ -1527,13 +1551,22 @@ function CalendarView({
                 : `${uniqueDates.length} custody day color assignments painted without child names.`,
           }
         );
+      }).catch((error: unknown) => {
+        setOptimisticPaintAssignments((current) =>
+          current.filter(
+            (item) =>
+              item.userId !== userId ||
+              item.caseId !== caseId ||
+              !targetDates.has(item.date)
+          )
+        );
+        flash(error instanceof Error ? error.message : "Calendar color save failed.");
       });
 
       setSelectedDay(uniqueDates[uniqueDates.length - 1]);
-      setPaintSelection(new Set());
       flash(uniqueDates.length === 1 ? "Custody day color saved." : `${uniqueDates.length} custody days colored.`);
     },
-    [caseId, flash, paintCaregiverLabel, paintColor, setPaintSelection, setSelectedDay, updateDataset, userId]
+    [caseId, flash, paintCaregiverLabel, paintColor, setSelectedDay, updateDataset, userId]
   );
 
   const extendPaint = useCallback(
@@ -1714,6 +1747,11 @@ function CalendarView({
 
   function clearCustodyDay() {
     if (!selectedAssignment) return;
+    setOptimisticPaintAssignments((current) =>
+      current.filter(
+        (item) => item.userId !== userId || item.caseId !== caseId || item.date !== selectedAssignment.date
+      )
+    );
     updateDataset((current) =>
       withAudit(
         {
@@ -1738,6 +1776,15 @@ function CalendarView({
   function clearCustodyLabel(caregiverLabel: string) {
     const normalizedLabel = caregiverLabel.trim();
     if (!normalizedLabel) return;
+
+    setOptimisticPaintAssignments((current) =>
+      current.filter(
+        (item) =>
+          item.userId !== userId ||
+          item.caseId !== caseId ||
+          item.caregiverLabel !== normalizedLabel
+      )
+    );
 
     updateDataset((current) =>
       withAudit(
@@ -1923,7 +1970,9 @@ function CalendarView({
                 const recordEventsForCell = dayEventsForCell.filter(
                   (event) => event.type !== "custody_day"
                 );
-                const assignment = day ? custodyDayMap.get(day) : undefined;
+                const assignment = day
+                  ? optimisticCustodyDayMap.get(day) || custodyDayMap.get(day)
+                  : undefined;
                 const isPaintDraft = day ? paintDraftDates.has(day) : false;
                 const isToday = day === today;
                 const visibleColor = isPaintDraft ? paintColor : assignment?.color;
