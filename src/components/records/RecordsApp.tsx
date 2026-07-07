@@ -1402,10 +1402,13 @@ function CalendarView({
   );
   const [isPainting, setIsPainting] = useState(false);
   const [paintDraftDates, setPaintDraftDates] = useState<Set<string>>(() => new Set());
+  const [paintSelectionDates, setPaintSelectionDates] = useState<Set<string>>(() => new Set());
   const paintingRef = useRef(false);
   const paintAnchorDateRef = useRef<string | null>(null);
   const activePaintPointerIdRef = useRef<number | null>(null);
   const paintDraftDatesRef = useRef<Set<string>>(new Set());
+  const paintSelectionDatesRef = useRef<Set<string>>(new Set());
+  const paintMovedRef = useRef(false);
   const suppressNextCalendarClickRef = useRef(false);
   const visibleEvents = useMemo(() => events.filter(isTimelineVisibleEvent), [events]);
   const eventsByDate = new Map<string, CalendarEvent[]>();
@@ -1431,6 +1434,11 @@ function CalendarView({
   const setPaintDraft = useCallback((dates: Set<string>) => {
     paintDraftDatesRef.current = dates;
     setPaintDraftDates(dates);
+  }, []);
+
+  const setPaintSelection = useCallback((dates: Set<string>) => {
+    paintSelectionDatesRef.current = dates;
+    setPaintSelectionDates(dates);
   }, []);
 
   const buildPaintDateRange = useCallback((from: string, to: string) => {
@@ -1522,9 +1530,10 @@ function CalendarView({
       });
 
       setSelectedDay(uniqueDates[uniqueDates.length - 1]);
+      setPaintSelection(new Set());
       flash(uniqueDates.length === 1 ? "Custody day color saved." : `${uniqueDates.length} custody days colored.`);
     },
-    [caseId, flash, paintCaregiverLabel, paintColor, setSelectedDay, updateDataset, userId]
+    [caseId, flash, paintCaregiverLabel, paintColor, setPaintSelection, setSelectedDay, updateDataset, userId]
   );
 
   const extendPaint = useCallback(
@@ -1532,6 +1541,7 @@ function CalendarView({
       if (!paintingRef.current) return;
       const anchorDay = paintAnchorDateRef.current || day;
       const nextDates = new Set(buildPaintDateRange(anchorDay, day));
+      if (day !== anchorDay) paintMovedRef.current = true;
       const currentDates = paintDraftDatesRef.current;
       if (
         currentDates.size === nextDates.size &&
@@ -1541,8 +1551,9 @@ function CalendarView({
       }
       setSelectedDay(day);
       setPaintDraft(nextDates);
+      setPaintSelection(nextDates);
     },
-    [buildPaintDateRange, setPaintDraft, setSelectedDay]
+    [buildPaintDateRange, setPaintDraft, setPaintSelection, setSelectedDay]
   );
 
   const finishPaint = useCallback(
@@ -1563,9 +1574,13 @@ function CalendarView({
       const dates = Array.from(paintDraftDatesRef.current);
       suppressNextCalendarClickRef.current = dates.length > 0;
       setPaintDraft(new Set());
-      applyCustodyDayPaint(dates);
+      setPaintSelection(new Set(dates));
+      if (paintMovedRef.current || dates.length > 1) {
+        applyCustodyDayPaint(dates);
+      }
+      paintMovedRef.current = false;
     },
-    [applyCustodyDayPaint, setPaintDraft]
+    [applyCustodyDayPaint, setPaintDraft, setPaintSelection]
   );
 
   useEffect(() => {
@@ -1601,9 +1616,11 @@ function CalendarView({
     paintingRef.current = true;
     paintAnchorDateRef.current = day;
     activePaintPointerIdRef.current = event.pointerId;
+    paintMovedRef.current = false;
     setIsPainting(true);
     setSelectedDay(day);
     setPaintDraft(new Set([day]));
+    setPaintSelection(new Set([day]));
   }
 
   function handleCalendarDayClick(day: string) {
@@ -1612,6 +1629,25 @@ function CalendarView({
       return;
     }
     setSelectedDay(day);
+  }
+
+  function applySelectedPaintDates() {
+    const dates = Array.from(paintSelectionDatesRef.current);
+    if (dates.length === 0) {
+      flash("Select one or more calendar days first.");
+      return;
+    }
+    applyCustodyDayPaint(dates);
+  }
+
+  function clearPaintSelection() {
+    setPaintDraft(new Set());
+    setPaintSelection(new Set());
+    paintingRef.current = false;
+    paintAnchorDateRef.current = null;
+    activePaintPointerIdRef.current = null;
+    paintMovedRef.current = false;
+    setIsPainting(false);
   }
 
   function saveCustodyDay(event: FormEvent<HTMLFormElement>) {
@@ -1750,8 +1786,6 @@ function CalendarView({
         onChange={(value) => setMode(value as "month" | "list" | "timeline")}
       />
 
-      <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
-
       {mode === "month" && (
         <section className="grid gap-4 xl:grid-cols-[1fr_400px]">
           <Panel title={`Monthly custody calendar: ${formatMonthLabel(monthKey, timezone)}`} action={`Case timezone: ${timezone}`}>
@@ -1829,6 +1863,24 @@ function CalendarView({
                     style={{ backgroundColor: color }}
                   />
                 ))}
+                {paintSelectionDates.size > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      className="btn-primary h-9 px-3 text-xs"
+                      onClick={applySelectedPaintDates}
+                    >
+                      Apply {paintSelectionDates.size} day{paintSelectionDates.size === 1 ? "" : "s"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary h-9 px-3 text-xs"
+                      onClick={clearPaintSelection}
+                    >
+                      Clear selection
+                    </button>
+                  </>
+                )}
                 {isPainting && (
                   <span className="rounded-md border border-teal-200 bg-teal-50 px-2 py-1 text-xs font-semibold text-teal-800">
                     {paintDraftDates.size} day{paintDraftDates.size === 1 ? "" : "s"}
@@ -1886,6 +1938,10 @@ function CalendarView({
                     data-calendar-day={day || undefined}
                     aria-label={day ? `Edit calendar day ${day}` : undefined}
                     onPointerDown={(event) => day && beginPaint(day, event)}
+                    onPointerEnter={() => day && extendPaint(day)}
+                    onPointerMove={() => day && extendPaint(day)}
+                    onMouseEnter={() => day && extendPaint(day)}
+                    onPointerUp={() => finishPaint()}
                     onClick={() => day && handleCalendarDayClick(day)}
                     style={
                       visibleColor
@@ -2079,6 +2135,8 @@ function CalendarView({
           />
         </Panel>
       )}
+
+      <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
     </div>
   );
 }

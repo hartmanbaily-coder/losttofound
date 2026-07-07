@@ -24,6 +24,12 @@ function localDateParts(date = new Date(), timeZone = "America/Anchorage") {
   return { monthKey, monthLabel, today };
 }
 
+function shiftMonthKey(monthKey: string, offset: number) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + offset, 1));
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}`;
+}
+
 test("records login and report workflow", async ({ page }) => {
   const currentCalendar = localDateParts();
   const calendarDay = (day: number) => `${currentCalendar.monthKey}-${pad2(day)}`;
@@ -45,6 +51,12 @@ test("records login and report workflow", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Calendar", exact: true })).toBeVisible();
   await expect(page.getByText(`Monthly custody calendar: ${currentCalendar.monthLabel}`)).toBeVisible();
   await expect(page.getByText("Case timezone: America/Anchorage")).toBeVisible();
+  await expect(page.getByLabel("Calendar month")).toHaveValue(currentCalendar.monthKey);
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByLabel("Calendar month")).toHaveValue(shiftMonthKey(currentCalendar.monthKey, 1));
+  await page.getByRole("button", { name: "Previous", exact: true }).click();
+  await expect(page.getByLabel("Calendar month")).toHaveValue(currentCalendar.monthKey);
+  await page.getByRole("button", { name: "Today", exact: true }).click();
   await expect(page.getByLabel("Calendar month")).toHaveValue(currentCalendar.monthKey);
   await expect(page.getByRole("button", { name: `Edit calendar day ${currentCalendar.today}` })).toBeVisible();
   await expect(page.getByText("Color selected day")).toBeVisible();
