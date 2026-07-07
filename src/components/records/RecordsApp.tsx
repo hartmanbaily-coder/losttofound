@@ -61,6 +61,7 @@ import {
 import {
   buildDateRangePreset,
   buildMonthDays,
+  defaultRecordsTimezone,
   formatLocalDate,
   formatMonthLabel,
   getMonthBounds,
@@ -91,6 +92,7 @@ import {
   exchangeLogSchema,
   exchangeRuleSchema,
   expenseItemSchema,
+  timezoneSchema,
   validateEvidenceFile,
 } from "@/lib/records/validation";
 import {
@@ -118,6 +120,18 @@ const navItems = [
 ] as const;
 
 type ActiveView = (typeof navItems)[number];
+
+const recordsTimezoneOptions = [
+  "America/Anchorage",
+  "America/Adak",
+  "America/Los_Angeles",
+  "America/Denver",
+  "America/Chicago",
+  "America/New_York",
+  "America/Phoenix",
+  "Pacific/Honolulu",
+  "UTC",
+];
 type Session = RecordsSession;
 type SectionExportFormat = "pdf" | "csv" | "json";
 type LoginFlowResult =
@@ -308,12 +322,32 @@ export default function RecordsApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("Dashboard");
   const [selectedCaseId, setSelectedCaseId] = useState(demoCaseId);
-  const [range, setRange] = useState<DateRange>(() => buildDateRangePreset(defaultRangePreset));
+  const [range, setRange] = useState<DateRange>(() =>
+    buildDateRangePreset(defaultRangePreset, new Date(), defaultRecordsTimezone)
+  );
   const [calendarMode, setCalendarMode] = useState<"month" | "list" | "timeline">("month");
-  const [selectedDay, setSelectedDay] = useState(() => formatLocalDate());
+  const [selectedDay, setSelectedDay] = useState(() => formatLocalDate(new Date(), defaultRecordsTimezone));
   const [reportType, setReportType] = useState<ReportType>("exchange_compliance");
   const [toast, setToast] = useState("");
   const toastTimeoutRef = useRef<number | null>(null);
+
+  const userId = session?.userId || demoUserId;
+  const selected = useSelectedRecords(dataset, userId, selectedCaseId);
+  const selectedCase = selected.matter || selected.matters[0];
+  const effectiveCaseId = selectedCase?.id || selectedCaseId;
+  const selectedProfile = dataset.users.find((user) => user.userId === userId);
+  const caseTimezone = selectedCase?.timezone || selectedProfile?.timezone || defaultRecordsTimezone;
+
+  const getCaseTimezone = useCallback((caseId: string, ownerId = userId) => {
+    const matter = dataset.matters.find((item) => item.userId === ownerId && item.id === caseId);
+    const profile = dataset.users.find((item) => item.userId === ownerId);
+    return matter?.timezone || profile?.timezone || defaultRecordsTimezone;
+  }, [dataset.matters, dataset.users, userId]);
+
+  const selectCase = useCallback((caseId: string) => {
+    setSelectedCaseId(caseId);
+    setSelectedDay(formatLocalDate(new Date(), getCaseTimezone(caseId)));
+  }, [getCaseTimezone]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -323,6 +357,7 @@ export default function RecordsApp() {
         if (stored) {
           setSession(stored);
           setSelectedCaseId(stored.caseId);
+          setSelectedDay(formatLocalDate(new Date(), defaultRecordsTimezone));
         }
       }
 
@@ -340,11 +375,6 @@ export default function RecordsApp() {
     },
     []
   );
-
-  const userId = session?.userId || demoUserId;
-  const selected = useSelectedRecords(dataset, userId, selectedCaseId);
-  const selectedCase = selected.matter || selected.matters[0];
-  const effectiveCaseId = selectedCase?.id || selectedCaseId;
 
   const expectedExchanges = useMemo(
     () => generateExpectedExchangeEvents(selected.exchangeRules, range),
@@ -551,7 +581,7 @@ export default function RecordsApp() {
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <select
                   value={selectedCaseId}
-                  onChange={(event) => setSelectedCaseId(event.target.value)}
+                  onChange={(event) => selectCase(event.target.value)}
                   className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900"
                 >
                   {selected.matters.map((matter) => (
@@ -560,7 +590,7 @@ export default function RecordsApp() {
                     </option>
                   ))}
                 </select>
-                <RangeToolbar range={range} setRange={setRange} />
+                <RangeToolbar range={range} setRange={setRange} timezone={caseTimezone} />
                 <button
                   type="button"
                   onClick={() => setActiveView("Reports")}
@@ -605,6 +635,7 @@ export default function RecordsApp() {
                 selectedDay={selectedDay}
                 setSelectedDay={setSelectedDay}
                 range={range}
+                timezone={caseTimezone}
                 sectionExport={sectionExportPackets.calendar}
                 onExportSection={exportSectionPacket}
                 flash={flash}
@@ -615,6 +646,7 @@ export default function RecordsApp() {
                 updateDataset={updateDataset}
                 userId={userId}
                 caseId={effectiveCaseId}
+                timezone={caseTimezone}
                 recordsStorageMode={recordsStorageMode}
                 flash={flash}
               />
@@ -660,6 +692,7 @@ export default function RecordsApp() {
                 updateDataset={updateDataset}
                 userId={userId}
                 caseId={effectiveCaseId}
+                timezone={caseTimezone}
                 evidence={selected.evidenceItems}
                 recordsStorageMode={recordsStorageMode}
                 sectionExport={sectionExportPackets.evidence}
@@ -713,7 +746,7 @@ export default function RecordsApp() {
                 selected={selected}
                 userId={userId}
                 caseId={effectiveCaseId}
-                setSelectedCaseId={setSelectedCaseId}
+                setSelectedCaseId={selectCase}
                 logout={logout}
                 flash={flash}
                 storageStatus={storageStatus}
@@ -1313,6 +1346,7 @@ function CalendarView({
   selectedDay,
   setSelectedDay,
   range,
+  timezone,
   sectionExport,
   onExportSection,
   flash,
@@ -1327,14 +1361,15 @@ function CalendarView({
   selectedDay: string;
   setSelectedDay: (day: string) => void;
   range: DateRange;
+  timezone: string;
   sectionExport: SectionExportPacket;
   onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
-  const monthKey = monthKeyFromDate(range.from);
-  const monthRange = getMonthBounds(monthKey);
+  const monthKey = monthKeyFromDate(range.from, timezone);
+  const monthRange = getMonthBounds(monthKey, timezone);
   const monthDays = buildMonthDays(monthKey);
-  const today = formatLocalDate();
+  const today = formatLocalDate(new Date(), timezone);
   const [paintCaregiverLabel, setPaintCaregiverLabel] = useState("Parent A");
   const [paintColor, setPaintColor] = useState<(typeof custodyDayColors)[number] | string>(
     custodyDayColors[0]
@@ -1684,7 +1719,7 @@ function CalendarView({
 
       {mode === "month" && (
         <section className="grid gap-4 xl:grid-cols-[1fr_400px]">
-          <Panel title={`Monthly custody calendar: ${formatMonthLabel(monthKey)}`} action="Editable color blocks">
+          <Panel title={`Monthly custody calendar: ${formatMonthLabel(monthKey, timezone)}`} action={`Case timezone: ${timezone}`}>
             <div className="mb-4 grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[1fr_auto] lg:items-end">
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
                 <Field label="Caregiver label">
@@ -2878,12 +2913,14 @@ function ImportView({
   updateDataset,
   userId,
   caseId,
+  timezone,
   recordsStorageMode,
   flash,
 }: {
   updateDataset: ReturnType<typeof useRecordsStore>["updateDataset"];
   userId: string;
   caseId: string;
+  timezone: string;
   recordsStorageMode: "local" | "supabase";
   flash: (message: string) => void;
 }) {
@@ -2898,7 +2935,7 @@ function ImportView({
   const selectedSetupPreset =
     parentingSchedulePresets.find((preset) => preset.id === setupSchedulePreset) ||
     parentingSchedulePresets[0];
-  const setupToday = formatLocalDate();
+  const setupToday = formatLocalDate(new Date(), timezone);
   const setupDefaultEndDate = addDays(setupToday, 90);
 
   function queueDrafts(nextDrafts: ImportDraft[], sourceLabel: string) {
@@ -3513,7 +3550,7 @@ function ImportView({
               />
             </Field>
             <Field label="Record date">
-              <input name="evidenceDate" type="date" className="input" defaultValue={formatLocalDate()} />
+              <input name="evidenceDate" type="date" className="input" defaultValue={formatLocalDate(new Date(), timezone)} />
             </Field>
             <Field label="Description">
               <textarea name="description" className="input min-h-20" />
@@ -3906,6 +3943,7 @@ function EvidenceView({
   updateDataset,
   userId,
   caseId,
+  timezone,
   evidence,
   recordsStorageMode,
   sectionExport,
@@ -3915,6 +3953,7 @@ function EvidenceView({
   updateDataset: ReturnType<typeof useRecordsStore>["updateDataset"];
   userId: string;
   caseId: string;
+  timezone: string;
   evidence: ReturnType<typeof useSelectedRecords>["evidenceItems"];
   recordsStorageMode: "local" | "supabase";
   sectionExport: SectionExportPacket;
@@ -4083,7 +4122,7 @@ function EvidenceView({
       description: item.description || "",
     }));
     downloadTextFile(
-      `file-index-${formatLocalDate()}.csv`,
+      `file-index-${formatLocalDate(new Date(), timezone)}.csv`,
       rowsToCsv(rows),
       "text/csv"
     );
@@ -5166,10 +5205,16 @@ function SettingsView({
   recordsStorageMode: "local" | "supabase";
 }) {
   const profile = dataset.users.find((user) => user.userId === userId);
+  const selectedMatter = selected.matter;
 
   function updateProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const parsedTimezone = timezoneSchema.safeParse(
+      text(formData, "timezone") || profile?.timezone || defaultRecordsTimezone
+    );
+    if (!parsedTimezone.success) return flash(parsedTimezone.error.issues[0]?.message || "Check the timezone.");
+
     updateDataset((current) => ({
       ...current,
       users: current.users.map((user) =>
@@ -5177,7 +5222,7 @@ function SettingsView({
           ? {
               ...user,
               displayName: text(formData, "displayName") || undefined,
-              timezone: text(formData, "timezone") || user.timezone,
+              timezone: parsedTimezone.data,
               updatedAt: nowIso(),
             }
           : user
@@ -5234,6 +5279,54 @@ function SettingsView({
     flash("Custody matter created.");
   }
 
+  function updateMatter(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedMatter) return flash("Select a custody matter first.");
+
+    const formData = new FormData(event.currentTarget);
+    const parsed = custodyMatterSchema.safeParse({
+      caseName: text(formData, "caseName"),
+      courtOrOrderNickname: text(formData, "courtOrOrderNickname"),
+      courtName: text(formData, "courtName"),
+      orderDate: text(formData, "orderDate"),
+      effectiveStartDate: text(formData, "effectiveStartDate"),
+      effectiveEndDate: text(formData, "effectiveEndDate"),
+      childDisplayLabels: parseTags(text(formData, "childDisplayLabels")),
+      userRoleLabel: text(formData, "userRoleLabel"),
+      otherParentLabel: text(formData, "otherParentLabel"),
+      defaultExchangeLocation: text(formData, "defaultExchangeLocation"),
+      timezone: text(formData, "timezone") || profile?.timezone || defaultRecordsTimezone,
+      notes: text(formData, "notes"),
+    });
+    if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the selected case form.");
+
+    updateDataset((current) =>
+      withAudit(
+        {
+          ...current,
+          matters: current.matters.map((matter) =>
+            matter.id === selectedMatter.id && matter.userId === userId
+              ? {
+                  ...matter,
+                  ...emptyToUndefined(parsed.data),
+                  updatedAt: nowIso(),
+                }
+              : matter
+          ),
+        },
+        {
+          userId,
+          caseId: selectedMatter.id,
+          action: "updated",
+          entityType: "custodyMatter",
+          entityId: selectedMatter.id,
+          metadataSummary: "Custody matter settings updated without court or child labels in audit metadata.",
+        }
+      )
+    );
+    flash("Selected case settings updated.");
+  }
+
   function deleteCase() {
     updateDataset((current) => ({
       ...current,
@@ -5276,6 +5369,11 @@ function SettingsView({
 
   return (
     <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
+      <datalist id="records-timezone-options">
+        {recordsTimezoneOptions.map((timezone) => (
+          <option key={timezone} value={timezone} />
+        ))}
+      </datalist>
       <div className="space-y-4">
         <Panel title="Account settings" action="MFA-ready structure">
           <form onSubmit={updateProfile} className="grid gap-3">
@@ -5286,12 +5384,92 @@ function SettingsView({
               <input className="input bg-slate-100" value={profile?.email || ""} readOnly />
             </Field>
             <Field label="Timezone">
-              <input name="timezone" className="input" defaultValue={profile?.timezone || "America/Anchorage"} />
+              <input
+                name="timezone"
+                className="input"
+                defaultValue={profile?.timezone || defaultRecordsTimezone}
+                list="records-timezone-options"
+              />
             </Field>
             <button className="btn-primary" type="submit">
               Update profile
             </button>
           </form>
+        </Panel>
+
+        <Panel title="Selected case settings" action="Calendar timezone">
+          {selectedMatter ? (
+            <form onSubmit={updateMatter} className="grid gap-3">
+              <Field label="Case name">
+                <input name="caseName" className="input" defaultValue={selectedMatter.caseName} />
+              </Field>
+              <Field label="Order nickname">
+                <input name="courtOrOrderNickname" className="input" defaultValue={selectedMatter.courtOrOrderNickname || ""} />
+              </Field>
+              <Field label="Court name">
+                <input name="courtName" className="input" defaultValue={selectedMatter.courtName || ""} />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Order date">
+                  <input name="orderDate" type="date" className="input" defaultValue={selectedMatter.orderDate || ""} />
+                </Field>
+                <Field label="Effective start">
+                  <input
+                    name="effectiveStartDate"
+                    type="date"
+                    className="input"
+                    defaultValue={selectedMatter.effectiveStartDate || ""}
+                  />
+                </Field>
+                <Field label="Effective end">
+                  <input
+                    name="effectiveEndDate"
+                    type="date"
+                    className="input"
+                    defaultValue={selectedMatter.effectiveEndDate || ""}
+                  />
+                </Field>
+              </div>
+              <Field label="Child labels">
+                <input
+                  name="childDisplayLabels"
+                  className="input"
+                  defaultValue={selectedMatter.childDisplayLabels.join(", ")}
+                />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Your label">
+                  <input name="userRoleLabel" className="input" defaultValue={selectedMatter.userRoleLabel} />
+                </Field>
+                <Field label="Other parent label">
+                  <input name="otherParentLabel" className="input" defaultValue={selectedMatter.otherParentLabel} />
+                </Field>
+              </div>
+              <Field label="Default exchange location">
+                <input
+                  name="defaultExchangeLocation"
+                  className="input"
+                  defaultValue={selectedMatter.defaultExchangeLocation || ""}
+                />
+              </Field>
+              <Field label="Case timezone">
+                <input
+                  name="timezone"
+                  className="input"
+                  defaultValue={selectedMatter.timezone || profile?.timezone || defaultRecordsTimezone}
+                  list="records-timezone-options"
+                />
+              </Field>
+              <Field label="Notes">
+                <textarea name="notes" className="input min-h-20" defaultValue={selectedMatter.notes || ""} />
+              </Field>
+              <button className="btn-primary" type="submit">
+                Save selected case
+              </button>
+            </form>
+          ) : (
+            <p className="text-sm leading-6 text-slate-600">Create or select a custody matter before setting a case timezone.</p>
+          )}
         </Panel>
 
         <Panel title="Create custody matter" action="Privacy-friendly labels">
@@ -5328,7 +5506,12 @@ function SettingsView({
               <input name="defaultExchangeLocation" className="input" />
             </Field>
             <Field label="Timezone">
-              <input name="timezone" className="input" defaultValue={profile?.timezone || "America/Anchorage"} />
+              <input
+                name="timezone"
+                className="input"
+                defaultValue={profile?.timezone || defaultRecordsTimezone}
+                list="records-timezone-options"
+              />
             </Field>
             <Field label="Notes">
               <textarea name="notes" className="input min-h-20" />
@@ -5458,11 +5641,19 @@ function Disclaimer() {
 function RangeToolbar({
   range,
   setRange,
+  timezone,
 }: {
   range: DateRange;
   setRange: (range: DateRange) => void;
+  timezone: string;
 }) {
   const [preset, setPreset] = useState<DateRangePreset | "custom">(defaultRangePreset);
+
+  useEffect(() => {
+    if (preset !== "custom") {
+      setRange(buildDateRangePreset(preset, new Date(), timezone));
+    }
+  }, [preset, setRange, timezone]);
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -5471,7 +5662,7 @@ function RangeToolbar({
         onChange={(event) => {
           const value = event.target.value as DateRangePreset | "custom";
           setPreset(value);
-          if (value !== "custom") setRange(buildDateRangePreset(value));
+          if (value !== "custom") setRange(buildDateRangePreset(value, new Date(), timezone));
         }}
         value={preset}
         aria-label="Date range preset"

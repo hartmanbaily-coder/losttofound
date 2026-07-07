@@ -4,11 +4,21 @@ function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
 
-function localDateParts(date = new Date()) {
-  const monthKey = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
-  const today = `${monthKey}-${pad2(date.getDate())}`;
+function localDateParts(date = new Date(), timeZone = "America/Anchorage") {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone,
+    year: "numeric",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value || `${date.getFullYear()}`;
+  const month = parts.find((part) => part.type === "month")?.value || pad2(date.getMonth() + 1);
+  const day = parts.find((part) => part.type === "day")?.value || pad2(date.getDate());
+  const monthKey = `${year}-${month}`;
+  const today = `${monthKey}-${day}`;
   const monthLabel = new Intl.DateTimeFormat("en-US", {
     month: "long",
+    timeZone,
     year: "numeric",
   }).format(date);
   return { monthKey, monthLabel, today };
@@ -32,6 +42,7 @@ test("records login and report workflow", async ({ page }) => {
   await page.getByRole("button", { name: "Calendar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Calendar", exact: true })).toBeVisible();
   await expect(page.getByText(`Monthly custody calendar: ${currentCalendar.monthLabel}`)).toBeVisible();
+  await expect(page.getByText("Case timezone: America/Anchorage")).toBeVisible();
   await expect(page.getByRole("button", { name: `Edit calendar day ${currentCalendar.today}` })).toBeVisible();
   await expect(page.getByText("Color selected day")).toBeVisible();
   await page.getByLabel("Child will be with").fill("Parent C");

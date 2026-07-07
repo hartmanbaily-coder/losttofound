@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDateRangePreset,
   buildMonthDays,
+  formatLocalDate,
   formatMonthLabel,
   getMonthBounds,
 } from "@/lib/records/dateRanges";
@@ -33,6 +34,21 @@ describe("records date ranges", () => {
     expect(buildDateRangePreset("ytd", july7)).toEqual({
       from: "2026-01-01",
       to: "2026-07-07",
+    });
+  });
+
+  it("builds current date windows in the selected case timezone", () => {
+    const earlyUtc = new Date("2026-07-01T06:30:00.000Z");
+
+    expect(formatLocalDate(earlyUtc, "America/Anchorage")).toBe("2026-06-30");
+    expect(formatLocalDate(earlyUtc, "UTC")).toBe("2026-07-01");
+    expect(buildDateRangePreset("currentMonth", earlyUtc, "America/Anchorage")).toEqual({
+      from: "2026-06-01",
+      to: "2026-06-30",
+    });
+    expect(buildDateRangePreset("currentMonth", earlyUtc, "UTC")).toEqual({
+      from: "2026-07-01",
+      to: "2026-07-31",
     });
   });
 
