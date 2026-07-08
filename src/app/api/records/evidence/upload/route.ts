@@ -11,7 +11,7 @@ import {
   getEvidenceBucket,
 } from "@/lib/records/evidenceStorage";
 import { scanEvidenceFile } from "@/lib/records/malwareScanner";
-import { buildStoredEvidenceName } from "@/lib/records/validation";
+import { buildStoredEvidenceName, validateEvidenceFileSignature } from "@/lib/records/validation";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
@@ -91,6 +91,18 @@ export async function POST(request: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  const signatureValidation = validateEvidenceFileSignature(
+    {
+      originalFileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+    },
+    buffer
+  );
+  if (!signatureValidation.ok) {
+    return NextResponse.json({ error: signatureValidation.error }, { status: 400 });
+  }
+
   const scan = await scanEvidenceFile({
     buffer,
     fileName: file.name,

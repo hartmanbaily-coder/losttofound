@@ -1912,7 +1912,7 @@ function CalendarView({
                 />
               </div>
             </div>
-            <div className="mb-4 grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div className="mb-4 grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 2xl:grid-cols-[minmax(360px,1fr)_auto] 2xl:items-end">
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
                 <Field label="Caregiver label">
                   <input
@@ -2125,6 +2125,7 @@ function CalendarView({
               <Timeline
                 events={dayEvents}
                 emptyLabel="No records on this day."
+                compact
                 onDeleteEvent={deleteTimelineEvent}
               />
             </Panel>
@@ -6362,26 +6363,32 @@ function TimelineEventRow({
   const severity = timelineSeverity(event);
   const tagList = event.tags || [];
   const showDelete = Boolean(onDeleteEvent && canDeleteTimelineEvent(event));
+  const summaryClassName = compact
+    ? "flex cursor-pointer list-none flex-col gap-2 p-3.5 marker:hidden [&::-webkit-details-marker]:hidden"
+    : "flex cursor-pointer list-none flex-col gap-2 p-3.5 marker:hidden sm:flex-row sm:items-start sm:justify-between [&::-webkit-details-marker]:hidden";
+  const metaClassName = compact
+    ? "flex flex-wrap items-center gap-1.5 pl-5"
+    : "flex shrink-0 flex-wrap items-center gap-1.5 pl-5 sm:justify-end sm:pl-0";
 
   return (
     <details
       className={`group rounded-lg border bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:shadow-md ${timelineSeverityBorderClass(severity)}`}
     >
-      <summary className="flex cursor-pointer list-none flex-col gap-2 p-3.5 marker:hidden sm:flex-row sm:items-start sm:justify-between [&::-webkit-details-marker]:hidden">
+      <summary className={summaryClassName}>
         <div className="flex min-w-0 gap-3">
           <span
             className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${timelineSeverityDotClass(severity)}`}
             aria-hidden="true"
           />
           <div className="min-w-0">
-            <p className="break-words text-sm font-semibold text-slate-950">{event.title}</p>
-            <p className="mt-1 break-words text-xs leading-5 text-slate-500">
+            <p className="break-words text-sm font-semibold text-slate-950 [overflow-wrap:anywhere]">{event.title}</p>
+            <p className="mt-1 break-words text-xs leading-5 text-slate-500 [overflow-wrap:anywhere]">
               {compact ? `${event.date}${event.time ? ` at ${event.time}` : ""}` : event.time || "All day"}
               {event.detail ? ` | ${event.detail}` : ""}
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-1.5 pl-5 sm:justify-end sm:pl-0">
+        <div className={metaClassName}>
           <StatusPill label={labelEventType(event.type)} />
           <span className={`rounded px-2 py-1 text-xs font-semibold ${timelineSeverityPillClass(severity)}`}>
             {timelineSeverityLabel(severity)}
@@ -6395,9 +6402,9 @@ function TimelineEventRow({
         </div>
       </summary>
       <div className="border-t border-slate-100 px-3.5 pb-3.5 pt-3 text-sm leading-6 text-slate-600">
-        {event.summary && <p>{event.summary}</p>}
-        {event.body && <p className={event.summary ? "mt-2" : ""}>{event.body}</p>}
-        {!event.summary && !event.body && event.detail && <p>{event.detail}</p>}
+        {event.summary && <p className="[overflow-wrap:anywhere]">{event.summary}</p>}
+        {event.body && <p className={`${event.summary ? "mt-2" : ""} [overflow-wrap:anywhere]`}>{event.body}</p>}
+        {!event.summary && !event.body && event.detail && <p className="[overflow-wrap:anywhere]">{event.detail}</p>}
         <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
           {event.sourceLabel && (
             <span className="rounded bg-slate-100 px-2 py-1 font-medium">

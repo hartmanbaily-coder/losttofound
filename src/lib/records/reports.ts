@@ -154,7 +154,7 @@ export interface ReportPreview {
 }
 
 function escapeCsvCell(value: unknown) {
-  const text = String(value ?? "");
+  const text = String(value ?? "").replace(/^[=+\-@\t\r]/, (prefix) => `'${prefix}`);
   if (/[",\n\r]/.test(text)) {
     return `"${text.replaceAll('"', '""')}"`;
   }

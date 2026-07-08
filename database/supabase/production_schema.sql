@@ -527,34 +527,7 @@ drop policy if exists "records evidence owner insert" on storage.objects;
 drop policy if exists "records evidence owner update" on storage.objects;
 drop policy if exists "records evidence owner delete" on storage.objects;
 
-create policy "records evidence owner read" on storage.objects
-  for select to authenticated
-  using (
-    bucket_id = 'records-evidence'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-  );
-
-create policy "records evidence owner insert" on storage.objects
-  for insert to authenticated
-  with check (
-    bucket_id = 'records-evidence'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-  );
-
-create policy "records evidence owner update" on storage.objects
-  for update to authenticated
-  using (
-    bucket_id = 'records-evidence'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-  )
-  with check (
-    bucket_id = 'records-evidence'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-  );
-
-create policy "records evidence owner delete" on storage.objects
-  for delete to authenticated
-  using (
-    bucket_id = 'records-evidence'
-    and (storage.foldername(name))[1] = (select auth.uid())::text
-  );
+-- Evidence object access is intentionally server-mediated through the Next.js
+-- routes and Supabase service role so uploads cannot bypass malware scanning.
+-- Do not add direct anon/authenticated Storage object policies for this bucket
+-- unless the replacement path preserves scanner and authorization guarantees.

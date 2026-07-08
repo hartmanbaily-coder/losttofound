@@ -34,13 +34,23 @@ function hasStrongSecret(value) {
   return hasValue(value) && value.length >= 32;
 }
 
+function readJwtPayload(value) {
+  const [, payload] = value.split(".");
+  if (!payload) return null;
+
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function isUsableSupabasePublicKey(value) {
   const key = String(value || "").trim();
-  return (
-    hasValue(key) &&
-    (key.startsWith("sb_publishable_") ||
-      /^eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/.test(key))
-  );
+  if (!hasValue(key)) return false;
+  if (key.startsWith("sb_publishable_")) return true;
+  if (!/^eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/.test(key)) return false;
+  return readJwtPayload(key)?.role === "anon";
 }
 
 function isEnabled(value) {
@@ -143,13 +153,14 @@ const checks = [
   [
     "EXPECTED_SUPABASE_PROJECT_REF",
     configuredSupabaseRef !== "adhnoiicwfvppzenwcgv" &&
-      (!hasValue(expectedSupabaseRef) || configuredSupabaseRef === expectedSupabaseRef),
+      hasValue(expectedSupabaseRef) &&
+      configuredSupabaseRef === expectedSupabaseRef,
     "must match the clean records production project and must not point at the old staging project",
   ],
   [
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     isUsableSupabasePublicKey(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
-    "must be a real Supabase publishable key or legacy anon JWT, not a placeholder",
+    "must be a real Supabase publishable key or legacy anon-role JWT, not a placeholder or service-role key",
   ],
   [
     "SUPABASE_SERVICE_ROLE_KEY",

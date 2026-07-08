@@ -16,8 +16,12 @@ export const recordsRefreshCookieName = secureCookies
   ? "__Host-l2f-records-refresh"
   : "l2f-records-refresh";
 export const recordsCaseCookieName = secureCookies ? "__Host-l2f-records-case" : "l2f-records-case";
+export const recordsPasswordRecoveryCookieName = secureCookies
+  ? "__Host-l2f-records-recovery"
+  : "l2f-records-recovery";
 
 const refreshCookieMaxAge = 60 * 60 * 24 * 30;
+const passwordRecoveryCookieMaxAge = 15 * 60;
 
 export interface RecordsAuthContext {
   supabase: ReturnType<typeof createSupabaseAdminClient>;
@@ -149,6 +153,19 @@ export function clearRecordsSessionCookies(response: NextResponse) {
   response.cookies.set(recordsAccessCookieName, "", baseCookieOptions(0));
   response.cookies.set(recordsRefreshCookieName, "", baseCookieOptions(0));
   response.cookies.set(recordsCaseCookieName, "", baseCookieOptions(0));
+  response.cookies.set(recordsPasswordRecoveryCookieName, "", baseCookieOptions(0));
+}
+
+export function setRecordsPasswordRecoveryCookie(response: NextResponse) {
+  response.cookies.set(
+    recordsPasswordRecoveryCookieName,
+    "1",
+    baseCookieOptions(passwordRecoveryCookieMaxAge)
+  );
+}
+
+export function hasRecordsPasswordRecoveryCookie(request: NextRequest) {
+  return request.cookies.get(recordsPasswordRecoveryCookieName)?.value === "1";
 }
 
 function getAllowedBearerToken(request: NextRequest) {

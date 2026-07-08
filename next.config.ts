@@ -1,8 +1,6 @@
 import type { NextConfig } from "next";
 
 const projectRoot = process.cwd();
-const isDevelopment = process.env.NODE_ENV !== "production";
-const scriptSrc = ["script-src", "'self'", "'unsafe-inline'", ...(isDevelopment ? ["'unsafe-eval'"] : [])];
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
@@ -14,21 +12,6 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     const securityHeaders = [
-      {
-        key: "Content-Security-Policy",
-        value: [
-          "default-src 'self'",
-          "base-uri 'self'",
-          "form-action 'self'",
-          "frame-ancestors 'none'",
-          "object-src 'none'",
-          "img-src 'self' data: blob:",
-          "font-src 'self' data:",
-          "style-src 'self' 'unsafe-inline'",
-          scriptSrc.join(" "),
-          "connect-src 'self'",
-        ].join("; "),
-      },
       {
         key: "Strict-Transport-Security",
         value: "max-age=31536000; includeSubDomains; preload",

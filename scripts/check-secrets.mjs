@@ -18,6 +18,14 @@ const secretPatterns = [
     pattern: /eyJ[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}/,
   },
   {
+    name: "Supabase secret key",
+    pattern: /sb_secret_[a-zA-Z0-9_-]{20,}/,
+  },
+  {
+    name: "OpenAI project API key",
+    pattern: /sk-proj-[a-zA-Z0-9_-]{20,}/,
+  },
+  {
     name: "Stripe live secret key",
     pattern: /sk_live_[a-zA-Z0-9]{16,}/,
   },

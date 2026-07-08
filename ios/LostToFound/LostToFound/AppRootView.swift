@@ -31,6 +31,8 @@ private enum AppTab: String, CaseIterable, Identifiable {
 }
 
 struct AppRootView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var isUnlocked = false
     @State private var selectedTab: AppTab = .workspace
 
@@ -65,5 +67,10 @@ struct AppRootView: View {
             }
         }
         .tint(Color("AccentColor"))
+        .onChange(of: scenePhase) { _, newPhase in
+            guard isUnlocked, newPhase != .active else { return }
+            selectedTab = .workspace
+            isUnlocked = false
+        }
     }
 }

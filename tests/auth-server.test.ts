@@ -43,6 +43,8 @@ describe("records auth server helpers", () => {
 
   it("rejects placeholder Supabase public keys", () => {
     expect(isUsableSupabasePublicKey("sb_publishable_REALISTIC_VALUE")).toBe(true);
+    expect(isUsableSupabasePublicKey(fakeJwt({ role: "anon" }))).toBe(true);
+    expect(isUsableSupabasePublicKey(fakeJwt({ role: "service_role" }))).toBe(false);
     expect(isUsableSupabasePublicKey("sb_publishable_REPLACE_WITH_DEFAULT_PUBLISHABLE_KEY")).toBe(false);
     expect(isUsableSupabasePublicKey("")).toBe(false);
   });

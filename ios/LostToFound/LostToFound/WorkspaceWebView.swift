@@ -125,7 +125,7 @@ struct WorkspaceWebView: UIViewRepresentable {
                 return .cancel
             }
 
-            if let host = targetURL.host, allowedHosts.contains(host) {
+            if targetURL.scheme == "https", let host = targetURL.host, allowedHosts.contains(host) {
                 return .allow
             }
 

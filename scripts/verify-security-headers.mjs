@@ -25,6 +25,13 @@ function requireHeader(headers, name, predicate, reason) {
   return "";
 }
 
+function cspDirective(value, name) {
+  return value
+    .split(";")
+    .map((directive) => directive.trim())
+    .find((directive) => directive === name || directive.startsWith(`${name} `)) || "";
+}
+
 let url;
 try {
   url = new URL(baseUrl);
@@ -62,7 +69,6 @@ const headerFindings = [
         "form-action 'self'",
         "frame-ancestors 'none'",
         "object-src 'none'",
-        "script-src 'self'",
         "connect-src 'self'",
       ].every((directive) => value.includes(directive)),
     "must include the required application CSP directives"
@@ -70,8 +76,20 @@ const headerFindings = [
   requireHeader(
     response.headers,
     "content-security-policy",
-    (value) => !value.includes("'unsafe-eval'"),
-    "must not allow unsafe-eval in script-src"
+    (value) => {
+      const scriptSrc = cspDirective(value, "script-src");
+      return scriptSrc.includes("'self'") && /'nonce-[A-Za-z0-9+/_-]+={0,2}'/.test(scriptSrc);
+    },
+    "script-src must include self and a request nonce"
+  ),
+  requireHeader(
+    response.headers,
+    "content-security-policy",
+    (value) => {
+      const scriptSrc = cspDirective(value, "script-src");
+      return !scriptSrc.includes("'unsafe-inline'") && !scriptSrc.includes("'unsafe-eval'");
+    },
+    "script-src must not allow unsafe-inline or unsafe-eval"
   ),
   requireHeader(
     response.headers,

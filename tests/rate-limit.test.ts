@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import {
   checkRateLimit,
+  rateLimitClientAddress,
   rateLimitExceededResponse,
   resetRateLimitStore,
 } from "@/lib/security/rateLimit";
@@ -52,8 +53,28 @@ describe("rate limit helper", () => {
     const rule = { id: "test-auth", limit: 1, windowMs: 60_000 };
 
     checkRateLimit(request("203.0.113.10"), rule, 1_000);
-    const otherClient = checkRateLimit(request("203.0.113.11"), rule, 2_000);
+    const otherClient = checkRateLimit(
+      request("203.0.113.11"),
+      { ...rule, key: "trusted-client-203.0.113.11" },
+      2_000
+    );
 
     expect(otherClient.limited).toBe(false);
+  });
+
+  it("does not trust spoofable forwarded IP headers by default", () => {
+    const rule = { id: "test-auth", limit: 1, windowMs: 60_000 };
+
+    checkRateLimit(request("203.0.113.10"), rule, 1_000);
+    const spoofed = checkRateLimit(request("203.0.113.11"), rule, 2_000);
+
+    expect(spoofed.limited).toBe(true);
+  });
+
+  it("can bucket by forwarded IP when proxy headers are explicitly trusted", () => {
+    expect(rateLimitClientAddress(request("203.0.113.10").headers, {})).toBe("direct");
+    expect(
+      rateLimitClientAddress(request("203.0.113.10").headers, { TRUST_PROXY_HEADERS: "true" })
+    ).toBe("203.0.113.10");
   });
 });

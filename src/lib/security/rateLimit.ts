@@ -28,7 +28,16 @@ export interface RateLimitResult {
 const buckets = new Map<string, { count: number; resetAt: number }>();
 let requestsSincePrune = 0;
 
-function clientAddress(headers: HeaderSource) {
+function trustProxyHeaders(env: Record<string, string | undefined> = process.env) {
+  return env.TRUST_PROXY_HEADERS === "true" || env.VERCEL === "1" || env.CF_PAGES === "1";
+}
+
+export function rateLimitClientAddress(
+  headers: HeaderSource,
+  env: Record<string, string | undefined> = process.env
+) {
+  if (!trustProxyHeaders(env)) return "direct";
+
   return (
     headers.get("cf-connecting-ip") ||
     headers.get("x-real-ip") ||
@@ -38,7 +47,7 @@ function clientAddress(headers: HeaderSource) {
 }
 
 function rateLimitKey(request: RateLimitRequest, rule: RateLimitRule) {
-  const identity = rule.key || clientAddress(request.headers);
+  const identity = rule.key || rateLimitClientAddress(request.headers);
   const path = rule.includePath ? `:${request.nextUrl?.pathname || ""}` : "";
   return `${rule.id}:${identity}${path}`;
 }

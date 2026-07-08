@@ -1,8 +1,8 @@
 # Supabase Live Verification
 
-Verification date: 2026-06-28 America/Anchorage
+Verification date: 2026-07-08 America/Anchorage
 
-Latest advisor refresh: 2026-06-28 America/Anchorage
+Latest advisor refresh: 2026-07-08 America/Anchorage
 
 Production project: `cieuilbpnwuvnrxrlczj`
 
@@ -32,9 +32,10 @@ Verified through Supabase SQL inspection on production project `cieuilbpnwuvnrxr
 - `records-evidence` is private, not public.
 - `records-evidence` file size limit is `10485760` bytes.
 - `records-evidence` MIME allow-list is limited to PDF, PNG, JPEG, HEIC/HEIF, plain text, and CSV.
-- Four Storage policies reference `records-evidence`.
+- No direct `anon` or `authenticated` Storage object policies remain for `records-evidence`; evidence object access is server-mediated through the Next.js API routes and Supabase service role.
 - Applied production migration: `20260617182822_create_records_production_schema`.
 - Applied cleanup migration: `20260628050702_remove_retired_grant_database_artifacts`.
+- Applied evidence policy hardening migration: `20260708195205_remove_records_evidence_direct_storage_policies`.
 
 ## Retired Non-Records Artifacts
 

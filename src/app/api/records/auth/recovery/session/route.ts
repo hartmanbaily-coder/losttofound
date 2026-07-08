@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseSessionClient } from "@/lib/supabaseClient";
 import {
   isSupabaseRecordsMode,
+  setRecordsPasswordRecoveryCookie,
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
 import { demoCaseId } from "@/lib/records/seed";
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
       },
       demoCaseId
     );
+    setRecordsPasswordRecoveryCookie(response);
     return response;
   } catch {
     await recordSecurityEvent({

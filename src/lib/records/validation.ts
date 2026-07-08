@@ -284,6 +284,65 @@ export function validateEvidenceFile(candidate: EvidenceFileCandidate) {
   return { ok: true as const };
 }
 
+export function validateEvidenceFileSignature(candidate: EvidenceFileCandidate, bytes: Uint8Array) {
+  const extension = getFileExtension(candidate.originalFileName);
+  const startsWith = (signature: number[]) =>
+    signature.every((value, index) => bytes[index] === value);
+  const asciiAt = (offset: number, length: number) =>
+    String.fromCharCode(...bytes.slice(offset, offset + length));
+  const hasNullByte = bytes.some((value) => value === 0);
+
+  if (extension === "pdf" || candidate.fileType === "application/pdf") {
+    return startsWith([0x25, 0x50, 0x44, 0x46, 0x2d])
+      ? { ok: true as const }
+      : { ok: false as const, error: "PDF file signature does not match the selected file." };
+  }
+
+  if (extension === "png" || candidate.fileType === "image/png") {
+    return startsWith([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+      ? { ok: true as const }
+      : { ok: false as const, error: "PNG file signature does not match the selected file." };
+  }
+
+  if (["jpg", "jpeg"].includes(extension) || candidate.fileType === "image/jpeg") {
+    return startsWith([0xff, 0xd8, 0xff])
+      ? { ok: true as const }
+      : { ok: false as const, error: "JPEG file signature does not match the selected file." };
+  }
+
+  if (
+    ["heic", "heif"].includes(extension) ||
+    candidate.fileType === "image/heic" ||
+    candidate.fileType === "image/heif"
+  ) {
+    const brand = asciiAt(4, 8);
+    return brand.startsWith("ftypheic") ||
+      brand.startsWith("ftypheix") ||
+      brand.startsWith("ftyphevc") ||
+      brand.startsWith("ftyphevx") ||
+      brand.startsWith("ftypmif1")
+      ? { ok: true as const }
+      : { ok: false as const, error: "HEIC/HEIF file signature does not match the selected file." };
+  }
+
+  if (
+    extension === "docx" ||
+    candidate.fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  ) {
+    return startsWith([0x50, 0x4b])
+      ? { ok: true as const }
+      : { ok: false as const, error: "DOCX file signature does not match the selected file." };
+  }
+
+  if (["txt", "csv"].includes(extension) || candidate.fileType.startsWith("text/")) {
+    return hasNullByte
+      ? { ok: false as const, error: "Text evidence files cannot contain binary null bytes." }
+      : { ok: true as const };
+  }
+
+  return { ok: true as const };
+}
+
 export function buildStoredEvidenceName(item: Pick<EvidenceItem, "id" | "originalFileName">) {
   const extension = getFileExtension(item.originalFileName);
   return `${item.id}.${extension}`;

@@ -47,6 +47,12 @@ const readyEnv = {
   VENDOR_SECURITY_REVIEW_APPROVED: "true",
 };
 
+function fakeJwt(payload: Record<string, unknown>) {
+  const encode = (input: Record<string, unknown>) =>
+    Buffer.from(JSON.stringify(input)).toString("base64url");
+  return `${encode({ alg: "none" })}.${encode(payload)}.signature`;
+}
+
 describe("production readiness", () => {
   it("blocks missing production records configuration", () => {
     const report = evaluateProductionReadiness({}, "2026-06-15T00:00:00.000Z");
@@ -159,11 +165,37 @@ describe("production readiness", () => {
     expect(report.blockers.map((item) => item.id)).toContain("supabase-production-project");
   });
 
+  it("blocks Supabase project URLs when the expected production ref is missing", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        EXPECTED_SUPABASE_PROJECT_REF: "",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("supabase-production-project");
+  });
+
   it("blocks placeholder Supabase public keys", () => {
     const report = evaluateProductionReadiness(
       {
         ...readyEnv,
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_REPLACE_WITH_DEFAULT_PUBLISHABLE_KEY",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("supabase-anon-key");
+  });
+
+  it("blocks service-role JWTs in the public Supabase browser key", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: fakeJwt({ role: "service_role" }),
       },
       "2026-06-15T00:00:00.000Z"
     );

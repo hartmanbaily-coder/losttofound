@@ -2,9 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import {
   clearRecordsSessionCookies,
+  getAccessTokenAal,
   getRecordsSessionAuthClient,
+  hasRecordsPasswordRecoveryCookie,
+  isRecordsMfaRequired,
   isStrongRecordsPassword,
   isSupabaseRecordsMode,
+  mfaRequiredResponse,
   recordsAccessCookieName,
   recordsPasswordMinimumLength,
 } from "@/lib/records/authServer";
@@ -53,6 +57,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Open a valid password reset link before changing your password." }, { status: 401 });
   }
 
+  const accessToken = request.cookies.get(recordsAccessCookieName)?.value;
+  const mfaSatisfied = !isRecordsMfaRequired() || getAccessTokenAal(accessToken) === "aal2";
+  if (!mfaSatisfied && !hasRecordsPasswordRecoveryCookie(request)) {
+    await recordSecurityEvent({
+      type: "auth_password_update_failed",
+      severity: "warning",
+      request,
+      status: 403,
+      detail: "Password update blocked before MFA verification.",
+    });
+    return mfaRequiredResponse();
+  }
+
   const user = await authClient.auth.getUser();
   const userId = user.data.user?.id;
   const update = await authClient.auth.updateUser({ password });
@@ -83,7 +100,6 @@ export async function POST(request: NextRequest) {
     { headers: { "Cache-Control": "no-store" } }
   );
 
-  const accessToken = request.cookies.get(recordsAccessCookieName)?.value;
   if (accessToken) {
     try {
       await createSupabaseAdminClient().auth.admin.signOut(accessToken, "local");

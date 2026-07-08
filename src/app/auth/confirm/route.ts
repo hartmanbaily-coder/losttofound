@@ -5,6 +5,7 @@ import {
   isSupabaseRecordsMode,
   recordsAppBaseUrl,
   safeRecordsAuthNextPath,
+  setRecordsPasswordRecoveryCookie,
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
 import { demoCaseId } from "@/lib/records/seed";
@@ -59,5 +60,6 @@ export async function GET(request: NextRequest) {
 
   const response = NextResponse.redirect(redirectUrl);
   setRecordsSessionCookies(response, data.session, demoCaseId);
+  if (type === "recovery") setRecordsPasswordRecoveryCookie(response);
   return response;
 }

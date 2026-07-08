@@ -12,10 +12,29 @@ export function isPlaceholderSecret(value: string | undefined) {
   );
 }
 
+function readJwtPayload(value: string) {
+  const [, payload] = value.split(".");
+  if (!payload) return null;
+
+  try {
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const decoded =
+      typeof globalThis.atob === "function"
+        ? globalThis.atob(padded)
+        : Buffer.from(payload, "base64url").toString("utf8");
+    return JSON.parse(decoded) as { role?: unknown };
+  } catch {
+    return null;
+  }
+}
+
 export function isUsableSupabasePublicKey(value: string | undefined) {
   const key = String(value || "").trim();
   if (isPlaceholderSecret(key)) return false;
-  return key.startsWith("sb_publishable_") || /^eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/.test(key);
+  if (key.startsWith("sb_publishable_")) return true;
+  if (!/^eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/.test(key)) return false;
+  return readJwtPayload(key)?.role === "anon";
 }
 
 function getBrowserSupabaseConfig() {

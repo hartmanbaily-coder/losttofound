@@ -92,13 +92,23 @@ function hasStrongSecret(value: string | undefined) {
   return hasValue(value) && (value || "").length >= 32;
 }
 
+function readJwtPayload(value: string) {
+  const [, payload] = value.split(".");
+  if (!payload) return null;
+
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { role?: unknown };
+  } catch {
+    return null;
+  }
+}
+
 function isUsableSupabasePublicKey(value: string | undefined) {
   const key = String(value || "").trim();
-  return (
-    hasValue(key) &&
-    (key.startsWith("sb_publishable_") ||
-      /^eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/.test(key))
-  );
+  if (!hasValue(key)) return false;
+  if (key.startsWith("sb_publishable_")) return true;
+  if (!/^eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+$/.test(key)) return false;
+  return readJwtPayload(key)?.role === "anon";
 }
 
 function isEnabled(value: string | undefined) {
@@ -230,16 +240,17 @@ export function evaluateProductionReadiness(
       "supabase-production-project",
       "Supabase project is the records production project",
       configuredSupabaseRef !== "adhnoiicwfvppzenwcgv" &&
-        (!hasValue(expectedSupabaseRef) || configuredSupabaseRef === expectedSupabaseRef),
+        hasValue(expectedSupabaseRef) &&
+        configuredSupabaseRef === expectedSupabaseRef,
       "blocker",
-      "Point production records at the clean records-only Supabase project, not the older staging/mixed-use project."
+      "Set EXPECTED_SUPABASE_PROJECT_REF and point production records at the clean records-only Supabase project, not the older staging/mixed-use project."
     ),
     check(
       "supabase-anon-key",
       "Supabase public browser key is configured",
       isUsableSupabasePublicKey(env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
       "blocker",
-      "Set NEXT_PUBLIC_SUPABASE_ANON_KEY to a real Supabase publishable key or legacy anon JWT, not a placeholder."
+      "Set NEXT_PUBLIC_SUPABASE_ANON_KEY to a real Supabase publishable key or legacy anon-role JWT, not a placeholder or service-role key."
     ),
     check(
       "supabase-service-role",

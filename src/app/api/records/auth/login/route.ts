@@ -9,7 +9,7 @@ import {
 } from "@/lib/records/authServer";
 import { demoCaseId } from "@/lib/records/seed";
 import { upsertRecordsProfile } from "@/lib/records/profileServer";
-import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
+import { checkRateLimit, rateLimitClientAddress, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
 export const dynamic = "force-dynamic";
@@ -29,8 +29,7 @@ function disabledResponse() {
 }
 
 function clientKey(request: NextRequest, email: string) {
-  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  const ip = forwarded || "unknown";
+  const ip = rateLimitClientAddress(request.headers);
   return `${ip}:${email.toLowerCase()}`;
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { evaluateEvidenceIntakeReadiness } from "@/lib/records/evidenceSecurity";
+import { validateEvidenceFileSignature } from "@/lib/records/validation";
 
 describe("evidence intake readiness", () => {
   it("blocks placeholder malware providers", () => {
@@ -48,5 +49,28 @@ describe("evidence intake readiness", () => {
 
     expect(report.ready).toBe(false);
     expect(report.blockers).toContain("Evidence malware scanning is not available.");
+  });
+
+  it("validates evidence file signatures before upload", () => {
+    expect(
+      validateEvidenceFileSignature(
+        { originalFileName: "order.pdf", fileType: "application/pdf", fileSize: 12 },
+        Buffer.from("%PDF-1.7\nbody", "utf8")
+      )
+    ).toEqual({ ok: true });
+
+    expect(
+      validateEvidenceFileSignature(
+        { originalFileName: "order.pdf", fileType: "application/pdf", fileSize: 12 },
+        Buffer.from("not a pdf", "utf8")
+      )
+    ).toMatchObject({ ok: false });
+
+    expect(
+      validateEvidenceFileSignature(
+        { originalFileName: "notes.txt", fileType: "text/plain", fileSize: 5 },
+        Buffer.from([0x68, 0x69, 0x00])
+      )
+    ).toMatchObject({ ok: false });
   });
 });
