@@ -65,12 +65,12 @@ export default function HomePage() {
             Security
           </Link>
           <Link href="/records" className="rounded-md bg-slate-950 px-4 py-2 text-white shadow-sm transition hover:bg-slate-800">
-            Open app
+            Open workspace
           </Link>
         </nav>
 
         <Link href="/records" className="rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white shadow-sm md:hidden">
-          Open
+          Workspace
         </Link>
       </header>
 

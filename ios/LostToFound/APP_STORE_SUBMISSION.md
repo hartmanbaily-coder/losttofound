@@ -1,0 +1,138 @@
+# App Store Submission Draft
+
+This draft is a working submission packet. It should be reviewed before public submission, especially privacy, age rating, export compliance, and legal claims.
+
+## App Identity
+
+- App name: Lost to Found Case Organization
+- Display name: Lost to Found
+- Bundle ID: `io.lendori.losttofound`
+- SKU suggestion: `losttofound-ios`
+- Primary category: Productivity
+- Secondary category: Utilities
+- Content rights: owned by the developer
+- Support URL: `https://losttofound.org/contact`
+- Privacy Policy URL: `https://losttofound.org/privacy`
+- Terms URL: `https://losttofound.org/terms`
+
+## Subtitle Options
+
+Apple subtitles are limited to 30 characters. Strong options:
+
+- Custody record organizer
+- Track custody case records
+- Parenting plan records
+
+Recommended: Custody record organizer
+
+## Promotional Text Draft
+
+Remove the emotion. Track the data. Organize custody records, parenting-plan timelines, files, and reports in one private workspace.
+
+## Description Draft
+
+Lost to Found Case Organization helps adult users organize custody and parenting-plan documentation in a private records workspace.
+
+Track dated notes, exchanges, FaceTime issues, files, calendar items, and report-ready summaries from one place. The app is built for factual organization: it helps users maintain cleaner records and exports for personal review or attorney conversations.
+
+Key features:
+
+- Private records workspace for custody and parenting-plan documentation
+- Timeline, calendar, notes, and file organization
+- Document upload support through the protected workspace
+- Report and export workflows for review
+- Device-level unlock with Face ID, Touch ID, or passcode
+- Privacy, security, and AI-data-use notices available in app
+
+Important boundaries:
+
+- Lost to Found does not provide legal advice.
+- Lost to Found is not a law firm and does not create an attorney-client relationship.
+- Users are responsible for verifying records against original source material.
+- The app is for adult users only and is not directed to children.
+- The app is not an emergency service, law enforcement tool, supervised exchange tool, or co-parent messaging system.
+
+## Keywords Draft
+
+custody, parenting plan, records, court, timeline, documents, co-parenting, evidence, family, organization
+
+## Review Notes Draft
+
+Lost to Found is a private records organizer for adult users documenting custody and parenting-plan information. It is not a legal advice app, law firm, emergency service, child-facing app, social network, payment processor, or co-parent messaging platform.
+
+The app uses a native SwiftUI shell with a device-authentication gate and native privacy/support surfaces. The workspace loads the production records app at `https://losttofound.org/records`.
+
+Provide Apple Review with a dedicated test account before submission:
+
+- Email: `[create-app-review-test-account]`
+- Password: `[create-secure-temporary-password]`
+- MFA status: `[disable for review account or provide review instructions]`
+- Test data: synthetic only
+
+## App Privacy Labels Draft
+
+Use App Store Connect's current privacy questionnaire. Based on the current product, expect to disclose at least:
+
+- Contact Info: email address for account/support.
+- Identifiers: user ID or account identifier.
+- User Content: notes, files, documents, message exports, calendar/timeline records, reports.
+- Sensitive Info: custody, court, child-related, family, financial, or health-adjacent records may be entered by the user.
+- Diagnostics: security events, logs, rate-limit events, and reliability diagnostics if collected.
+
+Expected use purposes:
+
+- App functionality
+- Account management
+- Security and fraud prevention
+- Customer support
+- Analytics/diagnostics only if explicitly enabled and documented
+
+Expected tracking answer:
+
+- No advertising tracking.
+- No third-party advertising trackers.
+- No selling custody records, evidence files, or account data.
+
+Review the final privacy labels against the live implementation before submission.
+
+## Age Rating Recommendation
+
+Start with a conservative 17+ posture because users may store sensitive custody, family-court, financial, or child-related records, even though the app is adult-only and does not target children. Complete Apple's age-rating questionnaire based on final features.
+
+## Export Compliance
+
+The app uses standard HTTPS/TLS and account security. Complete Apple's encryption/export compliance questions in App Store Connect based on the final binary and counsel/account guidance.
+
+## Screenshot Plan
+
+Prepare screenshots for iPhone 6.9", iPhone 6.5", and iPad if supporting iPad:
+
+1. Home/workspace overview with synthetic data only.
+2. Timeline with synthetic records.
+3. Calendar with synthetic parenting-plan colors.
+4. Files/upload view with synthetic file names.
+5. Report/export view with synthetic chart data.
+
+Do not use real custody, child, court, message, phone, address, or evidence data in screenshots.
+
+## Pre-Submission Checklist
+
+- Apple Developer account active.
+- Bundle ID created and assigned to the app.
+- Signing team set in Xcode.
+- App icon renders well at small sizes.
+- TestFlight build installed on a real iPhone.
+- App Review test account created with synthetic data.
+- Privacy Policy, Terms, Security, AI Data Use, Accessibility, and Contact pages live.
+- No production secrets committed.
+- No real user data in screenshots or demo account.
+- Native app tested for login, MFA/recovery path, file upload, report export, and support links.
+- Legal/privacy review complete before public launch.
+
+## Apple References
+
+- App Review Guidelines: `https://developer.apple.com/app-store/review/guidelines/`
+- Apple Developer Program: `https://developer.apple.com/programs/`
+- App Store Connect Help: `https://developer.apple.com/help/app-store-connect/`
+- TestFlight overview: `https://developer.apple.com/help/app-store-connect/test-a-beta-version/testflight-overview/`
+- App privacy details: `https://developer.apple.com/help/app-store-connect/manage-app-privacy/`

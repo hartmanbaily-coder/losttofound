@@ -102,6 +102,16 @@ Use Secure, HttpOnly, SameSite=Lax or SameSite=Strict cookies, and prefer `__Hos
 
 See `DEPLOYMENT_NOTES.md` for DNS, HTTPS, HSTS, and subdomain takeover controls.
 
+## iOS App Store Preparation
+
+The App Store prep package lives in `ios/LostToFound`.
+
+- `ios/LostToFound/LostToFound.xcodeproj` contains the native SwiftUI iOS shell.
+- `ios/LostToFound/README.md` covers local Xcode setup.
+- `ios/LostToFound/APP_STORE_SUBMISSION.md` contains draft App Store metadata, privacy-label notes, screenshot guidance, review notes, and pre-submission checklist.
+
+The iOS shell is intentionally more than a website shortcut: it includes a native device-authentication gate, native tabs for workspace/privacy/support, app icons, and controlled workspace navigation.
+
 ## Security Reminders
 
 - No child accounts
