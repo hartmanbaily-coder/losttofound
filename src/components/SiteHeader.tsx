@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -14,9 +15,13 @@ export default function SiteHeader() {
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
         <Link href="/" className="flex items-center gap-3">
-          <span className="grid h-9 w-9 place-items-center rounded-md bg-slate-950 text-sm font-bold text-white">
-            L2F
-          </span>
+          <Image
+            src="/app-icons/icon-192.png"
+            alt=""
+            width={36}
+            height={36}
+            className="h-9 w-9 rounded-md bg-slate-950 shadow-sm"
+          />
           <span>
             <span className="block text-sm font-semibold tracking-tight text-slate-950">
               {siteName}

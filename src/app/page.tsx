@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 import { recordsTagline, siteName, supportMailto } from "@/lib/site";
 
@@ -35,9 +36,14 @@ export default function HomePage() {
     <main className="min-h-screen overflow-hidden bg-[#f4f7f6] text-slate-950">
       <header className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
         <Link href="/" className="flex min-w-0 items-center gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-slate-950 text-sm font-bold text-white shadow-sm">
-            L2F
-          </span>
+          <Image
+            src="/app-icons/icon-192.png"
+            alt=""
+            width={40}
+            height={40}
+            priority
+            className="h-10 w-10 shrink-0 rounded-md bg-slate-950 shadow-sm"
+          />
           <span className="min-w-0">
             <span className="block text-sm font-semibold tracking-tight text-slate-950">
               {siteName}

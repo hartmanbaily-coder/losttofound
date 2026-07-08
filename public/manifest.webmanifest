@@ -1,0 +1,42 @@
+{
+  "name": "Lost to Found Case Organization",
+  "short_name": "Lost to Found",
+  "description": "Organize custody and parenting-plan case records, files, timelines, and reports.",
+  "id": "/records",
+  "start_url": "/records",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#f4f7f6",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/app-icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/app-icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open records workspace",
+      "short_name": "Workspace",
+      "url": "/records",
+      "icons": [{ "src": "/app-icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Review privacy",
+      "short_name": "Privacy",
+      "url": "/privacy",
+      "icons": [{ "src": "/app-icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

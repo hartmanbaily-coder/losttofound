@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import type { FormEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -98,7 +99,7 @@ import {
   timezoneSchema,
   validateEvidenceFile,
 } from "@/lib/records/validation";
-import { publicPolicyLinks, recordsTagline, supportEmail, supportMailto } from "@/lib/site";
+import { publicPolicyLinks, recordsTagline, siteName, supportEmail, supportMailto } from "@/lib/site";
 import {
   ExchangeTimingChart,
   ExpenseCategoryChart,
@@ -547,12 +548,16 @@ export default function RecordsApp() {
         <aside className="overflow-hidden border-b border-slate-200 bg-white/95 lg:overflow-visible lg:border-b-0 lg:border-r lg:border-slate-200">
           <div className="flex flex-col p-4 lg:sticky lg:top-0 lg:h-screen">
             <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-              <div className="grid h-10 w-10 place-items-center rounded-md bg-slate-950 text-sm font-semibold text-white shadow-sm">
-                L2F
-              </div>
+              <Image
+                src="/app-icons/icon-192.png"
+                alt=""
+                width={40}
+                height={40}
+                className="h-10 w-10 shrink-0 rounded-md bg-slate-950 shadow-sm"
+              />
               <div className="min-w-0">
                 <p className="text-sm font-semibold tracking-tight text-slate-950">
-                  Lost to Found Records
+                  {siteName}
                 </p>
                 <p className="mt-0.5 text-xs leading-4 text-slate-500">{recordsTagline}</p>
               </div>
@@ -1043,11 +1048,15 @@ function LoginScreen({
         <div className="grid lg:grid-cols-[1fr_420px]">
           <section className="space-y-6 p-6 sm:p-8">
             <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-lg bg-slate-950 text-sm font-semibold text-white">
-                L2F
-              </div>
+              <Image
+                src="/app-icons/icon-192.png"
+                alt=""
+                width={44}
+                height={44}
+                className="h-11 w-11 rounded-lg bg-slate-950 shadow-sm"
+              />
               <div>
-                <h1 className="text-2xl font-semibold tracking-tight">Lost to Found Records</h1>
+                <h1 className="text-2xl font-semibold tracking-tight">{siteName}</h1>
                 <p className="text-sm text-slate-500">{recordsTagline}</p>
               </div>
             </div>
@@ -4385,7 +4394,7 @@ function EvidenceView({
           </style>
         </head>
         <body>
-          <h1>Lost to Found Records File Sheet</h1>
+          <h1>{siteName} File Sheet</h1>
           <p>Private custody records workspace. Use privacy-friendly labels and verify the source document before submission.</p>
           <div class="notice">This sheet is metadata for organizing records. It is not legal advice and does not replace the original document.</div>
           <table>
