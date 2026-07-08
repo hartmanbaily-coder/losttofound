@@ -1,4 +1,4 @@
-export const siteName = "Lost to Found Records";
+export const siteName = "Lost to Found Case Organization";
 export const recordsTagline = "Remove the emotion. Track the data.";
 export const supportEmail = "support@lendori.io";
 export const supportMailto = `mailto:${supportEmail}`;

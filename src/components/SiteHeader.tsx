@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { publicPolicyLinks, recordsTagline } from "@/lib/site";
+import { publicPolicyLinks, recordsTagline, siteName } from "@/lib/site";
 
 const navItems = [{ href: "/records", label: "Records" }, ...publicPolicyLinks];
 
@@ -19,7 +19,7 @@ export default function SiteHeader() {
           </span>
           <span>
             <span className="block text-sm font-semibold tracking-tight text-slate-950">
-              Lost to Found Records
+              {siteName}
             </span>
             <span className="block text-xs text-slate-500">
               {recordsTagline}
