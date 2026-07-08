@@ -542,42 +542,42 @@ export default function RecordsApp() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-950">
-      <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
-        <aside className="border-b border-slate-200 bg-white lg:border-b-0 lg:border-r">
+    <div className="min-h-screen bg-[#f4f7f6] text-slate-950">
+      <div className="grid min-h-screen lg:grid-cols-[288px_minmax(0,1fr)]">
+        <aside className="overflow-hidden border-b border-slate-200 bg-white/95 lg:overflow-visible lg:border-b-0 lg:border-r lg:border-slate-200">
           <div className="flex flex-col p-4 lg:sticky lg:top-0 lg:h-screen">
             <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
-              <div className="grid h-10 w-10 place-items-center rounded-lg bg-slate-950 text-sm font-semibold text-white">
+              <div className="grid h-10 w-10 place-items-center rounded-md bg-slate-950 text-sm font-semibold text-white shadow-sm">
                 L2F
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-semibold tracking-tight text-slate-950">
                   Lost to Found Records
                 </p>
-                <p className="text-xs text-slate-500">{recordsTagline}</p>
+                <p className="mt-0.5 text-xs leading-4 text-slate-500">{recordsTagline}</p>
               </div>
             </div>
 
-            <nav className="mt-5 space-y-1">
+            <nav className="mt-5 flex max-w-full gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50/80 p-1 lg:block lg:space-y-1 lg:overflow-visible">
               {navItems.map((item) => (
                 <button
                   key={item}
                   type="button"
                   onClick={() => openView(item)}
-                  className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm font-medium transition ${
+                  className={`flex shrink-0 items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium transition lg:w-full ${
                     activeView === item
-                      ? "bg-teal-700 text-white"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                      ? "bg-white text-teal-900 shadow-sm ring-1 ring-slate-200"
+                      : "text-slate-600 hover:bg-white hover:text-slate-950"
                   }`}
                 >
                   <span>{item}</span>
                   {item === "Files" && (
-                    <span className="rounded bg-white/20 px-1.5 text-[11px]">
+                    <span className={`rounded px-1.5 text-[11px] ${activeView === item ? "bg-teal-50 text-teal-900" : "bg-white text-slate-500"}`}>
                       {selected.evidenceItems.length}
                     </span>
                   )}
                   {item === "Timeline" && (
-                    <span className="rounded bg-white/20 px-1.5 text-[11px]">
+                    <span className={`rounded px-1.5 text-[11px] ${activeView === item ? "bg-teal-50 text-teal-900" : "bg-white text-slate-500"}`}>
                       {timelineEvents.length}
                     </span>
                   )}
@@ -585,11 +585,11 @@ export default function RecordsApp() {
               ))}
             </nav>
 
-            <div className="mt-4 space-y-3 lg:mt-auto">
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:mt-auto lg:block lg:space-y-3">
+              <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-xs leading-5 text-amber-950">
                 Records are private by default. Use labels such as Child 1 and Parent B instead of real names.
               </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Policy center
                 </p>
@@ -606,10 +606,10 @@ export default function RecordsApp() {
         </aside>
 
         <main className="min-w-0">
-          <header className="sticky top-0 z-10 border-b border-slate-200 bg-slate-100/95 px-4 py-3 backdrop-blur lg:px-6">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <header className="sticky top-0 z-10 border-b border-slate-200 bg-[#f4f7f6]/95 px-4 py-3 backdrop-blur lg:px-6">
+            <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
                   {recordsTagline}
                 </p>
                 <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
@@ -617,11 +617,11 @@ export default function RecordsApp() {
                 </h1>
               </div>
 
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <div className="grid w-full min-w-0 gap-2 rounded-lg border border-slate-200 bg-white p-1 shadow-sm sm:flex sm:flex-wrap sm:items-center xl:flex-nowrap 2xl:w-auto">
                 <select
                   value={selectedCaseId}
                   onChange={(event) => selectCase(event.target.value)}
-                  className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900"
+                  className="h-10 min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 sm:w-auto xl:w-60"
                 >
                   {selected.matters.map((matter) => (
                     <option key={matter.id} value={matter.id}>
@@ -633,14 +633,14 @@ export default function RecordsApp() {
                 <button
                   type="button"
                   onClick={() => openView("Reports")}
-                  className="h-10 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800"
+                  className="h-10 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
                 >
                   Export
                 </button>
                 <button
                   type="button"
                   onClick={logout}
-                  className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
+                  className="h-10 rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-teal-500 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-teal-100"
                 >
                   Logout
                 </button>
@@ -1344,14 +1344,14 @@ function DashboardView({
         <div className="space-y-4">
           <Panel title="Dashboard focus" action="Court packet view">
             <div className="grid gap-4">
-              <div className="grid gap-2">
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                 {sourceCounts.map((item) => (
                   <div
                     key={item.label}
-                    className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+                    className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-2.5 text-sm last:border-b-0"
                   >
                     <span className="font-medium text-slate-700">{item.label}</span>
-                    <span className="rounded bg-white px-2 py-1 text-xs font-semibold text-slate-950">
+                    <span className="rounded bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-950 ring-1 ring-slate-200">
                       {item.value}
                     </span>
                   </div>
@@ -1361,11 +1361,11 @@ function DashboardView({
                 <StatMini label="Needs review" value={String(stats.attentionCount)} />
                 <StatMini label="Files in profile" value={String(evidenceCount)} />
               </div>
-              <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <div className="rounded-md border border-slate-200 bg-slate-50/70 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Visible sources</p>
                 <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-medium text-slate-600">
                   {["Exchanges", "FaceTime", "Notes", "Files"].map((source) => (
-                    <span key={source} className="rounded bg-white px-2 py-1">
+                    <span key={source} className="rounded bg-white px-2 py-1 ring-1 ring-slate-200">
                       {source}
                     </span>
                   ))}
@@ -5867,7 +5867,7 @@ function SettingsView({
 
 function Disclaimer() {
   return (
-    <div className="no-print rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-950">
+    <div className="no-print rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm leading-6 text-amber-950 shadow-sm">
       {disclaimer}
     </div>
   );
@@ -5891,9 +5891,9 @@ function RangeToolbar({
   }, [preset, setRange, timezone]);
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-2">
+    <div className="grid w-full min-w-0 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
       <select
-        className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
+        className="h-10 min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 sm:w-auto xl:w-40"
         onChange={(event) => {
           const value = event.target.value as DateRangePreset | "custom";
           setPreset(value);
@@ -5917,7 +5917,7 @@ function RangeToolbar({
           setPreset("custom");
           setRange({ ...range, from: event.target.value });
         }}
-        className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
+        className="h-10 min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 sm:w-auto xl:w-36"
       />
       <input
         aria-label="To date"
@@ -5927,7 +5927,7 @@ function RangeToolbar({
           setPreset("custom");
           setRange({ ...range, to: event.target.value });
         }}
-        className="h-10 min-w-0 max-w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
+        className="h-10 min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 sm:w-auto xl:w-36"
       />
     </div>
   );
@@ -5945,7 +5945,7 @@ function Panel({
   className?: string;
 }) {
   return (
-    <section className={`min-w-0 rounded-lg border border-slate-200 bg-white p-4 shadow-sm ${className}`}>
+    <section className={`min-w-0 rounded-lg border border-slate-200/90 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${className}`}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold text-slate-950">{title}</h2>
         {action && <span className="text-xs font-medium text-slate-500">{action}</span>}
@@ -5975,16 +5975,16 @@ function StatCard({
   detail: string;
   tone?: "teal" | "amber" | "slate";
 }) {
-  const color =
+  const toneClasses =
     tone === "amber"
-      ? "text-amber-700"
+      ? "border-l-amber-500 bg-amber-50/30 text-amber-700"
       : tone === "slate"
-        ? "text-slate-700"
-        : "text-teal-700";
+        ? "border-l-slate-500 bg-white text-slate-700"
+        : "border-l-teal-600 bg-teal-50/30 text-teal-700";
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className={`rounded-lg border border-l-4 border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${toneClasses}`}>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-2 text-2xl font-semibold tracking-tight ${color}`}>{value}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{detail}</p>
     </div>
   );
@@ -5992,7 +5992,7 @@ function StatCard({
 
 function StatMini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+    <div className="rounded-md border border-slate-200 bg-slate-50/80 p-3">
       <p className="text-xs font-medium text-slate-500">{label}</p>
       <p className="mt-1 text-lg font-semibold text-slate-950">{value}</p>
     </div>
@@ -6356,9 +6356,9 @@ function TimelineEventRow({
 
   return (
     <details
-      className={`group rounded-md border bg-white shadow-sm ${timelineSeverityBorderClass(severity)}`}
+      className={`group rounded-lg border bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:shadow-md ${timelineSeverityBorderClass(severity)}`}
     >
-      <summary className="flex cursor-pointer list-none flex-col gap-2 p-3 marker:hidden sm:flex-row sm:items-start sm:justify-between [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none flex-col gap-2 p-3.5 marker:hidden sm:flex-row sm:items-start sm:justify-between [&::-webkit-details-marker]:hidden">
         <div className="flex min-w-0 gap-3">
           <span
             className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${timelineSeverityDotClass(severity)}`}
@@ -6378,14 +6378,14 @@ function TimelineEventRow({
             {timelineSeverityLabel(severity)}
           </span>
           <span
-            className="grid h-6 w-6 place-items-center rounded border border-slate-200 text-xs font-semibold text-slate-500 transition group-open:rotate-180"
+            className="grid h-6 w-6 place-items-center rounded border border-slate-200 text-slate-500 transition group-open:rotate-180"
             aria-hidden="true"
           >
-            v
+            <ChevronDownIcon />
           </span>
         </div>
       </summary>
-      <div className="border-t border-slate-100 px-3 pb-3 pt-3 text-sm leading-6 text-slate-600">
+      <div className="border-t border-slate-100 px-3.5 pb-3.5 pt-3 text-sm leading-6 text-slate-600">
         {event.summary && <p>{event.summary}</p>}
         {event.body && <p className={event.summary ? "mt-2" : ""}>{event.body}</p>}
         {!event.summary && !event.body && event.detail && <p>{event.detail}</p>}
@@ -6413,6 +6413,20 @@ function TimelineEventRow({
         )}
       </div>
     </details>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg aria-hidden="true" className="h-3.5 w-3.5" viewBox="0 0 16 16" fill="none">
+      <path
+        d="M4 6l4 4 4-4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
