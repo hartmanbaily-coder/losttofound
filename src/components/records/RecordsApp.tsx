@@ -99,7 +99,14 @@ import {
   timezoneSchema,
   validateEvidenceFile,
 } from "@/lib/records/validation";
-import { publicPolicyLinks, recordsTagline, siteName, supportEmail, supportMailto } from "@/lib/site";
+import {
+  publicPolicyLinks,
+  recordsTagline,
+  siteLogoPath,
+  siteName,
+  supportEmail,
+  supportMailto,
+} from "@/lib/site";
 import {
   ExchangeTimingChart,
   ExpenseCategoryChart,
@@ -549,11 +556,11 @@ export default function RecordsApp() {
           <div className="flex flex-col p-4 lg:sticky lg:top-0 lg:h-screen">
             <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
               <Image
-                src="/app-icons/icon-192.png"
+                src={siteLogoPath}
                 alt=""
                 width={40}
                 height={40}
-                className="h-10 w-10 shrink-0 rounded-md bg-slate-950 shadow-sm"
+                className="h-10 w-10 shrink-0 shadow-sm"
               />
               <div className="min-w-0">
                 <p className="text-sm font-semibold tracking-tight text-slate-950">
@@ -1046,12 +1053,12 @@ function LoginScreen({
         <header className="flex items-center justify-between gap-4">
           <Link href="/" className="flex min-w-0 items-center gap-3">
             <Image
-              src="/app-icons/icon-192.png"
+              src={siteLogoPath}
               alt=""
               width={40}
               height={40}
               priority
-              className="h-10 w-10 shrink-0 rounded-md bg-slate-950 shadow-sm"
+              className="h-10 w-10 shrink-0 shadow-sm"
             />
             <span className="min-w-0">
               <span className="block text-sm font-semibold tracking-tight text-slate-950">

@@ -6,6 +6,7 @@ import {
   policyLastUpdated,
   publicPolicyLinks,
   recordsTagline,
+  siteLogoPath,
   siteName,
   supportEmail,
   supportMailto,
@@ -40,12 +41,12 @@ export function PolicyPage({ title, description, notice, sections, children }: P
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <Link href="/" className="flex min-w-0 items-center gap-3">
               <Image
-                src="/app-icons/icon-192.png"
+                src={siteLogoPath}
                 alt=""
                 width={40}
                 height={40}
                 priority
-                className="h-10 w-10 shrink-0 rounded-md bg-slate-950 shadow-sm"
+                className="h-10 w-10 shrink-0 shadow-sm"
               />
               <span className="min-w-0">
                 <span className="block text-sm font-semibold tracking-tight text-slate-950">
@@ -122,11 +123,11 @@ export function PolicyPage({ title, description, notice, sections, children }: P
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.08)] sm:p-7">
             <div className="flex items-start gap-4">
               <Image
-                src="/app-icons/icon-192.png"
+                src={siteLogoPath}
                 alt=""
                 width={48}
                 height={48}
-                className="hidden h-12 w-12 shrink-0 rounded-md bg-slate-950 shadow-sm sm:block"
+                className="hidden h-12 w-12 shrink-0 shadow-sm sm:block"
               />
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">

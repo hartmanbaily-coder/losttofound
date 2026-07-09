@@ -10,32 +10,11 @@ struct AppBrandMark: View {
     var size: CGFloat = 56
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
-                .fill(Color("AccentColor"))
-                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-
-            RoundedRectangle(cornerRadius: size * 0.2, style: .continuous)
-                .stroke(.white.opacity(0.35), lineWidth: 1)
-
-            Image(systemName: "book.closed.fill")
-                .font(.system(size: size * 0.46, weight: .semibold))
-                .foregroundStyle(.white)
-                .offset(x: -size * 0.08, y: -size * 0.04)
-
-            Image(systemName: "chart.bar.fill")
-                .font(.system(size: size * 0.24, weight: .bold))
-                .foregroundStyle(.white.opacity(0.92))
-                .offset(x: size * 0.23, y: size * 0.17)
-
-            Image(systemName: "hammer.fill")
-                .font(.system(size: size * 0.24, weight: .bold))
-                .foregroundStyle(.white.opacity(0.92))
-                .rotationEffect(.degrees(-28))
-                .offset(x: size * 0.23, y: -size * 0.18)
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
+        Image("L2FLogo")
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .accessibilityHidden(true)
     }
 }
 

@@ -5,11 +5,11 @@ This folder prepares Lost to Found Case Organization for the Apple App Store pat
 The iOS app is a native SwiftUI shell with:
 
 - Device authentication gate using Face ID, Touch ID, or device passcode.
-- Native tab structure for Workspace, Privacy, and Support.
+- Native tab structure for Records, Policies, and Support.
 - A controlled `WKWebView` workspace pointed at `https://losttofound.org/records`.
 - External link handling that opens non-product links outside the workspace.
 - Native privacy/support summaries that mirror the public policy pages.
-- App icon assets generated from the Lost to Found book, records, graph, and gavel logo.
+- App icon assets generated from the original Lost to Found L2F logo.
 
 ## Local Setup
 
