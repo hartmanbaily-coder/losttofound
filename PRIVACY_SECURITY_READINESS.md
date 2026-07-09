@@ -93,6 +93,7 @@ npm run verify:headers
 npm run check:pre-supabase
 npm run verify:malware
 npm run verify:isolation
+npm run verify:supabase-auth
 npm run verify:security-events
 npm run verify:backup-restore
 npm run check:live

@@ -23,6 +23,7 @@
     "verify:edge-controls": "node scripts/verify-edge-controls.mjs",
     "verify:malware": "node scripts/verify-malware-scanner.mjs",
     "verify:isolation": "node scripts/verify-two-user-isolation.mjs",
+    "verify:supabase-auth": "node scripts/verify-supabase-auth-public-settings.mjs",
     "verify:security-events": "node scripts/verify-security-event-sink.mjs",
     "verify:backup-restore": "node scripts/verify-backup-restore-evidence.mjs",
     "cleanup:retired-grant-bucket": "node scripts/delete-retired-grant-bucket.mjs"

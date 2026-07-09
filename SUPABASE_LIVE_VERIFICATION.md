@@ -82,6 +82,7 @@ Before production records launch, verify in the Supabase dashboard and reflect t
 
 - `SUPABASE_MFA_POLICY=required`
 - `RECORDS_ENFORCE_MFA=true`
+- When `RECORDS_SIGNUPS_ENABLED=false`, Supabase Auth direct signup must also be disabled so users cannot bypass the app signup gate by calling Supabase Auth directly.
 - `SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED=true`
 - `SUPABASE_PASSWORD_MIN_LENGTH=12` or higher
 - `SUPABASE_PASSWORD_REAUTH_ENABLED=true`
@@ -89,6 +90,8 @@ Before production records launch, verify in the Supabase dashboard and reflect t
 - `SUPABASE_AUTH_HARDENING_VERIFIED_AT=<YYYY-MM-DD>` after dashboard settings and Supabase advisors are verified
 
 The app now includes a Supabase TOTP MFA login/enrollment flow and production AAL2 enforcement. The Supabase dashboard settings above still need live confirmation before accepting real records.
+
+Public Auth settings check on 2026-07-09 showed email auth enabled, anonymous users disabled, phone auth disabled, and email autoconfirm disabled. It also showed `disable_signup=false` while the app-level records signup gate is disabled. For invite-only/App Store-test-account mode, disable direct Supabase signup in the Auth dashboard or intentionally enable and document public self-registration before clearing Auth hardening.
 
 ## Two-User Isolation Verification
 

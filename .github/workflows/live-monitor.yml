@@ -20,7 +20,6 @@ jobs:
           node <<'NODE'
           const baseUrl = process.env.RECORDS_APP_BASE_URL.replace(/\/$/, "");
           const expectedKnownBlockers = new Set([
-            "records-signup-mode",
             "supabase-custom-smtp",
             "supabase-auth-redirects",
             "supabase-leaked-passwords",
@@ -52,6 +51,7 @@ jobs:
           if (!recordsResponse.ok) {
             fail(`/records returned HTTP ${recordsResponse.status}`);
           }
+          const recordsHtml = await recordsResponse.text();
 
           const requiredHeaders = [
             "content-security-policy",
@@ -66,6 +66,46 @@ jobs:
             if (!recordsResponse.headers.get(header)) {
               fail(`/records is missing ${header}`);
             }
+          }
+
+          const csp = recordsResponse.headers.get("content-security-policy") || "";
+          const scriptSrc = csp
+            .split(";")
+            .map((part) => part.trim())
+            .find((part) => part.toLowerCase().startsWith("script-src"));
+          if (!scriptSrc || !scriptSrc.includes("'nonce-")) {
+            fail("/records CSP script-src is missing a nonce.");
+          }
+          if (scriptSrc?.includes("'unsafe-inline'") || scriptSrc?.includes("'unsafe-eval'")) {
+            fail("/records CSP script-src allows an unsafe script source.");
+          }
+          if (!/<script[^>]+nonce=/.test(recordsHtml)) {
+            fail("/records HTML does not include nonce-bearing script tags.");
+          }
+          if (recordsResponse.headers.get("x-frame-options")?.trim().toUpperCase() !== "DENY") {
+            fail("/records x-frame-options is not DENY.");
+          }
+          if (recordsResponse.headers.get("x-content-type-options")?.trim().toLowerCase() !== "nosniff") {
+            fail("/records x-content-type-options is not nosniff.");
+          }
+
+          const fakeLoginResponse = await fetch(`${baseUrl}/api/records/auth/login`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({
+              email: "deploy-monitor@example.invalid",
+              password: "not-a-real-password",
+              adultConfirmed: true,
+            }),
+          });
+          if (![400, 401].includes(fakeLoginResponse.status)) {
+            fail(`Fake login returned HTTP ${fakeLoginResponse.status}; expected handled 400 or 401.`);
+          }
+          if (!fakeLoginResponse.headers.get("content-type")?.includes("application/json")) {
+            fail("Fake login did not return JSON content-type.");
           }
 
           const readinessResponse = await get(`${baseUrl}/api/records/readiness`);
