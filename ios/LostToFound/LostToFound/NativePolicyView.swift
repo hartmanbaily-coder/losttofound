@@ -4,7 +4,18 @@ enum AppBrand {
     static let name = "Lost to Found Case Organization"
     static let tagline = "Remove the emotion. Track the data."
     static let supportEmail = "support@lendori.io"
+    static let legalDisclaimer = "This app helps organize records and does not provide legal advice. Consult a qualified attorney about your situation."
 }
+
+private let appPolicyLinks: [PolicyLink] = [
+    PolicyLink(title: "Privacy Policy", url: URL(string: "https://losttofound.org/privacy")!),
+    PolicyLink(title: "Terms of Use", url: URL(string: "https://losttofound.org/terms")!),
+    PolicyLink(title: "Security", url: URL(string: "https://losttofound.org/security")!),
+    PolicyLink(title: "AI Data Use", url: URL(string: "https://losttofound.org/ai-data-use")!),
+    PolicyLink(title: "Subprocessors", url: URL(string: "https://losttofound.org/subprocessors")!),
+    PolicyLink(title: "Accessibility", url: URL(string: "https://losttofound.org/accessibility")!),
+    PolicyLink(title: "Contact", url: URL(string: "https://losttofound.org/contact")!)
+]
 
 struct AppBrandMark: View {
     var size: CGFloat = 56
@@ -37,22 +48,12 @@ struct AppBrandHeader: View {
 }
 
 struct PrivacySummaryView: View {
-    private let policyLinks: [PolicyLink] = [
-        PolicyLink(title: "Privacy Policy", url: URL(string: "https://losttofound.org/privacy")!),
-        PolicyLink(title: "Terms of Use", url: URL(string: "https://losttofound.org/terms")!),
-        PolicyLink(title: "Security", url: URL(string: "https://losttofound.org/security")!),
-        PolicyLink(title: "AI Data Use", url: URL(string: "https://losttofound.org/ai-data-use")!),
-        PolicyLink(title: "Subprocessors", url: URL(string: "https://losttofound.org/subprocessors")!),
-        PolicyLink(title: "Accessibility", url: URL(string: "https://losttofound.org/accessibility")!),
-        PolicyLink(title: "Contact", url: URL(string: "https://losttofound.org/contact")!)
-    ]
-
     var body: some View {
         List {
             Section {
                 AppBrandHeader()
 
-                Text("Lost to Found is for adult users organizing private custody and parenting plan records. It does not provide legal advice, legal strategy, or emergency services.")
+                Text("Lost to Found is for adult users organizing private custody and parenting plan records.")
                     .font(.body)
                     .foregroundStyle(.secondary)
             }
@@ -64,15 +65,9 @@ struct PrivacySummaryView: View {
                 Label("User controlled records and exports", systemImage: "doc.text.magnifyingglass")
             }
 
-            Section("Policy Center") {
-                ForEach(policyLinks) { link in
-                    Link(destination: link.url) {
-                        Label(link.title, systemImage: "safari")
-                    }
-                }
-            }
+            NativePolicyFooterSections()
         }
-        .navigationTitle("Policy Center")
+        .navigationTitle("Policies")
     }
 }
 
@@ -102,13 +97,27 @@ struct SupportView: View {
                 }
             }
 
-            Section("App Review Notes") {
-                Text("This app is a private records organizer for adults. It is not a law firm, attorney client portal, emergency tool, child facing app, or coparent messaging system.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
+            NativePolicyFooterSections()
         }
         .navigationTitle("Support")
+    }
+}
+
+private struct NativePolicyFooterSections: View {
+    var body: some View {
+        Section("Policy Center") {
+            ForEach(appPolicyLinks) { link in
+                Link(destination: link.url) {
+                    Label(link.title, systemImage: "safari")
+                }
+            }
+        }
+
+        Section("Disclaimer") {
+            Text(AppBrand.legalDisclaimer)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

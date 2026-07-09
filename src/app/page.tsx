@@ -1,7 +1,8 @@
 import Link from "next/link";
 import Image from "next/image";
 
-import { recordsTagline, siteName, supportMailto } from "@/lib/site";
+import PolicyFooter from "@/components/PolicyFooter";
+import { recordsTagline, siteName } from "@/lib/site";
 
 const quickActions = [
   "Late exchange",
@@ -55,15 +56,6 @@ export default function HomePage() {
         </Link>
 
         <nav className="hidden items-center gap-1 text-sm font-medium md:flex">
-          <Link href="/records" className="rounded-md px-3 py-2 text-slate-600 transition hover:bg-white hover:text-slate-950">
-            Workspace
-          </Link>
-          <Link href="/privacy" className="rounded-md px-3 py-2 text-slate-600 transition hover:bg-white hover:text-slate-950">
-            Privacy
-          </Link>
-          <Link href="/security" className="rounded-md px-3 py-2 text-slate-600 transition hover:bg-white hover:text-slate-950">
-            Security
-          </Link>
           <Link href="/records" className="rounded-md bg-slate-950 px-4 py-2 text-white shadow-sm transition hover:bg-slate-800">
             Open workspace
           </Link>
@@ -107,20 +99,6 @@ export default function HomePage() {
                 </Link>
               ))}
             </div>
-          </div>
-
-          <div className="mt-7 flex flex-col gap-3 text-sm text-slate-600 sm:flex-row sm:items-center">
-            <Link href="/privacy" className="font-semibold text-slate-950 underline-offset-4 hover:underline">
-              Review privacy
-            </Link>
-            <span className="hidden h-1 w-1 rounded-full bg-slate-300 sm:block" />
-            <Link href="/security" className="font-semibold text-slate-950 underline-offset-4 hover:underline">
-              Security overview
-            </Link>
-            <span className="hidden h-1 w-1 rounded-full bg-slate-300 sm:block" />
-            <a href={supportMailto} className="font-semibold text-slate-950 underline-offset-4 hover:underline">
-              Contact support
-            </a>
           </div>
         </div>
 
@@ -182,6 +160,8 @@ export default function HomePage() {
           </div>
         ))}
       </section>
+
+      <PolicyFooter />
     </main>
   );
 }

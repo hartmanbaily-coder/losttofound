@@ -50,12 +50,18 @@ struct AuthenticationGate: View {
 
             Spacer()
 
-            Text("This app helps organize records and does not provide legal advice.")
-                .font(.footnote)
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 20)
+            VStack(spacing: 6) {
+                Text("Disclaimer")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Text(AppBrand.legalDisclaimer)
+                    .font(.footnote)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 20)
         }
         .task {
             await authenticate()

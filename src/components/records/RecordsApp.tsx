@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { FormEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import PolicyFooter from "@/components/PolicyFooter";
 import {
   addDays,
   buildDashboardTimelineStats,
@@ -99,7 +100,7 @@ import {
   timezoneSchema,
   validateEvidenceFile,
 } from "@/lib/records/validation";
-import { publicPolicyLinks, recordsTagline, siteName, supportEmail, supportMailto } from "@/lib/site";
+import { recordsTagline, siteName, supportEmail, supportMailto } from "@/lib/site";
 import {
   ExchangeTimingChart,
   ExpenseCategoryChart,
@@ -107,8 +108,8 @@ import {
   SupportTrendLine,
 } from "./RecordsCharts";
 
-const disclaimer =
-  "This tool helps organize records and does not provide legal advice. Consult a qualified attorney about your situation.";
+const recordsPrivacyNote =
+  "Records are private by default. Use labels such as Child 1 and Parent B instead of real names.";
 
 const navItems = [
   "Dashboard",
@@ -589,24 +590,6 @@ export default function RecordsApp() {
                 </button>
               ))}
             </nav>
-
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:mt-auto lg:block lg:space-y-3">
-              <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-xs leading-5 text-amber-950">
-                Records are private by default. Use labels such as Child 1 and Parent B instead of real names.
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Policy center
-                </p>
-                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs leading-5">
-                  {publicPolicyLinks.map((item) => (
-                    <Link key={item.href} href={item.href} className="font-medium text-slate-600 hover:text-teal-800">
-                      {item.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
           </div>
         </aside>
 
@@ -654,7 +637,6 @@ export default function RecordsApp() {
           </header>
 
           <div className="space-y-5 px-4 py-5 lg:px-6">
-            <Disclaimer />
             {toast && (
               <div className="rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-900">
                 {toast}
@@ -799,6 +781,7 @@ export default function RecordsApp() {
               />
             )}
           </div>
+          <PolicyFooter recordsNote={recordsPrivacyNote} />
         </main>
       </div>
     </div>
@@ -1062,15 +1045,6 @@ function LoginScreen({
               </span>
             </span>
           </Link>
-
-          <nav className="hidden items-center gap-1 text-sm font-medium sm:flex">
-            <Link href="/privacy" className="rounded-md px-3 py-2 text-slate-600 transition hover:bg-white hover:text-slate-950">
-              Privacy
-            </Link>
-            <Link href="/security" className="rounded-md px-3 py-2 text-slate-600 transition hover:bg-white hover:text-slate-950">
-              Security
-            </Link>
-          </nav>
         </header>
 
         <section className="grid flex-1 items-center gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-12 lg:py-8">
@@ -1088,10 +1062,6 @@ function LoginScreen({
             <p className="mt-5 max-w-2xl text-sm leading-6 text-slate-500">
               Built for adult recordkeeping. Records stay private in your account, and you choose what to export.
             </p>
-
-            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50/80 p-3 text-sm leading-6 text-amber-950 lg:mt-8">
-              {disclaimer}
-            </div>
           </section>
 
           <section className="order-1 self-center rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.12)] sm:p-8 lg:order-2">
@@ -1310,15 +1280,7 @@ function LoginScreen({
           </section>
         </section>
 
-        <footer className="border-t border-slate-200 py-4 text-xs leading-5 text-slate-500">
-          <div className="flex flex-wrap gap-x-4 gap-y-2">
-            {publicPolicyLinks.map((item) => (
-              <Link key={item.href} href={item.href} className="font-medium text-slate-600 hover:text-teal-800">
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        </footer>
+        <PolicyFooter className="-mx-4 mt-auto sm:-mx-6 lg:-mx-8" />
       </div>
     </main>
   );
@@ -5864,20 +5826,6 @@ function SettingsView({
           </div>
         </Panel>
 
-        <Panel title="Policy center" action="Public pages">
-          <div className="flex flex-wrap gap-2 text-sm">
-            {publicPolicyLinks.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-md border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:border-teal-500 hover:text-teal-800"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        </Panel>
-
         <Panel title="Audit trail" action={`${selected.auditLogs.length} entries`}>
           <Table
             headers={["Time", "Action", "Entity", "Summary"]}
@@ -5890,14 +5838,6 @@ function SettingsView({
           />
         </Panel>
       </div>
-    </div>
-  );
-}
-
-function Disclaimer() {
-  return (
-    <div className="no-print rounded-lg border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm leading-6 text-amber-950 shadow-sm">
-      {disclaimer}
     </div>
   );
 }
