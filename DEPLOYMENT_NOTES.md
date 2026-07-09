@@ -99,20 +99,26 @@ Before production deploy, use `.env.production.example` as the source checklist 
 - `VENDOR_SECURITY_REVIEW_APPROVED`
 - `SECURITY_CONTACT_EMAIL`
 
-The current GitHub workflow validates source quality but does not deploy. Production for `losttofound.org` is served by the `losttofound` container inside the separate `hartmanbaily-coder/listhaus` Docker Compose/Caddy stack.
+Production for `losttofound.org` is served by the `losttofound` container inside the separate `hartmanbaily-coder/listhaus` Docker Compose/Caddy stack. The LostToFound validation workflow dispatches the Listhaus production deploy after validation passes on `main`.
+
+Required automation secret:
+
+- `LISTHAUS_DEPLOY_TOKEN` in `hartmanbaily-coder/losttofound`. Prefer a fine-grained PAT or GitHub App token scoped only to `hartmanbaily-coder/listhaus` with `Actions: Read and write`; it does not need Contents write for workflow dispatch. A classic PAT must use GitHub's broader `repo` scope.
 
 Use this deploy path for LostToFound changes:
 
 1. Commit and push the LostToFound change to `hartmanbaily-coder/losttofound` `main`.
-2. Wait for the `Validate LostToFound` workflow to pass.
-3. Trigger `hartmanbaily-coder/listhaus` workflow `deploy.yml` on `main`. That workflow updates the remote LostToFound checkout, writes `/opt/listhaus/losttofound/.env.production`, rebuilds the `losttofound` container, restarts the shared Caddy/Compose stack, and verifies the LostToFound malware scanner.
-4. Watch the Listhaus deploy workflow until it completes.
-5. Verify production after deploy:
+2. The `Validate LostToFound` workflow runs lint, typecheck, unit tests, secret scan, production env template validation, dependency audit, and build.
+3. After validation passes, the workflow dispatches `hartmanbaily-coder/listhaus` workflow `deploy.yml` with the exact validated LostToFound commit SHA.
+4. The Listhaus deploy workflow checks out that SHA, writes `/opt/listhaus/losttofound/.env.production`, rebuilds the `losttofound` container, restarts the shared Caddy/Compose stack, verifies the malware scanner, and runs live HTTP smoke checks.
+5. Verify production after deploy if manual confirmation is needed:
    - `https://losttofound.org/records` serves the expected bundle/UI.
-   - A fake login to `POST https://losttofound.org/api/records/auth/login` returns a handled `401` JSON response, not a blank `500`.
+   - A fake login to `POST https://losttofound.org/api/records/auth/login` returns a handled `400` or `401` JSON response, not a blank `500`.
    - `https://losttofound.org/api/records/readiness` reflects the expected readiness blockers.
 
-Because the deploy workflow restarts the shared Listhaus Compose stack, get explicit approval before triggering it when the request is not clearly a production deploy request. Run `npm run check:production` in the deployment environment, with real host secrets loaded, before accepting real records.
+The Listhaus workflow can still be run manually with `workflow_dispatch`. Use the optional `losttofound_sha` input to deploy a specific validated LostToFound commit; leaving it blank deploys `origin/main`.
+
+Because the deploy workflow restarts the shared Listhaus Compose stack, get explicit approval before pushing to `main` or manually triggering deploy when the request is not clearly a production deploy request. Run `npm run check:production` in the deployment environment, with real host secrets loaded, before accepting real records.
 
 When Supabase is intentionally saved for last, run `npm run check:pre-supabase` first. That mode still checks host, secret strength, edge controls, monitoring, malware scanning, privacy/legal approvals, and other non-Supabase gates, while deferring the final Supabase Auth, storage, restore, and isolation checks.
 

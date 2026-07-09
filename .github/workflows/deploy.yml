@@ -8,6 +8,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      deploy:
+        description: Dispatch the Listhaus production deploy after validation passes.
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: losttofound-validate-${{ github.ref }}
@@ -42,3 +48,24 @@ jobs:
           npm run security:audit
           npm run verify:env-template
           npm run build
+
+      - name: Dispatch Listhaus production deploy
+        if: >-
+          (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy == 'true')
+        env:
+          LISTHAUS_DEPLOY_TOKEN: ${{ secrets.LISTHAUS_DEPLOY_TOKEN }}
+          LOSTTOFOUND_SHA: ${{ github.sha }}
+        run: |
+          if [ -z "$LISTHAUS_DEPLOY_TOKEN" ]; then
+            echo "::error::Set LISTHAUS_DEPLOY_TOKEN in this repository. Prefer a fine-grained PAT or GitHub App token scoped to hartmanbaily-coder/listhaus with Actions: Read and write."
+            exit 1
+          fi
+
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${LISTHAUS_DEPLOY_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/hartmanbaily-coder/listhaus/actions/workflows/deploy.yml/dispatches \
+            -d "{\"ref\":\"main\",\"inputs\":{\"losttofound_sha\":\"${LOSTTOFOUND_SHA}\"}}"
