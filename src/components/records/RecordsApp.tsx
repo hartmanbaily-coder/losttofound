@@ -101,7 +101,7 @@ import {
   validateEvidenceFile,
 } from "@/lib/records/validation";
 import {
-  accountDeletionMailto,
+  accountDeletionPath,
   recordsTagline,
   siteName,
   supportEmail,
@@ -5802,9 +5802,9 @@ function SettingsView({
             <button type="button" onClick={resetDemoData} className="btn-secondary">
               {recordsStorageMode === "supabase" ? "Clear workspace data" : "Reset synthetic demo data"}
             </button>
-            <a href={accountDeletionMailto} className="btn-secondary text-center">
+            <Link href={accountDeletionPath} className="btn-secondary text-center">
               Request account deletion
-            </a>
+            </Link>
             <Link href="/privacy" className="btn-secondary text-center">
               Privacy and deletion policy
             </Link>

@@ -29,7 +29,7 @@ The iOS app is a native SwiftUI shell with:
 5. Use TestFlight for internal testing.
 6. Submit for App Review after privacy/legal copy and screenshots are final.
 
-Before App Review, create a dedicated synthetic review account and make sure the review notes explain device unlock, login/MFA, native policy/support tabs, and the Support tab account deletion request path.
+Before App Review, create a dedicated synthetic review account and make sure the review notes explain device unlock, login/MFA, native policy/support tabs, and the Support tab account deletion request path at `https://losttofound.org/account/delete`.
 
 ## Native Value
 

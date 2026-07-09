@@ -1,5 +1,7 @@
+import Link from "next/link";
+
 import { PolicyPage, type PolicySection } from "@/components/PolicyPage";
-import { supportEmail, supportMailto } from "@/lib/site";
+import { accountDeletionPath, supportEmail, supportMailto } from "@/lib/site";
 
 const sections: PolicySection[] = [
   {
@@ -13,7 +15,7 @@ const sections: PolicySection[] = [
   {
     title: "Privacy requests",
     body: [
-      "Use support for access, correction, deletion, export, account data, retention, or privacy policy questions.",
+      "Use the account deletion page to start complete account deletion. Use support for access, correction, export, account data, retention, or privacy policy questions.",
       "Include the email address connected to the account so the request can be matched after verification.",
       "Some privacy requests may require identity verification before action is taken.",
     ],
@@ -67,6 +69,13 @@ export default function ContactPage() {
           <a href={supportMailto} className="font-mono font-semibold text-emerald-700 underline underline-offset-2">
             {supportEmail}
           </a>
+          .
+        </p>
+        <p className="mt-3">
+          For account deletion, go directly to{" "}
+          <Link href={accountDeletionPath} className="font-semibold text-emerald-700 underline underline-offset-2">
+            Delete Account
+          </Link>
           .
         </p>
       </section>

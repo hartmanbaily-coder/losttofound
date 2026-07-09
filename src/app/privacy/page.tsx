@@ -1,5 +1,6 @@
 import { PolicyPage, type PolicySection } from "@/components/PolicyPage";
-import { supportEmail, supportMailto } from "@/lib/site";
+import { accountDeletionPath, supportEmail, supportMailto } from "@/lib/site";
+import Link from "next/link";
 
 const sections: PolicySection[] = [
   {
@@ -77,7 +78,7 @@ const sections: PolicySection[] = [
     body: [
       "Users can use privacy minded labels instead of real names and can avoid entering unnecessary sensitive identifiers.",
       "Users can export records and download files where export/download controls are available.",
-      "Users can request access, correction, deletion, account support, privacy review, or security review by emailing the support address below.",
+      "Users can start complete account deletion from the account deletion page, and can request access, correction, account support, privacy review, or security review by emailing the support address below.",
       "Some requests may require identity verification before action is taken.",
     ],
   },
@@ -118,7 +119,11 @@ export default function PrivacyPage() {
       <section className="rounded-lg border border-slate-200 bg-white p-6 text-sm leading-6 text-slate-600">
         <h2 className="text-base font-semibold text-slate-950">Privacy Requests</h2>
         <p className="mt-2">
-          Send privacy, deletion, access, correction, or account-data requests to{" "}
+          Start a complete account deletion request from{" "}
+          <Link href={accountDeletionPath} className="font-semibold text-emerald-700 underline underline-offset-2">
+            Delete Account
+          </Link>
+          . Send other privacy, access, correction, or account-data requests to{" "}
           <a href={supportMailto} className="font-mono font-semibold text-emerald-700 underline underline-offset-2">
             {supportEmail}
           </a>

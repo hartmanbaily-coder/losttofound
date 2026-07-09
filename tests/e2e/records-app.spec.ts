@@ -173,14 +173,25 @@ test("records account recovery and deletion paths are reachable", async ({ page 
 
   const accountDeletion = page.getByRole("link", { name: "Request account deletion" });
   await expect(accountDeletion).toBeVisible();
-  await expect(accountDeletion).toHaveAttribute(
-    "href",
-    "mailto:support@lendori.io?subject=Lost%20to%20Found%20account%20deletion%20request"
-  );
+  await expect(accountDeletion).toHaveAttribute("href", "/account/delete");
 
   const privacyDeletion = page.getByRole("link", { name: "Privacy and deletion policy" });
   await expect(privacyDeletion).toBeVisible();
   await expect(privacyDeletion).toHaveAttribute("href", "/privacy");
+
+  await accountDeletion.click();
+  await expect(page).toHaveURL(/\/account\/delete$/);
+  await expect(page.getByRole("heading", { name: "Delete Account" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Start account deletion" })).toHaveAttribute(
+    "href",
+    "mailto:support@lendori.io?subject=Lost%20to%20Found%20account%20deletion%20request"
+  );
+  await expect(page.getByText("What may be retained")).toBeVisible();
+
+  await page.goto("/records");
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
 
   await privacyDeletion.click();
   await expect(page).toHaveURL(/\/privacy$/);

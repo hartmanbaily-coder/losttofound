@@ -5,7 +5,7 @@ enum AppBrand {
     static let tagline = "Remove the emotion. Track the data."
     static let supportEmail = "support@lendori.io"
     static let accountDeletionRequestURL = URL(
-        string: "mailto:support@lendori.io?subject=Lost%20to%20Found%20account%20deletion%20request"
+        string: "https://losttofound.org/account/delete"
     )!
     static let legalDisclaimer = "This app helps organize records and does not provide legal advice. Consult a qualified attorney about your situation."
 }
@@ -17,6 +17,7 @@ private let appPolicyLinks: [PolicyLink] = [
     PolicyLink(title: "AI Data Use", url: URL(string: "https://losttofound.org/ai-data-use")!),
     PolicyLink(title: "Subprocessors", url: URL(string: "https://losttofound.org/subprocessors")!),
     PolicyLink(title: "Accessibility", url: URL(string: "https://losttofound.org/accessibility")!),
+    PolicyLink(title: "Account Deletion", url: AppBrand.accountDeletionRequestURL),
     PolicyLink(title: "Contact", url: URL(string: "https://losttofound.org/contact")!)
 ]
 
