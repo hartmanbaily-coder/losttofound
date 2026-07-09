@@ -14,8 +14,8 @@ export const dynamic = "force-dynamic";
 function disabledResponse() {
   return NextResponse.json(
     {
-      error: "Supabase records storage is not enabled.",
-      detail: "Set RECORDS_STORAGE_MODE=supabase before evidence intake.",
+      error: "Cloud records storage is not enabled.",
+      detail: "Enable authenticated cloud records storage before evidence intake.",
     },
     { status: 501 }
   );

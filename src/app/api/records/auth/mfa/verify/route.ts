@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   if (!isSupabaseRecordsMode()) {
-    return NextResponse.json({ error: "Supabase records auth is not enabled." }, { status: 501 });
+    return NextResponse.json({ error: "Records account access is not enabled." }, { status: 501 });
   }
 
   const rateLimit = checkRateLimit(request, {

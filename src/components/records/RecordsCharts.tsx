@@ -176,7 +176,7 @@ export function ReportPreviewChartCard({ chart }: { chart: ReportPreviewChart })
         {chart.rows.length === 0 ? (
           <ChartEmpty label={chart.emptyLabel || "No chart data for this range."} />
         ) : rows.length === 0 ? (
-          <ChartEmpty label={chart.emptyLabel || "No non-zero chart values in this range."} />
+          <ChartEmpty label={chart.emptyLabel || "No chart values above zero in this range."} />
         ) : chart.kind === "line" ? (
           <ResponsiveContainer width="100%" height={260} minWidth={0}>
             <LineChart data={chart.rows}>

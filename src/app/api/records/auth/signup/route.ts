@@ -24,7 +24,7 @@ function disabledResponse() {
 
 export async function POST(request: NextRequest) {
   if (!isSupabaseRecordsMode()) {
-    return NextResponse.json({ error: "Supabase records auth is not enabled." }, { status: 501 });
+    return NextResponse.json({ error: "Records account access is not enabled." }, { status: 501 });
   }
 
   if (!isRecordsSignupEnabled()) return disabledResponse();
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
       severity: "warning",
       request,
       status: 400,
-      detail: "Supabase signup failed.",
+      detail: "Account signup failed.",
     });
     return NextResponse.json({ error: "Unable to create that account." }, { status: 400 });
   }

@@ -4,8 +4,8 @@ const sections: PolicySection[] = [
   {
     title: "Records workspace",
     body: [
-      "Lost to Found Records is a private workspace for adults organizing custody, parenting-time, child support, expense, file, and family-court documentation.",
-      "The service is for factual organization, recordkeeping, calendar planning, file storage, and user-directed report exports.",
+      "Lost to Found Records is a private workspace for adults organizing custody, parenting time, child support, expense, file, and family court documentation.",
+      "The service is for factual organization, recordkeeping, calendar planning, file storage, and user directed report exports.",
       "The service may change as account controls, imports, exports, deletion workflows, retention policies, and security operations mature.",
     ],
   },
@@ -13,16 +13,16 @@ const sections: PolicySection[] = [
     title: "Adult use",
     body: [
       "The service is intended for adult users only.",
-      "Do not create accounts for children, invite children to use the service, or use the service as a child-facing product.",
-      "Users are responsible for using privacy-friendly labels and avoiding unnecessary sensitive identifiers.",
+      "Do not create accounts for children, invite children to use the service, or use the service as a child facing product.",
+      "Users are responsible for using privacy minded labels and avoiding unnecessary sensitive identifiers.",
     ],
   },
   {
     title: "No legal advice",
     body: [
-      "The service does not provide legal advice, legal strategy, legal determinations, filing advice, legal representation, or attorney-client privilege.",
+      "The service does not provide legal advice, legal strategy, legal determinations, filing advice, legal representation, or attorney client privilege.",
       "Users should consult a qualified attorney about court orders, evidence handling, filing requirements, child support obligations, and their specific situation.",
-      "Generated summaries, timelines, calendars, exports, and reports are user organization tools, not legal findings or court-ready legal arguments by themselves.",
+      "Generated summaries, timelines, calendars, exports, and reports are user organization tools, not legal findings or court ready legal arguments by themselves.",
     ],
   },
   {
@@ -42,11 +42,11 @@ const sections: PolicySection[] = [
     ],
   },
   {
-    title: "AI-assisted features",
+    title: "AI assisted features",
     body: [
-      "AI-assisted import, if enabled, is intended to help structure user-provided notes, messages, documents, or file summaries.",
+      "AI assisted import, if enabled, is intended to help structure user provided notes, messages, documents, or file summaries.",
       "AI output can be incomplete, inaccurate, or overbroad and must be reviewed by the user before saving, exporting, or relying on it.",
-      "AI-assisted features do not provide legal advice, predict court outcomes, determine credibility, or decide whether evidence is admissible.",
+      "AI assisted features do not provide legal advice, predict court outcomes, determine credibility, or decide whether evidence is admissible.",
     ],
   },
   {
@@ -60,7 +60,7 @@ const sections: PolicySection[] = [
   {
     title: "Safety boundaries",
     body: [
-      "The service is not an emergency service, crisis service, law enforcement tool, supervised exchange service, or safety-response provider.",
+      "The service is not an emergency service, crisis service, law enforcement tool, supervised exchange service, or safety response provider.",
       "Users should contact local emergency services, law enforcement, legal counsel, court staff, or qualified support professionals when appropriate.",
       "The service does not monitor family safety, enforce court orders, or contact another parent or third party on a user's behalf.",
     ],
@@ -69,7 +69,7 @@ const sections: PolicySection[] = [
     title: "Accounts and security",
     body: [
       "Users are responsible for keeping account credentials, devices, email accounts, and authenticator apps secure.",
-      "The service may require multi-factor authentication, stronger password rules, session controls, account verification, rate limits, or manual review.",
+      "The service may require multi factor authentication, stronger password rules, session controls, account verification, rate limits, or manual review.",
       "Users should promptly report suspected unauthorized access or security concerns through the support contact.",
     ],
   },
@@ -103,8 +103,8 @@ export default function TermsPage() {
   return (
     <PolicyPage
       title="Terms of Use"
-      description="These terms set the boundaries for using the records workspace, including adult-only use, no legal advice, evidence limitations, AI-assisted import, account security, and acceptable use."
-      notice="These terms are a product baseline and should be reviewed by qualified counsel before broad public launch or before relying on them for customer-facing enforcement."
+      description="These terms set the boundaries for using the records workspace, including adult only use, no legal advice, evidence limitations, AI assisted import, account security, and acceptable use."
+      notice="These terms are a product baseline and should be reviewed by qualified counsel before broad public launch or before relying on them for customer facing enforcement."
       sections={sections}
     />
   );

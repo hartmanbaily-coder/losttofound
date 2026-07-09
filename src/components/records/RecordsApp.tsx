@@ -186,9 +186,9 @@ const parentingSchedulePresets: Array<{
 }> = [
   {
     id: "three_four_four_three_flip",
-    label: "3/4/4/3 with 8-week flip",
+    label: "3 4 4 3 with eight week flip",
     description:
-      "Alternates 4-3 then 3-4 blocks for eight weeks, then swaps which parent starts the four-day block.",
+      "Alternates four day and three day blocks for eight weeks, then swaps which parent starts the four day block.",
   },
   {
     id: "week_on_week_off",
@@ -198,19 +198,19 @@ const parentingSchedulePresets: Array<{
   },
   {
     id: "two_two_three",
-    label: "2-2-3",
+    label: "Two two three",
     description:
-      "Two days, two days, then a three-day weekend, flipping the long weekend each week.",
+      "Two days, two days, then a three day weekend, flipping the long weekend each week.",
   },
   {
     id: "two_two_five_five",
-    label: "2-2-5-5",
+    label: "Two two five five",
     description:
-      "Two fixed weekdays with each parent, then alternating five-day stretches.",
+      "Two fixed weekdays with each parent, then alternating five day stretches.",
   },
   {
     id: "three_three_four_four",
-    label: "3-3-4-4",
+    label: "Three three four four",
     description:
       "Three days with each parent, then four days with each parent.",
   },
@@ -245,7 +245,7 @@ const directTimelineDeleteTypes = new Set<CalendarEvent["type"]>([
 const exportReviewItems = [
   {
     key: "neutralLabels",
-    label: "Names, file titles, and labels use privacy-friendly wording.",
+    label: "Names, file titles, and labels use privacy minded wording.",
   },
   {
     key: "paymentRefs",
@@ -253,7 +253,7 @@ const exportReviewItems = [
   },
   {
     key: "notes",
-    label: "Notes are factual and do not include unnecessary third-party details.",
+    label: "Notes are factual and do not include unnecessary third party details.",
   },
 ] as const;
 
@@ -913,7 +913,7 @@ function LoginScreen({
         setMfaEnrollment(result.enrollment);
       }
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : "Sign-in failed.");
+      setError(loginError instanceof Error ? loginError.message : "Sign in failed.");
     } finally {
       setSubmitting(false);
     }
@@ -1038,51 +1038,69 @@ function LoginScreen({
         ? "Reset password"
         : mode === "update_password"
           ? "Choose new password"
-          : recordsStorageMode === "supabase"
-            ? "Secure sign in"
-            : "Local demo access";
+          : "Sign in";
 
   return (
-    <main className="grid min-h-screen place-items-center bg-slate-100 px-4 py-10 text-slate-950">
-      <div className="w-full max-w-5xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="grid lg:grid-cols-[1fr_420px]">
-          <section className="space-y-6 p-6 sm:p-8">
-            <div className="flex items-center gap-3">
-              <Image
-                src="/app-icons/icon-192.png"
-                alt=""
-                width={44}
-                height={44}
-                className="h-11 w-11 rounded-lg bg-slate-950 shadow-sm"
-              />
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight">{siteName}</h1>
-                <p className="text-sm text-slate-500">{recordsTagline}</p>
-              </div>
-            </div>
+    <main className="min-h-screen overflow-hidden bg-[#f6f8f7] text-slate-950">
+      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8">
+        <header className="flex items-center justify-between gap-4">
+          <Link href="/" className="flex min-w-0 items-center gap-3">
+            <Image
+              src="/app-icons/icon-192.png"
+              alt=""
+              width={40}
+              height={40}
+              priority
+              className="h-10 w-10 shrink-0 rounded-md bg-slate-950 shadow-sm"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-semibold tracking-tight text-slate-950">
+                {siteName}
+              </span>
+              <span className="block text-xs leading-4 text-slate-500">
+                {recordsTagline}
+              </span>
+            </span>
+          </Link>
 
-            <p className="max-w-2xl text-sm leading-6 text-slate-600">
-              Sign in to organize court-ordered exchange expectations, recorded exchange
-              outcomes, child support payment records, expenses, date-based notes, file
-              attachments, and neutral report exports.
+          <nav className="hidden items-center gap-1 text-sm font-medium sm:flex">
+            <Link href="/privacy" className="rounded-md px-3 py-2 text-slate-600 transition hover:bg-white hover:text-slate-950">
+              Privacy
+            </Link>
+            <Link href="/security" className="rounded-md px-3 py-2 text-slate-600 transition hover:bg-white hover:text-slate-950">
+              Security
+            </Link>
+          </nav>
+        </header>
+
+        <section className="grid flex-1 items-center gap-6 py-6 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-12 lg:py-8">
+          <section className="order-2 flex max-w-3xl flex-col justify-center lg:order-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-700">
+              Private records workspace
+            </p>
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-slate-950 sm:text-6xl">
+              {siteName}
+            </h1>
+            <p className="mt-4 max-w-2xl text-lg leading-7 text-slate-600 sm:text-xl sm:leading-8">
+              Turn custody notes, exchanges, files, and reports into a clear record you can actually use.
             </p>
 
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-              {disclaimer}
-            </div>
+            <p className="mt-5 max-w-2xl text-sm leading-6 text-slate-500">
+              Built for adult recordkeeping. Records stay private in your account, and you choose what to export.
+            </p>
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <StatMini label="Adult users" value="Only" />
-              <StatMini label="Stored records" value="Private" />
-              <StatMini label="Public sharing" value="Off" />
+            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50/80 p-3 text-sm leading-6 text-amber-950 lg:mt-8">
+              {disclaimer}
             </div>
           </section>
 
-          <section className="border-t border-slate-200 bg-slate-50 p-6 sm:p-8 lg:border-l lg:border-t-0">
-            <h2 className="text-lg font-semibold">{heading}</h2>
+          <section className="order-1 self-center rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_24px_80px_rgba(15,23,42,0.12)] sm:p-8 lg:order-2">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
+              Account access
+            </p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{heading}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Supabase mode signs in through server-managed HttpOnly cookies and requires
-              authenticator verification. Local mode is limited to development demo data.
+              Organize your custody data into clear records so you can understand patterns, work toward your desired outcomes, and protect yourself with better documentation.
             </p>
 
             {message && (
@@ -1095,7 +1113,7 @@ function LoginScreen({
               <form method="post" onSubmit={onMfaSubmit} className="mt-5 space-y-4">
                 {mfaMode === "enroll" && mfaEnrollment && (
                   <div className="rounded-md border border-slate-200 bg-white p-4">
-                    {/* Supabase returns this as a data URL; a plain img avoids Next image SVG/data URL rewriting. */}
+                    {/* The authenticator provider returns this as a data URL; a plain img avoids Next image SVG/data URL rewriting. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       alt="Authenticator QR code"
@@ -1122,7 +1140,7 @@ function LoginScreen({
                 <button
                   type="submit"
                   disabled={mfaSubmitting}
-                  className="h-10 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
+                  className="min-h-11 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
                 >
                   {mfaSubmitting ? "Verifying..." : "Verify authenticator"}
                 </button>
@@ -1154,7 +1172,7 @@ function LoginScreen({
                 <button
                   type="button"
                   onClick={() => switchMode("login")}
-                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
+                  className="min-h-11 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
                 >
                   Back to sign in
                 </button>
@@ -1178,21 +1196,21 @@ function LoginScreen({
                 <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
                   <input name="adult" type="checkbox" defaultChecked className="mt-1" />
                   <span>
-                    I am an adult user and will use privacy-friendly labels for sensitive records.
+                    I am an adult user and will use privacy minded labels for sensitive records.
                   </span>
                 </label>
                 {error && <p className="text-sm font-medium text-red-700">{error}</p>}
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="h-10 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
+                  className="min-h-11 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
                 >
                   {submitting ? "Creating..." : "Create account"}
                 </button>
                 <button
                   type="button"
                   onClick={() => switchMode("login")}
-                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
+                  className="min-h-11 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
                 >
                   Back to sign in
                 </button>
@@ -1221,14 +1239,14 @@ function LoginScreen({
                 <button
                   type="submit"
                   disabled={submitting || recoveryHydrating}
-                  className="h-10 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
+                  className="min-h-11 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
                 >
                   {recoveryHydrating ? "Preparing..." : submitting ? "Saving..." : "Update password"}
                 </button>
                 <button
                   type="button"
                   onClick={() => switchMode("login")}
-                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
+                  className="min-h-11 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
                 >
                   Back to sign in
                 </button>
@@ -1256,14 +1274,14 @@ function LoginScreen({
                 <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
                   <input name="adult" type="checkbox" defaultChecked className="mt-1" />
                   <span>
-                    I am an adult user and will use privacy-friendly labels for sensitive records.
+                    I am an adult user and will use privacy minded labels for sensitive records.
                   </span>
                 </label>
                 {error && <p className="text-sm font-medium text-red-700">{error}</p>}
                 <button
                   type="submit"
                   disabled={!appReady || submitting}
-                  className="h-10 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
+                  className="min-h-11 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
                 >
                   {!appReady ? "Loading workspace..." : submitting ? "Signing in..." : "Enter records workspace"}
                 </button>
@@ -1290,8 +1308,9 @@ function LoginScreen({
               </form>
             )}
           </section>
-        </div>
-        <div className="border-t border-slate-200 bg-white px-6 py-4 text-xs leading-5 text-slate-500 sm:px-8">
+        </section>
+
+        <footer className="border-t border-slate-200 py-4 text-xs leading-5 text-slate-500">
           <div className="flex flex-wrap gap-x-4 gap-y-2">
             {publicPolicyLinks.map((item) => (
               <Link key={item.href} href={item.href} className="font-medium text-slate-600 hover:text-teal-800">
@@ -1299,7 +1318,7 @@ function LoginScreen({
               </Link>
             ))}
           </div>
-        </div>
+        </footer>
       </div>
     </main>
   );
@@ -1335,7 +1354,7 @@ function DashboardView({
     { label: "Late exchanges", value: stats.lateExchangeCount },
     { label: "Missed/refused", value: stats.missedExchangeCount },
     { label: "No FaceTime", value: stats.noFaceTimeCount },
-    { label: "Post-call notices", value: stats.postCallNoFaceTimeCount },
+    { label: "Post call notices", value: stats.postCallNoFaceTimeCount },
     { label: "Attached files", value: stats.evidenceCount },
   ];
 
@@ -1346,7 +1365,7 @@ function DashboardView({
         <StatCard label="Late exchanges" value={stats.lateExchangeCount} detail="From visible timeline records" tone="amber" />
         <StatCard label="Missed/refused" value={stats.missedExchangeCount} detail="Exchange issues in timeline" tone="slate" />
         <StatCard label="No FaceTime conducted" value={stats.noFaceTimeCount} detail="FaceTime notes and text archive" tone="amber" />
-        <StatCard label="Post-call notices" value={stats.postCallNoFaceTimeCount} detail="Call first, then text response" tone="slate" />
+        <StatCard label="Post call notices" value={stats.postCallNoFaceTimeCount} detail="Call first, then text response" tone="slate" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[340px_1fr]">
@@ -2109,7 +2128,7 @@ function CalendarView({
                         {selectedAssignment.caregiverLabel}
                       </p>
                       <p className="mt-1 text-xs text-slate-600">
-                        Scheduled parenting-time color for this date
+                        Scheduled parenting time color for this date
                       </p>
                     </div>
                     <span className="h-6 w-6 rounded-full" style={{ backgroundColor: selectedAssignment.color }} />
@@ -2305,7 +2324,7 @@ function TimelineView({
         <StatCard label="Timeline records" value={visibleEvents.length} detail={`${range.from} to ${range.to}`} />
         <StatCard label="Needs review" value={attentionCount} detail="Attention or critical markers" tone="amber" />
         <StatCard label="Exchange entries" value={exchangeCount} detail="Scheduled and logged" />
-        <StatCard label="Notes" value={noteCount} detail="Date-based records" tone="slate" />
+        <StatCard label="Notes" value={noteCount} detail="Date based records" tone="slate" />
         <StatCard label="Files" value={evidenceCount} detail="Dated file attachments" />
       </section>
 
@@ -2330,7 +2349,7 @@ function TimelineView({
                 Export timeline CSV
               </button>
               <p className="text-xs leading-5 text-slate-500">
-                Delete removes user-entered records from this workspace. Scheduled exchanges and
+                Delete removes user entered records from this workspace. Scheduled exchanges and
                 uploaded files are managed from the Files tab.
               </p>
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
@@ -2542,7 +2561,7 @@ function ExchangesView({
   return (
     <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
       <div className="space-y-4">
-        <Panel title="Court-ordered exchange expectation" action="Simple recurring rule">
+        <Panel title="Court ordered exchange expectation" action="Simple recurring rule">
           <form onSubmit={addRule} className="grid gap-3">
             <Field label="Rule name">
               <input name="ruleName" className="input" defaultValue="Friday evening exchange" />
@@ -2767,7 +2786,7 @@ function NotesView({
       )
     );
     event.currentTarget.reset();
-    flash("Date-based note saved.");
+      flash("Date based note saved.");
   }
 
   function deleteNote(noteId: string) {
@@ -2789,7 +2808,7 @@ function NotesView({
         }
       )
     );
-    flash("Date-based note deleted.");
+      flash("Date based note deleted.");
   }
 
   const filteredNotes = filter === "all" ? notes : notes.filter((note) => note.category === filter);
@@ -2797,7 +2816,7 @@ function NotesView({
   return (
     <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
       <div className="space-y-4">
-        <Panel title="Add date-based note" action="Factual wording">
+        <Panel title="Add date based note" action="Factual wording">
           <form onSubmit={addNote} className="grid gap-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Date">
@@ -3160,7 +3179,7 @@ function ImportView({
 
   function queueDrafts(nextDrafts: ImportDraft[], sourceLabel: string) {
     if (nextDrafts.length === 0) {
-      flash(`No import-ready records found in ${sourceLabel}.`);
+      flash(`No import ready records found in ${sourceLabel}.`);
       return;
     }
 
@@ -3722,7 +3741,7 @@ function ImportView({
       <div className="space-y-4">
         <Panel title="Message archive" action="CSV, TXT, HTML">
           <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-            AI review sends this import text to the configured server-side model and returns editable drafts only.
+            AI review sends this import text to the configured server side model and returns editable drafts only.
           </div>
           <form onSubmit={reviewMessageArchive} className="grid gap-3">
             <Field label="Archive file">
@@ -3857,7 +3876,7 @@ function ImportView({
                 <textarea
                   name="orderNotes"
                   className="input min-h-20"
-                  placeholder="Vacation, holiday, communication, and order-specific notes."
+                  placeholder="Vacation, holiday, communication, and order specific notes."
                   defaultValue="Vacation schedule: each parent may exercise two uninterrupted weeks with notice. Holidays: alternate annually unless the order states otherwise."
                 />
               </Field>
@@ -4283,7 +4302,7 @@ function EvidenceView({
       flash(
         recordsStorageMode === "supabase"
           ? "File uploaded, scanned clean, and metadata saved."
-          : "File metadata saved with allow-list validation."
+          : "File metadata saved with allow list validation."
       );
     } catch (error) {
       flash(error instanceof Error ? error.message : "File upload failed.");
@@ -4396,7 +4415,7 @@ function EvidenceView({
         </head>
         <body>
           <h1>{siteName} File Sheet</h1>
-          <p>Private custody records workspace. Use privacy-friendly labels and verify the source document before submission.</p>
+          <p>Private custody records workspace. Use privacy minded labels and verify the source document before submission.</p>
           <div class="notice">This sheet is metadata for organizing records. It is not legal advice and does not replace the original document.</div>
           <table>
             <tbody>
@@ -4511,13 +4530,13 @@ function EvidenceView({
     <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
       <Panel
         title="Private file attachment"
-        action={recordsStorageMode === "supabase" ? "Authenticated storage" : "Safe dev adapter"}
+        action={recordsStorageMode === "supabase" ? "Private storage" : "Private drafting"}
       >
         <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
           Avoid uploading unnecessary Social Security numbers, full bank account numbers, card
-          numbers, or unrelated third-party private information. Supabase mode stores files only
-          after authenticated server-side validation and malware scanning; local mode saves metadata
-          only.
+          numbers, or unrelated third party private information. When cloud storage is active,
+          files are saved only after validation and malware scanning. Private drafting mode saves
+          file metadata only.
         </div>
         <form onSubmit={addEvidence} className="grid gap-3">
           <Field label="File">
@@ -4815,7 +4834,7 @@ function ChildSupportView({
     <div className="space-y-4">
       <section className="grid gap-3 md:grid-cols-4">
         <StatCard label="Total due" value={formatMoney(supportStats.totalDue)} detail="Selected range" />
-        <StatCard label="Total paid" value={formatMoney(supportStats.totalPaid)} detail="User-entered records" />
+        <StatCard label="Total paid" value={formatMoney(supportStats.totalPaid)} detail="User entered records" />
         <StatCard label="Payments marked partial" value={supportStats.partialCount} detail="Selected range" tone="amber" />
         <StatCard label="Payments marked unpaid" value={supportStats.unpaidCount} detail={formatMoney(supportStats.unpaidBalance)} tone="amber" />
       </section>
@@ -5082,13 +5101,13 @@ function ExpensesView({
     <div className="space-y-4">
       <section className="grid gap-3 md:grid-cols-4">
         <StatCard label="Total expenses" value={formatMoney(expenseStats.totalExpenses)} detail="Selected range" />
-        <StatCard label="Reimbursement requested" value={formatMoney(expenseStats.reimbursementRequested)} detail="User-entered records" />
-        <StatCard label="Reimbursement received" value={formatMoney(expenseStats.reimbursementReceived)} detail="User-entered records" />
+        <StatCard label="Reimbursement requested" value={formatMoney(expenseStats.reimbursementRequested)} detail="User entered records" />
+        <StatCard label="Reimbursement received" value={formatMoney(expenseStats.reimbursementReceived)} detail="User entered records" />
         <StatCard label="Unpaid reimbursement" value={formatMoney(expenseStats.unpaidReimbursement)} detail="Based on records" tone="amber" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[420px_1fr]">
-        <Panel title="Add expense record" action="Custody-related expense">
+        <Panel title="Add expense record" action="Custody related expense">
           <form onSubmit={addExpense} className="grid gap-3">
             <Field label="Expense date">
               <input name="expenseDate" type="date" className="input" defaultValue="2026-06-05" />
@@ -5218,7 +5237,7 @@ function ReportsView({
 
   function downloadCsv() {
     if (!exportReviewComplete) {
-      flash("Complete the pre-export review first.");
+      flash("Complete the export review first.");
       return;
     }
     const csv = reportPreviewToCsv(preview);
@@ -5238,7 +5257,7 @@ function ReportsView({
 
   function downloadJson() {
     if (!exportReviewComplete) {
-      flash("Complete the pre-export review first.");
+      flash("Complete the export review first.");
       return;
     }
     const body = JSON.stringify({ report: preview, dataScope: { userId, caseId, range } }, null, 2);
@@ -5262,7 +5281,7 @@ function ReportsView({
 
   function printPdf() {
     if (!exportReviewComplete) {
-      flash("Complete the pre-export review first.");
+      flash("Complete the export review first.");
       return;
     }
     updateDataset((current) =>
@@ -5606,7 +5625,7 @@ function SettingsView({
         ))}
       </datalist>
       <div className="space-y-4">
-        <Panel title="Account settings" action="MFA-ready structure">
+        <Panel title="Account settings" action="MFA ready structure">
           <form onSubmit={updateProfile} className="grid gap-3">
             <Field label="Display name">
               <input name="displayName" className="input" defaultValue={profile?.displayName || ""} />
@@ -5703,7 +5722,7 @@ function SettingsView({
           )}
         </Panel>
 
-        <Panel title="Create custody matter" action="Privacy-friendly labels">
+        <Panel title="Create custody matter" action="Privacy minded labels">
           <form onSubmit={createMatter} className="grid gap-3">
             <Field label="Case name">
               <input name="caseName" className="input" placeholder="Parenting Plan Records" />
@@ -5786,7 +5805,7 @@ function SettingsView({
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Session storage</p>
                 <p className="mt-1 font-medium text-slate-900">
-                  {recordsStorageMode === "supabase" ? "HttpOnly cookie" : "This browser only"}
+                  {recordsStorageMode === "supabase" ? "Secure account session" : "This browser only"}
                 </p>
               </div>
             </div>
@@ -5839,9 +5858,9 @@ function SettingsView({
 
         <Panel title="Session and security notes" action="Privacy defaults">
           <div className="space-y-3 text-sm leading-6 text-slate-600">
-            <p>No child accounts, public profiles, social features, co-parent messaging, advertising trackers, or session replay are included.</p>
-            <p>Cloud storage uses server-side auth routes and HttpOnly cookies instead of browser-stored access tokens.</p>
-            <p>Attached files use server-mediated private object storage, require a clean malware scan before download, and never expose public or anonymous share links.</p>
+            <p>No child accounts, public profiles, social features, coparent messaging, advertising trackers, or session replay are included.</p>
+            <p>Cloud storage is designed to keep account sessions protected and limit what browser scripts can access.</p>
+            <p>Attached files use server mediated private object storage, require a clean malware scan before download, and never expose public or anonymous share links.</p>
           </div>
         </Panel>
 
@@ -6052,7 +6071,7 @@ function SectionExportPanel({
           </button>
         </div>
         <p className="text-xs leading-5 text-slate-500">
-          Exports leave protected storage. Review names, account numbers, and third-party details before sharing.
+          Exports leave protected storage. Review names, account numbers, and third party details before sharing.
         </p>
       </div>
     </Panel>

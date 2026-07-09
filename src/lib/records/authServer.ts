@@ -106,7 +106,7 @@ export function getAccessTokenAal(accessToken: string | undefined) {
 export function mfaRequiredResponse() {
   return NextResponse.json(
     {
-      error: "Multi-factor verification required.",
+      error: "Multi factor verification required.",
       mfaRequired: true,
     },
     { status: 403 }

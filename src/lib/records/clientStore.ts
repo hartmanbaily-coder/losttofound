@@ -87,7 +87,7 @@ async function readRemoteSession() {
   });
 
   if (!response.ok) {
-    throw new Error(response.status === 401 ? "Sign in to Supabase records." : "Records session unavailable.");
+    throw new Error(response.status === 401 ? "Sign in to your records workspace." : "Records session unavailable.");
   }
 
   const body = (await response.json()) as { session?: RecordsSession };
@@ -136,7 +136,7 @@ export function useRecordsStore() {
   const [dataset, setDataset] = useState<RecordsDataset>(() => createRecordsSeed());
   const [hydrated, setHydrated] = useState(false);
   const [storageStatus, setStorageStatus] = useState(
-    recordsStorageMode === "supabase" ? "Supabase storage pending." : "Local demo storage."
+    recordsStorageMode === "supabase" ? "Cloud records storage pending." : "Private drafting storage."
   );
   const datasetRef = useRef(dataset);
   const remoteWriteChainRef = useRef<Promise<void>>(Promise.resolve());
@@ -154,11 +154,11 @@ export function useRecordsStore() {
       remoteWriteChainRef.current = write.catch(() => undefined);
       return write
         .then(() => {
-          setStorageStatus("Supabase records storage saved.");
+          setStorageStatus("Cloud records storage saved.");
         })
         .catch((error: unknown) => {
           const message =
-            error instanceof Error ? error.message : "Supabase records storage save failed.";
+            error instanceof Error ? error.message : "Cloud records storage save failed.";
           setStorageStatus(message);
           throw new Error(message);
         });
@@ -174,10 +174,10 @@ export function useRecordsStore() {
         const remoteSession = await readRemoteSession();
         const remote = await readRemoteDataset(remoteSession);
         setCurrentDataset(remote);
-        setStorageStatus("Supabase records storage connected.");
+        setStorageStatus("Cloud records storage connected.");
       } else {
         setCurrentDataset(readLocalDataset());
-        setStorageStatus("Local demo storage.");
+        setStorageStatus("Private drafting storage.");
       }
     } catch (error) {
       if (recordsStorageMode === "supabase") {
@@ -227,9 +227,9 @@ export function useRecordsStore() {
         : createRecordsSeed();
     setCurrentDataset(next);
     void persistDataset(next)
-      .then(() => setStorageStatus(recordsStorageMode === "supabase" ? "Supabase records storage reset." : "Local demo storage."))
+      .then(() => setStorageStatus(recordsStorageMode === "supabase" ? "Cloud records storage reset." : "Private drafting storage."))
       .catch((error: unknown) =>
-        setStorageStatus(error instanceof Error ? error.message : "Supabase records storage reset failed.")
+        setStorageStatus(error instanceof Error ? error.message : "Cloud records storage reset failed.")
       );
   }
 
@@ -299,7 +299,7 @@ export async function signInRecordsSession(
   }
 
   if (!response.ok || !body.session) {
-    throw new Error(body.error || `Supabase sign-in failed with ${response.status}.`);
+    throw new Error(body.error || `Sign in failed with ${response.status}.`);
   }
 
   return { status: "signed_in", session: body.session };

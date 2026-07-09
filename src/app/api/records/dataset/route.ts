@@ -34,8 +34,8 @@ function isRecordsDataset(input: unknown): input is RecordsDataset {
 function disabledResponse() {
   return NextResponse.json(
     {
-      error: "Supabase records storage is not enabled.",
-      detail: "Set RECORDS_STORAGE_MODE=supabase and NEXT_PUBLIC_RECORDS_STORAGE_MODE=supabase.",
+      error: "Cloud records storage is not enabled.",
+      detail: "Records storage is not configured for authenticated cloud access.",
     },
     { status: 501 }
   );

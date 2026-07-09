@@ -21,8 +21,8 @@ export const runtime = "nodejs";
 function disabledResponse() {
   return NextResponse.json(
     {
-      error: "Supabase records storage is not enabled.",
-      detail: "Set RECORDS_STORAGE_MODE=supabase before evidence upload.",
+      error: "Cloud records storage is not enabled.",
+      detail: "Enable authenticated cloud records storage before evidence upload.",
     },
     { status: 501 }
   );

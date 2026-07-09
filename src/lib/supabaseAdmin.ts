@@ -13,7 +13,7 @@ function getAdminSupabaseConfig() {
 
   if (!serviceRoleKey) {
     throw new Error(
-      "Missing SUPABASE_SERVICE_ROLE_KEY for supabaseAdmin. Set it only in server-side secret storage."
+      "Missing SUPABASE_SERVICE_ROLE_KEY for supabaseAdmin. Set it only in server side secret storage."
     );
   }
 

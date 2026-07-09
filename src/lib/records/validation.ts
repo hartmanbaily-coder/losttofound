@@ -270,7 +270,7 @@ export function validateEvidenceFile(candidate: EvidenceFileCandidate) {
   }
 
   if (!allowedEvidenceExtensions.includes(extension as (typeof allowedEvidenceExtensions)[number])) {
-    return { ok: false as const, error: "File type is not on the evidence allow-list." };
+    return { ok: false as const, error: "File type is not on the evidence allow list." };
   }
 
   if (!allowedEvidenceMimeTypes.has(candidate.fileType)) {

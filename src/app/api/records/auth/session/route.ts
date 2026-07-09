@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 function disabledResponse() {
   return NextResponse.json(
     {
-      error: "Supabase records auth is not enabled.",
-      detail: "Set RECORDS_STORAGE_MODE=supabase and NEXT_PUBLIC_RECORDS_STORAGE_MODE=supabase.",
+      error: "Records account access is not enabled.",
+      detail: "Authenticated records access is not configured.",
     },
     { status: 501 }
   );

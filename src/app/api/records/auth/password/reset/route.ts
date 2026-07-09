@@ -10,7 +10,7 @@ const resetMessage = "If an account exists for that email, a password reset link
 
 export async function POST(request: NextRequest) {
   if (!isSupabaseRecordsMode()) {
-    return NextResponse.json({ error: "Supabase records auth is not enabled." }, { status: 501 });
+    return NextResponse.json({ error: "Records account access is not enabled." }, { status: 501 });
   }
 
   const rateLimit = checkRateLimit(request, {
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     severity: error ? "warning" : "info",
     request,
     status: 200,
-    detail: error ? "Supabase password reset request failed." : undefined,
+    detail: error ? "Password reset request failed." : undefined,
   });
 
   return NextResponse.json(

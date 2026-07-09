@@ -144,7 +144,7 @@ describe("records calculations", () => {
     expect(lateExchange?.body).toContain("Recorded arrival at 6:32 PM.");
     expect(schoolNote).toMatchObject({
       time: "16:30",
-      body: "Documented pickup time and after-school item transfer.",
+      body: "Documented pickup time and after school item transfer.",
       sourceLabel: "Date note",
     });
     expect(evidence).toMatchObject({ type: "evidence_item", sourceLabel: "File attachment" });

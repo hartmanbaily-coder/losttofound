@@ -5,7 +5,7 @@ const sections: PolicySection[] = [
   {
     title: "Commitment",
     body: [
-      "Lost to Found Records is intended to be usable by adult users who need to organize sensitive family-court records without unnecessary visual or technical barriers.",
+      "Lost to Found Records is intended to be usable by adult users who need to organize sensitive family court records without unnecessary visual or technical barriers.",
       "The site should be developed toward recognized web accessibility practices, including keyboard access, readable contrast, semantic structure, form labels, focus states, and responsive layouts.",
       "Accessibility work should continue as the app adds imports, reports, file handling, charts, and calendar interactions.",
     ],
@@ -21,9 +21,9 @@ const sections: PolicySection[] = [
   {
     title: "Known complex areas",
     body: [
-      "Drag-to-paint calendar interactions may require alternate click, form, or keyboard-accessible paths for users who cannot use pointer dragging.",
+      "Drag to paint calendar interactions may require alternate click, form, or keyboard accessible paths for users who cannot use pointer dragging.",
       "Charts and visual reports should be paired with written summaries or tables so the data is not available only visually.",
-      "Uploaded third-party PDFs, screenshots, message exports, or court documents may not be accessible if the source file itself is not accessible.",
+      "Uploaded third party PDFs, screenshots, message exports, or court documents may not be accessible if the source file itself is not accessible.",
     ],
   },
   {
@@ -46,7 +46,7 @@ const sections: PolicySection[] = [
     title: "Ongoing review",
     body: [
       "Accessibility should be reviewed when adding new workflows such as AI import, document upload, report export, charting, calendar editing, and account recovery.",
-      "Automated checks can help catch some issues, but manual keyboard and screen-reader-oriented review may still be needed.",
+      "Automated checks can help catch some issues, but manual keyboard and screen reader review may still be needed.",
       "Known accessibility limitations should be tracked and prioritized alongside security, privacy, and product reliability work.",
     ],
   },

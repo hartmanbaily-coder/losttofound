@@ -13,7 +13,7 @@ const quickActions = [
 const workflowSteps = [
   {
     title: "Track",
-    detail: "Log exchanges, FaceTime, notes, and parenting-plan events in one dated record.",
+    detail: "Log exchanges, FaceTime, notes, and parenting plan events in one dated record.",
   },
   {
     title: "Attach",
@@ -21,7 +21,7 @@ const workflowSteps = [
   },
   {
     title: "Export",
-    detail: "Create cleaner summaries and court-useful packets when you need to review the data.",
+    detail: "Create cleaner summaries and court useful packets when you need to review the data.",
   },
 ];
 

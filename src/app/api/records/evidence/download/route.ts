@@ -31,7 +31,7 @@ async function readEvidenceBody(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   if (!isSupabaseRecordsMode()) {
-    return NextResponse.json({ error: "Supabase records storage is not enabled." }, { status: 501 });
+    return NextResponse.json({ error: "Cloud records storage is not enabled." }, { status: 501 });
   }
 
   const rateLimit = checkRateLimit(request, {

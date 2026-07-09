@@ -6,17 +6,17 @@ const sections: PolicySection[] = [
     title: "Information we collect",
     body: [
       "Account information such as email address, authentication identifiers, session state, account status, and timezone.",
-      "Records you choose to enter, including custody matter labels, parenting-time schedules, exchange logs, notes, support records, expense records, document requests, report settings, and audit history.",
+      "Records you choose to enter, including custody matter labels, parenting time schedules, exchange logs, notes, support records, expense records, document requests, report settings, and audit history.",
       "Files you choose to upload, including PDFs, images, text files, CSV files, message exports, court orders, parenting plans, receipts, screenshots, and related file metadata.",
-      "Operational information needed to run and secure the service, including request route, status code, request id, timestamp, security event metadata, rate-limit events, and diagnostic logs.",
+      "Operational information needed to run and secure the service, including request route, status code, request id, timestamp, security event metadata, rate limit events, and diagnostic logs.",
     ],
   },
   {
     title: "Sensitive records",
     body: [
-      "Custody, parenting-time, court, school, health-adjacent, financial, child support, expense, and evidence records can be sensitive.",
-      "The service is designed for adult users organizing their own records. It does not offer child accounts, child-facing features, public profiles, public social features, or co-parent messaging.",
-      "Users should avoid entering Social Security numbers, full bank account numbers, full card numbers, login credentials, unrelated third-party details, or unnecessary medical detail.",
+      "Custody, parenting time, court, school, health adjacent, financial, child support, expense, and evidence records can be sensitive.",
+      "The service is designed for adult users organizing their own records. It does not offer child accounts, child facing features, public profiles, public social features, or coparent messaging.",
+      "Users should avoid entering Social Security numbers, full bank account numbers, full card numbers, login credentials, unrelated third party details, or unnecessary medical detail.",
     ],
   },
   {
@@ -29,10 +29,10 @@ const sections: PolicySection[] = [
     ],
   },
   {
-    title: "AI-assisted import",
+    title: "AI assisted import",
     body: [
-      "If AI-assisted import is enabled, the app may send selected user-provided text or documents to the configured AI provider so the service can draft structured timeline entries, calendar items, file summaries, or report inputs.",
-      "AI-assisted output is not legal advice, not a court finding, and not a substitute for reviewing the original source material.",
+      "If AI assisted import is enabled, the app may send selected user provided text or documents to the configured AI provider so the service can draft structured timeline entries, calendar items, file summaries, or report inputs.",
+      "AI assisted output is not legal advice, not a court finding, and not a substitute for reviewing the original source material.",
       "Users should review, edit, and approve imported records before relying on them, exporting them, or sharing them with an attorney, court, agency, or other third party.",
       "The AI data use page explains what may be sent, what should not be uploaded, and how provider data controls are expected to work.",
     ],
@@ -50,8 +50,8 @@ const sections: PolicySection[] = [
     title: "Sharing and service providers",
     body: [
       "We do not sell custody records, evidence files, or account data.",
-      "We do not use advertising trackers or third-party session replay in the records workspace.",
-      "We may share limited information with service providers that help operate hosting, authentication, database, private storage, malware scanning, logging, monitoring, email delivery, support, security operations, or AI-assisted import if enabled.",
+      "We do not use advertising trackers or third party session replay in the records workspace.",
+      "We may share limited information with service providers that help operate hosting, authentication, database, private storage, malware scanning, logging, monitoring, email delivery, support, security operations, or AI assisted import if enabled.",
       "We may disclose information if required by law, court order, subpoena, valid legal process, or to protect rights, safety, security, and service integrity.",
     ],
   },
@@ -59,7 +59,7 @@ const sections: PolicySection[] = [
     title: "Cookies and tracking",
     body: [
       "The service uses authentication and session cookies needed to keep users signed in and protect account access.",
-      "The records workspace is not designed around advertising cookies, behavioral advertising, public social sharing, or third-party session replay.",
+      "The records workspace is not designed around advertising cookies, behavioral advertising, public social sharing, or third party session replay.",
       "Because browser privacy signals such as Do Not Track are not standardized, the app does not currently change functionality in response to those signals.",
     ],
   },
@@ -75,7 +75,7 @@ const sections: PolicySection[] = [
   {
     title: "Your choices and requests",
     body: [
-      "Users can use privacy-friendly labels instead of real names and can avoid entering unnecessary sensitive identifiers.",
+      "Users can use privacy minded labels instead of real names and can avoid entering unnecessary sensitive identifiers.",
       "Users can export records and download files where export/download controls are available.",
       "Users can request access, correction, deletion, account support, privacy review, or security review by emailing the support address below.",
       "Some requests may require identity verification before action is taken.",
@@ -85,14 +85,14 @@ const sections: PolicySection[] = [
     title: "Children's information",
     body: [
       "The app is for adult account holders and is not directed to children under 13.",
-      "Adults may store records that refer to children when those records are part of their custody or parenting-time documentation.",
+      "Adults may store records that refer to children when those records are part of their custody or parenting time documentation.",
       "Do not create an account for a child, invite a child to use the service, or upload unnecessary child identifiers.",
     ],
   },
   {
     title: "Security and incidents",
     body: [
-      "The app is designed around server-managed cookies, private storage, server-side authorization checks, file validation, malware scanning, rate limits, and security event logging.",
+      "The app is designed around server managed cookies, private storage, server side authorization checks, file validation, malware scanning, rate limits, and security event logging.",
       "No internet service can guarantee absolute security, so users should protect their devices, passwords, authenticator apps, and downloaded exports.",
       "If we learn of a security incident involving personal information, we will evaluate notice obligations under applicable law and the approved incident response process.",
     ],
@@ -111,7 +111,7 @@ export default function PrivacyPage() {
   return (
     <PolicyPage
       title="Privacy Policy"
-      description="This policy explains how the records workspace handles account data, custody records, uploaded files, support requests, security events, and AI-assisted import if enabled."
+      description="This policy explains how the records workspace handles account data, custody records, uploaded files, support requests, security events, and AI assisted import if enabled."
       notice="This page is a product privacy notice for adult users organizing private records. It is not legal advice and should be reviewed by qualified counsel before broad public launch."
       sections={sections}
     >

@@ -106,17 +106,17 @@ export const reportsTabReportTypes: Array<{ value: ReportType; label: string; de
   {
     value: "facetime_cancellations",
     label: reportTypeLabels.facetime_cancellations,
-    description: "Summarizes no-FaceTime records and whether notice came after a call/request.",
+    description: "Summarizes no FaceTime records and whether notice came after a call/request.",
   },
   {
     value: "incident_timeline",
     label: reportTypeLabels.incident_timeline,
-    description: "Filters the timeline to court-useful exchange and communication issues.",
+    description: "Filters the timeline to court useful exchange and communication issues.",
   },
   {
     value: "filing_facetime_correlation",
     label: reportTypeLabels.filing_facetime_correlation,
-    description: "Compares court/attorney filing notes with nearby no-FaceTime records.",
+    description: "Compares court/attorney filing notes with nearby no FaceTime records.",
   },
   {
     value: "combined_attorney_summary",
@@ -433,7 +433,7 @@ export function buildSectionExportPacket(
   const caseName = matter?.caseName || "Selected custody matter";
   const generatedAt = formatGeneratedAt();
   const disclaimer =
-    "This export organizes user-entered records. It is not legal advice; review with a qualified attorney before filing or sharing.";
+    "This export organizes user entered records. It is not legal advice; review with a qualified attorney before filing or sharing.";
   const events = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent);
   const exchangeRules = ownedCaseRecords(dataset.exchangeRules, userId, caseId);
   const expectedExchanges = generateExpectedExchangeEvents(exchangeRules, range);
@@ -478,14 +478,14 @@ export function buildSectionExportPacket(
         `${attentionEvents.length} dated event${attentionEvents.length === 1 ? "" : "s"} in this range are marked for review based on status/category.`,
       ],
       metrics: [
-        { label: "Custody days", value: custodyAssignments.length, detail: "Color-coded calendar entries" },
-        { label: "Dated records", value: events.length, detail: "Timeline-visible sources" },
+        { label: "Custody days", value: custodyAssignments.length, detail: "Color coded calendar entries" },
+        { label: "Dated records", value: events.length, detail: "Timeline visible sources" },
         { label: "Needs review", value: attentionEvents.length, detail: "Attention or critical severity" },
       ],
       charts: [
         {
           title: "Custody days by caregiver label",
-          description: "Count of color-coded custody calendar days in the selected range.",
+          description: "Count of color coded custody calendar days in the selected range.",
           unit: "days",
           rows: countBy(custodyAssignments, (item) => item.caregiverLabel),
         },
@@ -524,7 +524,7 @@ export function buildSectionExportPacket(
         },
       ],
       suggestedUses: [
-        "Show parenting-time patterns by date range.",
+        "Show parenting time patterns by date range.",
         "Attach to a broader timeline packet when explaining recurring transition issues.",
       ],
     };
@@ -572,7 +572,7 @@ export function buildSectionExportPacket(
       ],
       suggestedUses: [
         "Give counsel a single chronological fact pattern.",
-        "Filter the in-app timeline before exporting CSV when a narrower issue packet is needed.",
+        "Filter the app timeline before exporting CSV when a narrower issue packet is needed.",
       ],
     };
   }
@@ -602,7 +602,7 @@ export function buildSectionExportPacket(
         { label: "Scheduled", value: exchangeStats.scheduledCount, detail: "Expected from saved rules and logs" },
         { label: "Logged", value: exchangeStats.loggedCount, detail: "Actual outcomes entered" },
         { label: "Late", value: exchangeStats.lateCount, detail: `${exchangeStats.averageLatenessMinutes} min average delay` },
-        { label: "Missed/refused", value: exchangeStats.missedCount + exchangeStats.refusedCount, detail: "User-entered statuses" },
+        { label: "Missed/refused", value: exchangeStats.missedCount + exchangeStats.refusedCount, detail: "User entered statuses" },
       ],
       charts: [
         {
@@ -659,8 +659,8 @@ export function buildSectionExportPacket(
     return {
       ...base,
       summaries: [
-        `${notes.length} date-based note${notes.length === 1 ? "" : "s"} are recorded in this range. ${included} are marked for report inclusion.`,
-        "Notes are grouped by category so counsel can separate communication, exchange, child-item, safety, court, and support issues.",
+        `${notes.length} date based note${notes.length === 1 ? "" : "s"} are recorded in this range. ${included} are marked for report inclusion.`,
+        "Notes are grouped by category so counsel can separate communication, exchange, child item, safety, court, and support issues.",
       ],
       metrics: [
         { label: "Notes", value: notes.length, detail: `${range.from} to ${range.to}` },
@@ -681,7 +681,7 @@ export function buildSectionExportPacket(
       ],
       tables: [
         {
-          title: "Date-based notes",
+          title: "Date based notes",
           headers: ["Date", "Time", "Category", "Title", "Body", "Tags", "Included"],
           rows: toTableRows(notes, (note) => [
             note.noteDate,
@@ -695,7 +695,7 @@ export function buildSectionExportPacket(
         },
       ],
       suggestedUses: [
-        "Give counsel issue-specific narrative records without raw app navigation.",
+        "Give counsel issue specific narrative records without raw app navigation.",
         "Use category charts to show where the record set is concentrated.",
       ],
     };
@@ -759,7 +759,7 @@ export function buildSectionExportPacket(
       ],
       metrics: [
         { label: "Total due", value: formatMoney(supportStats.totalDue), detail: "Selected range" },
-        { label: "Total paid", value: formatMoney(supportStats.totalPaid), detail: "User-entered records" },
+        { label: "Total paid", value: formatMoney(supportStats.totalPaid), detail: "User entered records" },
         { label: "Unpaid balance", value: formatMoney(supportStats.unpaidBalance), detail: `${supportStats.unpaidCount} unpaid` },
         { label: "Average days late", value: supportStats.averageDaysLate, detail: "Paid late records" },
       ],
@@ -809,7 +809,7 @@ export function buildSectionExportPacket(
         },
       ],
       suggestedUses: [
-        "Show due-versus-paid history and unpaid balance by month.",
+        "Show due versus paid history and unpaid balance by month.",
         "Export before discussing reimbursement, arrears, or payment compliance with counsel.",
       ],
     };
@@ -818,14 +818,14 @@ export function buildSectionExportPacket(
   return {
     ...base,
     summaries: [
-      `Based on records entered in this app, expenses in this range total ${formatMoney(expenseStats.totalExpenses)}. Unpaid reimbursement based on user-entered records is ${formatMoney(expenseStats.unpaidReimbursement)}.`,
+      `Based on records entered in this app, expenses in this range total ${formatMoney(expenseStats.totalExpenses)}. Unpaid reimbursement based on user entered records is ${formatMoney(expenseStats.unpaidReimbursement)}.`,
       `${expenses.length} expense record${expenses.length === 1 ? "" : "s"} are included, with ${expenseStats.reimbursementRequested > 0 ? formatMoney(expenseStats.reimbursementRequested) : "$0.00"} marked as reimbursement requested.`,
     ],
     metrics: [
       { label: "Total expenses", value: formatMoney(expenseStats.totalExpenses), detail: "Selected range" },
       { label: "Requested", value: formatMoney(expenseStats.reimbursementRequested), detail: "Reimbursement requested" },
       { label: "Received", value: formatMoney(expenseStats.reimbursementReceived), detail: "Marked reimbursed" },
-      { label: "Unpaid", value: formatMoney(expenseStats.unpaidReimbursement), detail: "User-entered records" },
+      { label: "Unpaid", value: formatMoney(expenseStats.unpaidReimbursement), detail: "User entered records" },
     ],
     charts: [
       {
@@ -857,7 +857,7 @@ export function buildSectionExportPacket(
       },
     ],
     suggestedUses: [
-      "Show custody-related expense totals and reimbursement status.",
+      "Show custody related expense totals and reimbursement status.",
       "Pair with receipt file sheets when asking counsel to review support documents.",
     ],
   };
@@ -1030,7 +1030,7 @@ export function buildReportPreview(
     caseName: matter?.caseName || "Selected custody matter",
     generatedAt,
     disclaimer:
-      "This report organizes user-entered records. It is not legal advice; review with a qualified attorney before filing or sharing.",
+      "This report organizes user entered records. It is not legal advice; review with a qualified attorney before filing or sharing.",
     rows,
     evidenceIndex: buildEvidenceIndex(evidence, range),
   };
@@ -1086,7 +1086,7 @@ export function buildReportPreview(
           kind: "bar",
           orientation: "horizontal",
           title: "Late exchanges by direction",
-          description: "Compares late count against not-late count for each exchange direction.",
+          description: "Compares late count against not late count for each exchange direction.",
           unit: "exchanges",
           seriesLabels: ["Late", "Not late"],
           rows: exchangeDirectionRows(exchangeLogs),
@@ -1126,17 +1126,17 @@ export function buildReportPreview(
       title: reportTypeLabels.facetime_cancellations,
       focus: "FaceTime cancellations and notice timing",
       summaries: [
-        `${noFaceTimeEvents.length} no-FaceTime record${noFaceTimeEvents.length === 1 ? "" : "s"} are in this range.`,
+        `${noFaceTimeEvents.length} no FaceTime record${noFaceTimeEvents.length === 1 ? "" : "s"} are in this range.`,
         `${postCallNoFaceTimeEvents.length} of those records (${postCallShare}) indicate notice after a call/request or unanswered call based on the entered notes/tags.`,
-        "The report separates post-call notice from other no-FaceTime records so the timing pattern is visible.",
+        "The report separates post call notice from other no FaceTime records so the timing pattern is visible.",
       ],
       metrics: [
         { label: "No FaceTime records", value: noFaceTimeEvents.length, detail: `${range.from} to ${range.to}` },
         { label: "After call/request", value: postCallNoFaceTimeEvents.length, detail: postCallShare },
         {
-          label: "Other no-FaceTime",
+          label: "Other no FaceTime",
           value: noFaceTimeEvents.length - postCallNoFaceTimeEvents.length,
-          detail: "No post-call marker found",
+          detail: "No post call marker found",
         },
         { label: "Monthly span", value: months.length, detail: "Months charted" },
       ],
@@ -1144,11 +1144,11 @@ export function buildReportPreview(
         {
           kind: "line",
           title: "No FaceTime records by month",
-          description: "Compares all no-FaceTime records with the subset marked after a call/request.",
+          description: "Compares all no FaceTime records with the subset marked after a call/request.",
           unit: "records",
           seriesLabels: ["No FaceTime", "After call/request"],
           rows: facetimeTrendRows,
-          emptyLabel: "No no-FaceTime records in this range.",
+          emptyLabel: "No no FaceTime records in this range.",
         },
         {
           kind: "bar",
@@ -1157,9 +1157,9 @@ export function buildReportPreview(
           unit: "records",
           rows: [
             { label: "Notice after call/request", value: postCallNoFaceTimeEvents.length },
-            { label: "Other no-FaceTime records", value: noFaceTimeEvents.length - postCallNoFaceTimeEvents.length },
+            { label: "Other no FaceTime records", value: noFaceTimeEvents.length - postCallNoFaceTimeEvents.length },
           ],
-          emptyLabel: "No no-FaceTime records in this range.",
+          emptyLabel: "No no FaceTime records in this range.",
         },
       ],
       tables: [table],
@@ -1168,7 +1168,7 @@ export function buildReportPreview(
 
   if (reportType === "filing_facetime_correlation") {
     const table: SectionExportTable = {
-      title: "Filing notes with nearby no-FaceTime counts",
+      title: "Filing notes with nearby no FaceTime counts",
       headers: ["Date", "Time", "Filing note", "Same day", "Within 7 days", "Within 14 days", "Note text"],
       rows: filingCorrelationRows(filingEvents, noFaceTimeEvents).map((row) => [
         row.date,
@@ -1185,17 +1185,17 @@ export function buildReportPreview(
     return {
       ...base,
       title: reportTypeLabels.filing_facetime_correlation,
-      focus: "Filing dates compared with no-FaceTime timing",
+      focus: "Filing dates compared with no FaceTime timing",
       summaries: [
         `${filingEvents.length} court/attorney filing note${filingEvents.length === 1 ? "" : "s"} are detected in this range.`,
-        `${within7Total} no-FaceTime record${within7Total === 1 ? "" : "s"} fall within seven days after those filing notes.`,
+        `${within7Total} no FaceTime record${within7Total === 1 ? "" : "s"} fall within seven days after those filing notes.`,
         "This report shows timing overlap only; it does not claim why a FaceTime did or did not occur.",
       ],
       metrics: [
         { label: "Filing notes", value: filingEvents.length, detail: "Court/attorney notes with filing language" },
         { label: "No FaceTime records", value: noFaceTimeEvents.length, detail: `${range.from} to ${range.to}` },
         { label: "Within 7 days", value: within7Total, detail: "After filing note dates" },
-        { label: "Post-call notices", value: postCallNoFaceTimeEvents.length, detail: "Subset of no-FaceTime records" },
+        { label: "Post call notices", value: postCallNoFaceTimeEvents.length, detail: "Subset of no FaceTime records" },
       ],
       charts: [
         {
@@ -1209,11 +1209,11 @@ export function buildReportPreview(
         },
         {
           kind: "line",
-          title: "Monthly filing notes and no-FaceTime records",
+          title: "Monthly filing notes and no FaceTime records",
           unit: "records",
           seriesLabels: ["Filing notes", "No FaceTime", "After call/request"],
           rows: filingTrendRows,
-          emptyLabel: "No filing or no-FaceTime records in this range.",
+          emptyLabel: "No filing or no FaceTime records in this range.",
         },
       ],
       tables: [table],
@@ -1243,8 +1243,8 @@ export function buildReportPreview(
       focus: "Timeline issue pattern",
       summaries: [
         `${issueEvents.length} timeline record${issueEvents.length === 1 ? "" : "s"} match the issue filters in this range.`,
-        `${lateExchangeEvents.length} are marked late exchange records and ${noFaceTimeEvents.length} are no-FaceTime records.`,
-        "Custody-day color blocks are excluded from this report so the timeline only shows event records.",
+        `${lateExchangeEvents.length} are marked late exchange records and ${noFaceTimeEvents.length} are no FaceTime records.`,
+        "Custody day color blocks are excluded from this report so the timeline only shows event records.",
       ],
       metrics: [
         { label: "Issue records", value: issueEvents.length, detail: `${range.from} to ${range.to}` },
@@ -1296,7 +1296,7 @@ export function buildReportPreview(
     focus: reportType === "combined_court_packet" ? "Combined court issue packet" : "Attorney issue review",
     summaries: [
       `${issueEvents.length} issue record${issueEvents.length === 1 ? "" : "s"} are included from ${range.from} to ${range.to}.`,
-      `${lateExchangeEvents.length} late exchange record${lateExchangeEvents.length === 1 ? "" : "s"}, ${noFaceTimeEvents.length} no-FaceTime record${noFaceTimeEvents.length === 1 ? "" : "s"}, and ${filingEvents.length} court/attorney filing note${filingEvents.length === 1 ? "" : "s"} are detected.`,
+      `${lateExchangeEvents.length} late exchange record${lateExchangeEvents.length === 1 ? "" : "s"}, ${noFaceTimeEvents.length} no FaceTime record${noFaceTimeEvents.length === 1 ? "" : "s"}, and ${filingEvents.length} court/attorney filing note${filingEvents.length === 1 ? "" : "s"} are detected.`,
       "The combined packet prioritizes custody timeline issues and does not include child support or expense sections.",
     ],
     metrics: [

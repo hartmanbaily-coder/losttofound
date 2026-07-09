@@ -111,7 +111,7 @@ function requireSupabaseResponse() {
   return NextResponse.json(
     {
       error: "AI import assistance requires authenticated records storage.",
-      detail: "Set RECORDS_STORAGE_MODE=supabase before enabling AI import.",
+      detail: "Enable authenticated cloud records storage before turning on AI import.",
     },
     { status: 501 }
   );

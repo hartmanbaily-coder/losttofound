@@ -219,7 +219,7 @@ export function evaluateProductionReadiness(
       hasValue(env.NEXT_PUBLIC_RECORDS_HOST) &&
         !["localhost", "127.0.0.1"].includes(env.NEXT_PUBLIC_RECORDS_HOST || ""),
       "blocker",
-      "Set NEXT_PUBLIC_RECORDS_HOST to the host-only production records domain."
+      "Set NEXT_PUBLIC_RECORDS_HOST to the host only production records domain."
     ),
     check(
       "records-storage-mode",
@@ -243,26 +243,26 @@ export function evaluateProductionReadiness(
         hasValue(expectedSupabaseRef) &&
         configuredSupabaseRef === expectedSupabaseRef,
       "blocker",
-      "Set EXPECTED_SUPABASE_PROJECT_REF and point production records at the clean records-only Supabase project, not the older staging/mixed-use project."
+      "Set EXPECTED_SUPABASE_PROJECT_REF and point production records at the clean records only Supabase project, not the older staging or mixed use project."
     ),
     check(
       "supabase-anon-key",
       "Supabase public browser key is configured",
       isUsableSupabasePublicKey(env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
       "blocker",
-      "Set NEXT_PUBLIC_SUPABASE_ANON_KEY to a real Supabase publishable key or legacy anon-role JWT, not a placeholder or service-role key."
+      "Set NEXT_PUBLIC_SUPABASE_ANON_KEY to a real Supabase publishable key or legacy anon role JWT, not a placeholder or service role key."
     ),
     check(
       "supabase-service-role",
-      "Supabase service role key is server-only",
+      "Supabase service role key is server only",
       hasValue(env.SUPABASE_SERVICE_ROLE_KEY) &&
         !String(env.SUPABASE_SERVICE_ROLE_KEY).startsWith("NEXT_PUBLIC_"),
       "blocker",
-      "Set SUPABASE_SERVICE_ROLE_KEY only in server-side secret storage."
+      "Set SUPABASE_SERVICE_ROLE_KEY only in server side secret storage."
     ),
     check(
       "bearer-auth-disabled",
-      "Bearer-token records auth fallback is disabled",
+      "Bearer token records auth fallback is disabled",
       env.RECORDS_ALLOW_BEARER_AUTH !== "true",
       "blocker",
       "Do not enable RECORDS_ALLOW_BEARER_AUTH in production."
@@ -281,7 +281,7 @@ export function evaluateProductionReadiness(
       "Auth secret is strong",
       hasStrongSecret(env.AUTH_SECRET),
       "blocker",
-      "Set AUTH_SECRET to a high-entropy value with at least 32 characters."
+      "Set AUTH_SECRET to a high entropy value with at least 32 characters."
     ),
     check(
       "supabase-mfa-policy",
@@ -313,10 +313,10 @@ export function evaluateProductionReadiness(
     ),
     check(
       "supabase-leaked-passwords",
-      "Leaked-password protection is enabled",
+      "Leaked password protection is enabled",
       isEnabled(env.SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED),
       "blocker",
-      "Enable Supabase leaked-password protection and set SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED=true."
+      "Enable Supabase leaked password protection and set SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED=true."
     ),
     check(
       "supabase-password-minimum",
@@ -331,7 +331,7 @@ export function evaluateProductionReadiness(
       isEnabled(env.SUPABASE_PASSWORD_REAUTH_ENABLED) &&
         isEnabled(env.SUPABASE_CURRENT_PASSWORD_REQUIRED),
       "blocker",
-      "Enable reauthentication and current-password checks for password changes."
+      "Enable reauthentication and current password checks for password changes."
     ),
     check(
       "supabase-auth-hardening-verified",
@@ -373,7 +373,7 @@ export function evaluateProductionReadiness(
       "Edge or WAF rate limiting is configured",
       isEnabled(env.EDGE_RATE_LIMITING_ENABLED) && hasValue(env.EDGE_RATE_LIMITING_PROVIDER),
       "blocker",
-      "Configure provider-level rate limits for auth, evidence, exports, and write-heavy routes, then set EDGE_RATE_LIMITING_PROVIDER."
+      "Configure provider level rate limits for auth, evidence, exports, and write heavy routes, then set EDGE_RATE_LIMITING_PROVIDER."
     ),
     check(
       "edge-waf",
@@ -413,7 +413,7 @@ export function evaluateProductionReadiness(
     ),
     check(
       "two-user-isolation-tested",
-      "Two-user isolation has been verified recently",
+      "Two user isolation has been verified recently",
       isRecentDate(env.TWO_USER_ISOLATION_TESTED_AT, generatedAt, 30),
       "blocker",
       "Verify user A cannot access user B records or evidence, then set TWO_USER_ISOLATION_TESTED_AT."
@@ -457,10 +457,10 @@ export function evaluateProductionReadiness(
     ),
     check(
       "ai-import-openai-key",
-      "AI import OpenAI key is server-only",
+      "AI import OpenAI key is server only",
       !aiImportEnabled || hasValue(env.OPENAI_API_KEY),
       "blocker",
-      "Set OPENAI_API_KEY only in server-side secret storage when RECORDS_AI_IMPORT_ENABLED=true."
+      "Set OPENAI_API_KEY only in server side secret storage when RECORDS_AI_IMPORT_ENABLED=true."
     ),
     check(
       "ai-import-model",

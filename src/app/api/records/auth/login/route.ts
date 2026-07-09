@@ -21,8 +21,8 @@ const failedLogins = new Map<string, { count: number; resetAt: number }>();
 function disabledResponse() {
   return NextResponse.json(
     {
-      error: "Supabase records auth is not enabled.",
-      detail: "Set RECORDS_STORAGE_MODE=supabase and NEXT_PUBLIC_RECORDS_STORAGE_MODE=supabase.",
+      error: "Records account access is not enabled.",
+      detail: "Authenticated records access is not configured.",
     },
     { status: 501 }
   );
@@ -100,7 +100,7 @@ async function mfaResponse(input: {
   if (hasVerifiedTotp || (hasUnknownStatusTotp && assurance.data.nextLevel === "aal2")) {
     const response = NextResponse.json(
       {
-        error: "Multi-factor verification required.",
+        error: "Multi factor verification required.",
         mfaRequired: true,
       },
       { status: 403, headers: { "Cache-Control": "no-store" } }
@@ -192,12 +192,12 @@ async function handleLoginPost(request: NextRequest) {
   const adultConfirmed = body.adultConfirmed === true;
 
   if (!adultConfirmed || !email.includes("@") || password.length < 8) {
-    return NextResponse.json({ error: "Check your email, password, and adult-use confirmation." }, { status: 400 });
+    return NextResponse.json({ error: "Check your email, password, and adult use confirmation." }, { status: 400 });
   }
 
   const key = clientKey(request, email);
   if (isLimited(key)) {
-    return NextResponse.json({ error: "Too many sign-in attempts. Try again shortly." }, { status: 429 });
+    return NextResponse.json({ error: "Too many sign in attempts. Try again shortly." }, { status: 429 });
   }
 
   const supabase = createServerSupabaseAuthClient();

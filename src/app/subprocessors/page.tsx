@@ -4,7 +4,7 @@ const sections: PolicySection[] = [
   {
     title: "Purpose of this list",
     body: [
-      "Subprocessors and vendors help operate the records workspace, authenticate users, store records, protect files, deliver email, monitor reliability, and support optional AI-assisted import.",
+      "Subprocessors and vendors help operate the records workspace, authenticate users, store records, protect files, deliver email, monitor reliability, and support optional AI assisted import.",
       "This page is intended to give users a practical view of the service providers that may process account, records, file, operational, or security data.",
       "The list should be reviewed when vendors, hosting architecture, storage, malware scanning, email delivery, monitoring, or AI providers change.",
     ],
@@ -36,7 +36,7 @@ const sections: PolicySection[] = [
   {
     title: "OpenAI",
     body: [
-      "Purpose: optional AI-assisted import, draft structuring, summarization, tagging, and extraction if AI import is enabled.",
+      "Purpose: optional AI assisted import, draft structuring, summarization, tagging, and extraction if AI import is enabled.",
       "Data involved: selected text, documents, file metadata, prompts, and model outputs submitted by the user for import assistance.",
       "Status: conditional provider. Vendor/security review and user notice should be complete before production user data is processed through AI import.",
     ],
@@ -71,8 +71,8 @@ export default function SubprocessorsPage() {
   return (
     <PolicyPage
       title="Subprocessors"
-      description="This page lists the vendors and infrastructure providers that may help operate the records workspace or process limited account, records, file, operational, security, or AI-import data."
-      notice="This is an operational vendor list. It should be kept current as production services, support tooling, malware scanning, monitoring, and AI-assisted import providers are finalized."
+      description="This page lists the vendors and infrastructure providers that may help operate the records workspace or process limited account, records, file, operational, security, or AI import data."
+      notice="This is an operational vendor list. It should be kept current as production services, support tooling, malware scanning, monitoring, and AI assisted import providers are finalized."
       sections={sections}
     />
   );
