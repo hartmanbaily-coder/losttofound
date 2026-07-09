@@ -7,8 +7,9 @@ The iOS app is a native SwiftUI shell with:
 - Device authentication gate using Face ID, Touch ID, or device passcode.
 - Native tab structure for Records, Policies, and Support.
 - A controlled `WKWebView` workspace pointed at `https://losttofound.org/records`.
+- WebKit app-bound domains for `losttofound.org` and `www.losttofound.org`.
 - External link handling that opens non-product links outside the workspace.
-- Native privacy/support summaries that mirror the public policy pages.
+- Native privacy/support summaries that mirror the public policy pages and expose account deletion support.
 - App icon assets generated from the Lost to Found book, records, graph, and gavel logo.
 
 ## Local Setup
@@ -27,6 +28,8 @@ The iOS app is a native SwiftUI shell with:
 4. Archive from Xcode and upload to App Store Connect.
 5. Use TestFlight for internal testing.
 6. Submit for App Review after privacy/legal copy and screenshots are final.
+
+Before App Review, create a dedicated synthetic review account and make sure the review notes explain device unlock, login/MFA, native policy/support tabs, and the Support tab account deletion request path.
 
 ## Native Value
 

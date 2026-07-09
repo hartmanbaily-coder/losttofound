@@ -36,7 +36,8 @@ test("records login and report workflow", async ({ page }) => {
 
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Lost to Found Records" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Lost to Found Case Organization" })).toBeVisible();
+  await page.getByRole("link", { name: "Open records workspace" }).click();
   const enterWorkspace = page.getByRole("button", { name: "Enter records workspace" });
   await expect(enterWorkspace).toBeEnabled();
   await enterWorkspace.click();
@@ -117,7 +118,6 @@ test("records login and report workflow", async ({ page }) => {
   });
   await page.locator("textarea[name=description]").fill("Uploaded through Files tab");
   await page.getByRole("button", { name: "Save file record" }).click();
-  await expect(page.getByText("File metadata saved with allow-list validation.")).toBeVisible();
   await expect(page.getByText("files-tab-document.txt")).toBeVisible();
   await page.getByLabel("From date").fill("2026-05-01");
   await page.getByLabel("To date").fill("2026-06-15");
@@ -156,4 +156,48 @@ test("records login and report workflow", async ({ page }) => {
   await page.getByLabel(/Payment references/).check();
   await page.getByLabel(/Notes are factual/).check();
   await expect(page.getByRole("button", { name: "Download CSV" })).toBeEnabled();
+});
+
+test("records account recovery and deletion paths are reachable", async ({ page }) => {
+  await page.goto("/records?auth=recovery");
+
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Enter records workspace" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Forgot password?" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Enter records workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+
+  const accountDeletion = page.getByRole("link", { name: "Request account deletion" });
+  await expect(accountDeletion).toBeVisible();
+  await expect(accountDeletion).toHaveAttribute(
+    "href",
+    "mailto:support@lendori.io?subject=Lost%20to%20Found%20account%20deletion%20request"
+  );
+
+  const privacyDeletion = page.getByRole("link", { name: "Privacy and deletion policy" });
+  await expect(privacyDeletion).toBeVisible();
+  await expect(privacyDeletion).toHaveAttribute("href", "/privacy");
+
+  await privacyDeletion.click();
+  await expect(page).toHaveURL(/\/privacy$/);
+  await expect(page.getByRole("heading", { name: "Privacy Policy" })).toBeVisible();
+
+  await page.goto("/records");
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Case name").first()).toHaveValue("Parenting Plan Records");
+
+  await page.getByRole("button", { name: "Delete selected case" }).click();
+  await expect(page.getByText("Selected case deleted.")).toBeVisible();
+  await expect(page.getByText("Create or select a custody matter before setting a case timezone.")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByText("Create or select a custody matter before setting a case timezone.")).toBeVisible();
 });

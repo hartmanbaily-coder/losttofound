@@ -86,11 +86,14 @@ struct WorkspaceWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+        configuration.limitsNavigationsToAppBoundDomains = true
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         configuration.websiteDataStore = .default()
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.allowsBackForwardNavigationGestures = true
         webView.customUserAgent = "LostToFound-iOS/0.1"
+        webView.isInspectable = false
         webView.navigationDelegate = context.coordinator
 
         model.webView = webView

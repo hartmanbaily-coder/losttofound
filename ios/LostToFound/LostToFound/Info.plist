@@ -24,6 +24,11 @@
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Lost to Found uses Face ID to protect access to your private records workspace.</string>
+	<key>WKAppBoundDomains</key>
+	<array>
+		<string>losttofound.org</string>
+		<string>www.losttofound.org</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

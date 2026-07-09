@@ -7,6 +7,11 @@ This draft is a working submission packet. It should be reviewed before public s
 - App name: Lost to Found Case Organization
 - Display name: Lost to Found
 - Bundle ID: `io.lendori.losttofound`
+- Version: `0.1.0`
+- Build: `1`
+- Minimum iOS version: `17.0`
+- Supported devices: iPhone and iPad
+- Signing team: `HQG9VJ8JK2`
 - SKU suggestion: `losttofound-ios`
 - Primary category: Productivity
 - Secondary category: Utilities
@@ -42,6 +47,7 @@ Key features:
 - Document upload support through the protected workspace
 - Report and export workflows for review
 - Device-level unlock with Face ID, Touch ID, or passcode
+- Controlled records web view limited to `losttofound.org` and `www.losttofound.org`
 - Privacy, security, and AI-data-use notices available in app
 
 Important boundaries:
@@ -60,7 +66,15 @@ custody, parenting plan, records, court, timeline, documents, co-parenting, evid
 
 Lost to Found is a private records organizer for adult users documenting custody and parenting-plan information. It is not a legal advice app, law firm, emergency service, child-facing app, social network, payment processor, or co-parent messaging platform.
 
-The app uses a native SwiftUI shell with a device-authentication gate and native privacy/support surfaces. The workspace loads the production records app at `https://losttofound.org/records`.
+The app uses a native SwiftUI shell with a device-authentication gate, native tab navigation, native privacy/support surfaces, and a controlled `WKWebView` workspace. The web view is app-bound to `losttofound.org` and `www.losttofound.org`; external web links and `mailto:` links open outside the records workspace.
+
+Review flow:
+
+1. Launch the app.
+2. Unlock with the review device's Face ID, Touch ID, or passcode. The app uses Apple's LocalAuthentication framework and does not receive or store biometric data.
+3. Open the Records tab and sign in with the review account below.
+4. Review the Policies tab for native privacy, terms, security, AI data use, subprocessors, accessibility, and contact links.
+5. Review the Support tab for support contact, account/data help, and the in-app account deletion request entry point.
 
 Provide Apple Review with a dedicated test account before submission:
 
@@ -68,6 +82,20 @@ Provide Apple Review with a dedicated test account before submission:
 - Password: `[create-secure-temporary-password]`
 - MFA status: `[disable for review account or provide review instructions]`
 - Test data: synthetic only
+
+Account deletion path for review: Support tab -> Account and Data -> Request account deletion. The public Privacy Policy also documents retention, deletion, backup aging, and support requests.
+
+Current native build snapshot:
+
+- Product: `LostToFound.app`
+- Bundle ID: `io.lendori.losttofound`
+- Version/build: `0.1.0 (1)`
+- Deployment target: iOS 17.0
+- Records URL: `https://losttofound.org/records`
+- Web navigation allowlist: `losttofound.org`, `www.losttofound.org`
+- Scene privacy behavior: app returns to locked state when it leaves the active scene
+
+Do not submit to App Review until the production backend is ready for review access, including reviewed auth email delivery, auth redirect URLs, leaked-password protection, monitoring, backup/restore evidence, retention/deletion approval, and legal review.
 
 ## App Privacy Labels Draft
 
@@ -92,6 +120,12 @@ Expected tracking answer:
 - No advertising tracking.
 - No third-party advertising trackers.
 - No selling custody records, evidence files, or account data.
+
+Native authentication note:
+
+- Face ID, Touch ID, and passcode checks are performed on device through LocalAuthentication.
+- The app should not claim to collect biometric data unless another feature or vendor actually collects it.
+- Keep App Store Connect privacy answers aligned with the live web workspace, support tooling, logging/monitoring, and any enabled AI import or malware scanning vendors.
 
 Review the final privacy labels against the live implementation before submission.
 
@@ -123,6 +157,8 @@ Do not use real custody, child, court, message, phone, address, or evidence data
 - App icon renders well at small sizes.
 - TestFlight build installed on a real iPhone.
 - App Review test account created with synthetic data.
+- App Review notes include review-device unlock instructions and login/MFA instructions.
+- Account deletion request path tested in the native Support tab.
 - Privacy Policy, Terms, Security, AI Data Use, Accessibility, and Contact pages live.
 - No production secrets committed.
 - No real user data in screenshots or demo account.

@@ -4,6 +4,9 @@ enum AppBrand {
     static let name = "Lost to Found Case Organization"
     static let tagline = "Remove the emotion. Track the data."
     static let supportEmail = "support@lendori.io"
+    static let accountDeletionRequestURL = URL(
+        string: "mailto:support@lendori.io?subject=Lost%20to%20Found%20account%20deletion%20request"
+    )!
     static let legalDisclaimer = "This app helps organize records and does not provide legal advice. Consult a qualified attorney about your situation."
 }
 
@@ -63,6 +66,7 @@ struct PrivacySummaryView: View {
                 Label("No public profiles or social feeds", systemImage: "eye.slash")
                 Label("No advertising trackers", systemImage: "hand.raised")
                 Label("User controlled records and exports", systemImage: "doc.text.magnifyingglass")
+                Label("Account deletion requests start from Support", systemImage: "person.crop.circle.badge.xmark")
             }
 
             NativePolicyFooterSections()
@@ -95,6 +99,20 @@ struct SupportView: View {
                 Link(destination: URL(string: "https://losttofound.org/contact")!) {
                     Label("Contact page", systemImage: "safari")
                 }
+            }
+
+            Section("Account and Data") {
+                Link(destination: AppBrand.accountDeletionRequestURL) {
+                    Label("Request account deletion", systemImage: "person.crop.circle.badge.xmark")
+                }
+
+                Link(destination: URL(string: "https://losttofound.org/privacy")!) {
+                    Label("Privacy and deletion policy", systemImage: "doc.text.magnifyingglass")
+                }
+
+                Text("Support can help with account deletion, data export, correction, privacy questions, and recovery. Do not include sensitive case details unless support asks for them.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             NativePolicyFooterSections()

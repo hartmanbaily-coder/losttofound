@@ -100,7 +100,13 @@ import {
   timezoneSchema,
   validateEvidenceFile,
 } from "@/lib/records/validation";
-import { recordsTagline, siteName, supportEmail, supportMailto } from "@/lib/site";
+import {
+  accountDeletionMailto,
+  recordsTagline,
+  siteName,
+  supportEmail,
+  supportMailto,
+} from "@/lib/site";
 import {
   ExchangeTimingChart,
   ExpenseCategoryChart,
@@ -801,12 +807,7 @@ function LoginScreen({
 }) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [mode, setMode] = useState<LoginScreenMode>(() => {
-    if (typeof window === "undefined") return "login";
-    return new URLSearchParams(window.location.search).get("auth") === "recovery"
-      ? "update_password"
-      : "login";
-  });
+  const [mode, setMode] = useState<LoginScreenMode>("login");
   const [submitting, setSubmitting] = useState(false);
   const [mfaMode, setMfaMode] = useState<"verify" | "enroll" | null>(null);
   const [mfaEnrollment, setMfaEnrollment] = useState<RecordsMfaEnrollment | null>(null);
@@ -5801,10 +5802,17 @@ function SettingsView({
             <button type="button" onClick={resetDemoData} className="btn-secondary">
               {recordsStorageMode === "supabase" ? "Clear workspace data" : "Reset synthetic demo data"}
             </button>
+            <a href={accountDeletionMailto} className="btn-secondary text-center">
+              Request account deletion
+            </a>
+            <Link href="/privacy" className="btn-secondary text-center">
+              Privacy and deletion policy
+            </Link>
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-600">
             Export your data before major cleanup. Deleting the selected case removes its records
-            from this workspace.
+            from this workspace. Account deletion requests are handled through support so export,
+            backup aging, security review, and any valid legal hold can be checked.
           </p>
         </Panel>
 
