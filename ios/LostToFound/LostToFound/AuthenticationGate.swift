@@ -11,15 +11,18 @@ struct AuthenticationGate: View {
         VStack(spacing: 28) {
             Spacer()
 
-            Image(systemName: "lock.shield")
-                .font(.system(size: 54, weight: .semibold))
-                .foregroundStyle(Color("AccentColor"))
+            AppBrandMark(size: 76)
 
             VStack(spacing: 10) {
-                Text("Lost to Found")
+                Text(AppBrand.name)
                     .font(.largeTitle.bold())
+                    .multilineTextAlignment(.center)
 
-                Text("Unlock your private records workspace with Face ID, Touch ID, or your device passcode.")
+                Text(AppBrand.tagline)
+                    .font(.headline)
+                    .foregroundStyle(Color("AccentColor"))
+
+                Text("Organize custody notes, exchanges, files, and reports into a private records workspace you can use to understand patterns, work toward desired outcomes, and protect yourself with better documentation.")
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -37,7 +40,7 @@ struct AuthenticationGate: View {
             Button {
                 Task { await authenticate() }
             } label: {
-                Label(isAuthenticating ? "Unlocking" : "Unlock workspace", systemImage: "faceid")
+                Label(isAuthenticating ? "Unlocking" : "Unlock records workspace", systemImage: "faceid")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -47,7 +50,7 @@ struct AuthenticationGate: View {
 
             Spacer()
 
-            Text("This app organizes records only. It does not provide legal advice.")
+            Text("This app helps organize records and does not provide legal advice.")
                 .font(.footnote)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)

@@ -37,7 +37,7 @@ struct WorkspaceScreen: View {
 
     var body: some View {
         WorkspaceWebView(url: workspaceURL, model: model)
-            .navigationTitle("Workspace")
+            .navigationTitle("Records")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .bottomBar) {

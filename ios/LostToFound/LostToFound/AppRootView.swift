@@ -10,9 +10,9 @@ private enum AppTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .workspace:
-            "Workspace"
+            "Records"
         case .privacy:
-            "Privacy"
+            "Policies"
         case .support:
             "Support"
         }
@@ -23,7 +23,7 @@ private enum AppTab: String, CaseIterable, Identifiable {
         case .workspace:
             "folder.badge.person.crop"
         case .privacy:
-            "lock.shield"
+            "doc.text.magnifyingglass"
         case .support:
             "questionmark.circle"
         }
