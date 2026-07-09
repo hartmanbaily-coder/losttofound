@@ -182,7 +182,13 @@ test("records account recovery and deletion paths are reachable", async ({ page 
   await accountDeletion.click();
   await expect(page).toHaveURL(/\/account\/delete$/);
   await expect(page.getByRole("heading", { name: "Delete Account" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Start account deletion" })).toHaveAttribute(
+  await expect(page.getByRole("heading", { name: "Authenticated Deletion Request" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Submit account deletion request" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Email support instead" })).toHaveAttribute(
+    "href",
+    "mailto:support@lendori.io?subject=Lost%20to%20Found%20account%20deletion%20request"
+  );
+  await expect(page.getByRole("link", { name: "Email deletion support" })).toHaveAttribute(
     "href",
     "mailto:support@lendori.io?subject=Lost%20to%20Found%20account%20deletion%20request"
   );

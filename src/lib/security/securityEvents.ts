@@ -23,6 +23,8 @@ export type SecurityEventType =
   | "auth_mfa_enrollment_verified"
   | "auth_mfa_enrollment_failed"
   | "auth_mfa_policy_denied"
+  | "account_deletion_requested"
+  | "account_deletion_request_failed"
   | "evidence_upload_scanner_blocked"
   | "evidence_upload_scanner_failed"
   | "evidence_storage_failed"

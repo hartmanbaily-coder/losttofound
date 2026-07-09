@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { AccountDeletionRequest } from "@/app/account/delete/AccountDeletionRequest";
 import { PolicyPage, type PolicySection } from "@/components/PolicyPage";
 import { accountDeletionMailto, supportEmail } from "@/lib/site";
 
@@ -46,19 +47,22 @@ export default function AccountDeletePage() {
       notice="This deletion process should be reviewed by qualified counsel before broad public launch, especially for backup aging, legal holds, support verification, and security-log retention."
       sections={sections}
     >
+      <AccountDeletionRequest />
+
       <section className="rounded-xl border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-        <h2 className="text-base font-semibold text-slate-950">Start Deletion Request</h2>
+        <h2 className="text-base font-semibold text-slate-950">Support Fallback</h2>
         <p className="mt-3">
-          Send the request from the email address connected to the account. Use a short message such as
-          <span className="font-medium text-slate-800"> Please delete my Lost to Found account.</span> Support will follow up if verification or additional
-          confirmation is required.
+          If you cannot sign in, send the request from the email address connected to the account.
+          Use a short message such as
+          <span className="font-medium text-slate-800"> Please delete my Lost to Found account.</span>{" "}
+          Support will follow up if verification or additional confirmation is required.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <a
             href={accountDeletionMailto}
             className="inline-flex min-h-11 items-center justify-center rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-200"
           >
-            Start account deletion
+            Email deletion support
           </a>
           <Link
             href="/records"

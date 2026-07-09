@@ -74,7 +74,7 @@ Review flow:
 2. Unlock with the review device's Face ID, Touch ID, or passcode. The app uses Apple's LocalAuthentication framework and does not receive or store biometric data.
 3. Open the Records tab and sign in with the review account below.
 4. Review the Policies tab for native privacy, terms, security, AI data use, subprocessors, accessibility, and contact links.
-5. Review the Support tab for support contact, account/data help, and the in-app account deletion request entry point. The deletion entry point opens `https://losttofound.org/account/delete`.
+5. Review the Support tab for support contact, account/data help, and the in-app account deletion request entry point. The deletion entry point opens `https://losttofound.org/account/delete`, where a signed-in records user can submit an authenticated complete-account deletion request.
 
 Provide Apple Review with a dedicated test account before submission:
 
@@ -83,7 +83,7 @@ Provide Apple Review with a dedicated test account before submission:
 - MFA status: `[disable for review account or provide review instructions]`
 - Test data: synthetic only
 
-Account deletion path for review: Support tab -> Account and Data -> Request account deletion -> `https://losttofound.org/account/delete`. The direct deletion page explains complete-account deletion, request timing, backup aging, legal/security retention, and support verification. The public Privacy Policy also documents retention, deletion, backup aging, and support requests.
+Account deletion path for review: Support tab -> Account and Data -> Request account deletion -> `https://losttofound.org/account/delete`. The direct deletion page lets a signed-in records user press "Submit account deletion request" to create a server-side authenticated deletion request, and also explains complete-account deletion, request timing, backup aging, legal/security retention, and support verification. The public Privacy Policy also documents retention, deletion, backup aging, and support requests.
 
 Current native build snapshot:
 
