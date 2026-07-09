@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 
-import { recordsTagline, siteLogoPath, siteName, supportMailto } from "@/lib/site";
+import { recordsTagline, siteName, supportMailto } from "@/lib/site";
 
 const quickActions = [
   "Late exchange",
@@ -37,12 +37,12 @@ export default function HomePage() {
       <header className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-8">
         <Link href="/" className="flex min-w-0 items-center gap-3">
           <Image
-            src={siteLogoPath}
+            src="/app-icons/icon-192.png"
             alt=""
             width={40}
             height={40}
             priority
-            className="h-10 w-10 shrink-0 shadow-sm"
+            className="h-10 w-10 shrink-0 rounded-md bg-slate-950 shadow-sm"
           />
           <span className="min-w-0">
             <span className="block text-sm font-semibold tracking-tight text-slate-950">

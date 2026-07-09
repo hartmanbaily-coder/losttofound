@@ -1,6 +1,5 @@
 export const siteName = "Lost to Found Case Organization";
 export const recordsTagline = "Remove the emotion. Track the data.";
-export const siteLogoPath = "/l2f-logo.png";
 export const supportEmail = "support@lendori.io";
 export const supportMailto = `mailto:${supportEmail}`;
 export const policyLastUpdated = "July 7, 2026";

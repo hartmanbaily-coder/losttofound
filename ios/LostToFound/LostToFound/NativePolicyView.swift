@@ -10,7 +10,7 @@ struct AppBrandMark: View {
     var size: CGFloat = 56
 
     var body: some View {
-        Image("L2FLogo")
+        Image("BookGavelLogo")
             .resizable()
             .scaledToFit()
             .frame(width: size, height: size)

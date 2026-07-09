@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { publicPolicyLinks, recordsTagline, siteLogoPath, siteName } from "@/lib/site";
+import { publicPolicyLinks, recordsTagline, siteName } from "@/lib/site";
 
 const navItems = [{ href: "/records", label: "Records" }, ...publicPolicyLinks];
 
@@ -16,11 +16,11 @@ export default function SiteHeader() {
       <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-6">
         <Link href="/" className="flex items-center gap-3">
           <Image
-            src={siteLogoPath}
+            src="/app-icons/icon-192.png"
             alt=""
             width={36}
             height={36}
-            className="h-9 w-9 shadow-sm"
+            className="h-9 w-9 rounded-md bg-slate-950 shadow-sm"
           />
           <span>
             <span className="block text-sm font-semibold tracking-tight text-slate-950">

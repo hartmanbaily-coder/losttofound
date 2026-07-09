@@ -9,7 +9,7 @@ The iOS app is a native SwiftUI shell with:
 - A controlled `WKWebView` workspace pointed at `https://losttofound.org/records`.
 - External link handling that opens non-product links outside the workspace.
 - Native privacy/support summaries that mirror the public policy pages.
-- App icon assets generated from the original Lost to Found L2F logo.
+- App icon assets generated from the Lost to Found book, records, graph, and gavel logo.
 
 ## Local Setup
 
