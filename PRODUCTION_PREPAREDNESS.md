@@ -24,6 +24,7 @@ Lost to Found Records can run against either the local demo store or the Supabas
 - `MONITORING_ALERTING_RUNBOOK.md` defines production security monitoring sources, alert thresholds, log privacy rules, and escalation paths.
 - `INCIDENT_RESPONSE_RUNBOOK.md` defines incident severity, containment, investigation, notification review, recovery, and post-incident review steps.
 - `DATA_RETENTION_DELETION_RUNBOOK.md` defines the production retention, export, deletion, backup-aging, and legal-hold model to finalize before launch.
+- `SUPABASE_AUTH_LAUNCH_CHECKLIST.md` defines the dashboard-only Supabase Auth settings, redirect URLs, and matching Listhaus repo variables required before Auth readiness can be marked complete.
 - `scripts/verify-two-user-isolation.mjs` runs an executable synthetic two-user isolation check against a deployed Supabase-mode app.
 - `scripts/verify-supabase-auth-public-settings.mjs` checks the public Supabase Auth settings endpoint for email auth, anonymous/phone auth drift, email autoconfirm, and direct-signup alignment with the app signup gate.
 - `scripts/verify-malware-scanner.mjs` verifies the production malware scanner with clean and EICAR test payloads.
@@ -93,7 +94,7 @@ Verified:
 7. Keep production secrets in the host using project `cieuilbpnwuvnrxrlczj`, and deploy through the existing server path for `losttofound.org`.
 8. Set `EXPECTED_SUPABASE_PROJECT_REF=cieuilbpnwuvnrxrlczj` so production readiness fails if secrets point at the old staging project.
 9. Keep production invite-only until launch by setting `NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED=false` and `RECORDS_SIGNUPS_ENABLED=false`; also disable direct Supabase Auth signup while invite-only mode is active. Enable self-registration only after Supabase SMTP, abuse controls, direct-signup policy, and App Store review account handling are ready.
-10. Configure MFA policy, leaked-password protection, reset-token settings, password-change reauthentication, and session/device revocation in Supabase Auth.
+10. Complete `SUPABASE_AUTH_LAUNCH_CHECKLIST.md`, including direct-signup policy, SMTP, redirect URLs, leaked-password protection, reset-token settings, password-change reauthentication, and session/device revocation in Supabase Auth.
 11. Set `RECORDS_ENFORCE_MFA=true` after the Supabase TOTP flow is verified in staging.
 12. Keep two-user RLS/storage verification current by dispatching `Verify Live Isolation`; the latest passing value is `TWO_USER_ISOLATION_TESTED_AT=2026-06-28`.
 13. Run a restore drill, save `ops/backup-restore-evidence.json`, and run `npm run verify:backup-restore`.

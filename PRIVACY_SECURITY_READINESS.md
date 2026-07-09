@@ -60,6 +60,7 @@ These gates are enforced by `src/lib/production/readiness.ts` and `scripts/check
 - Access review: document who has Supabase, hosting, domain, deployment, monitoring, and malware-scanner access; review before launch and at least quarterly.
 - Vendor review: document Supabase, hosting/CDN, malware scanner, email provider, logging/monitoring, and DNS registrar security posture.
 - Edge security: use `EDGE_SECURITY_RULES.md` before setting the WAF and rate-limit readiness flags.
+- Supabase Auth: use `SUPABASE_AUTH_LAUNCH_CHECKLIST.md` before setting Auth readiness flags or enabling self-registration.
 - Legal review: use `LEGAL_REVIEW_PACKET.md` before setting `LEGAL_REVIEW_APPROVED=true`.
 
 ## Two-User Isolation Test
