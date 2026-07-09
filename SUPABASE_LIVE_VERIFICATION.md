@@ -1,6 +1,6 @@
 # Supabase Live Verification
 
-Verification date: 2026-07-08 America/Anchorage
+Verification date: 2026-07-09 America/Anchorage
 
 Latest advisor refresh: 2026-07-08 America/Anchorage
 
@@ -16,7 +16,7 @@ Staging/mixed-use project: `adhnoiicwfvppzenwcgv`
 
 Staging/mixed-use project URL: `https://adhnoiicwfvppzenwcgv.supabase.co`
 
-Status from Supabase connector: `ACTIVE_HEALTHY`
+Status from Supabase connector: `ACTIVE_HEALTHY` as of 2026-07-09 America/Anchorage
 
 Production database: Postgres 17, region `us-west-1`
 
@@ -28,6 +28,7 @@ Verified through Supabase SQL inspection on production project `cieuilbpnwuvnrxr
 
 - All 13 `public.records_*` tables have RLS enabled.
 - No direct `anon` or `authenticated` table privileges remain on `public.records_*`.
+- No functions exist in the exposed `public` schema, so there are no public `SECURITY DEFINER` functions or public function execute grants to remediate.
 - The `records-evidence` Storage bucket exists.
 - `records-evidence` is private, not public.
 - `records-evidence` file size limit is `10485760` bytes.
@@ -36,6 +37,12 @@ Verified through Supabase SQL inspection on production project `cieuilbpnwuvnrxr
 - Applied production migration: `20260617182822_create_records_production_schema`.
 - Applied cleanup migration: `20260628050702_remove_retired_grant_database_artifacts`.
 - Applied evidence policy hardening migration: `20260708195205_remove_records_evidence_direct_storage_policies`.
+
+Latest read-only SQL recheck: 2026-07-09 America/Anchorage. The production
+project was `ACTIVE_HEALTHY`, all exposed records/storage tables had RLS
+enabled, no direct browser-role table grants existed on `public`, no public
+schema functions existed, and the `records-evidence` bucket remained private
+with the expected size and MIME limits.
 
 ## Retired Non-Records Artifacts
 
