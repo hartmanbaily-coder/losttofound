@@ -103,13 +103,14 @@ Fill before launch:
 - Backup restore owner:
 - Backup restore test cadence:
 
-After a restore drill, save a non-sensitive evidence artifact at `ops/backup-restore-evidence.json` using `ops/backup-restore-evidence.example.json` as the template. Then run:
+After a restore drill, copy `ops/backup-restore-evidence.example.json` to the ignored path `ops/backup-restore-evidence.json`, replace every placeholder with the real non-sensitive restore evidence, and run:
 
 ```bash
 npm run verify:backup-restore
 ```
 
 Do not include real custody, child, court, payment, health, school, note, evidence contents, raw storage paths, or secrets in the evidence artifact.
+The verifier intentionally rejects the `.example.json` template and common placeholder text.
 
 ## Legal Hold
 

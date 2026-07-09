@@ -21,6 +21,10 @@ const evidencePath = process.env.BACKUP_RESTORE_EVIDENCE_FILE || "ops/backup-res
 const expectedProjectRef = process.env.EXPECTED_SUPABASE_PROJECT_REF || "cieuilbpnwuvnrxrlczj";
 const absolutePath = path.resolve(process.cwd(), evidencePath);
 
+if (path.basename(absolutePath).includes(".example.")) {
+  fail("Backup restore evidence must be a real restore artifact, not the example template.");
+}
+
 let evidence;
 try {
   evidence = JSON.parse(await readFile(absolutePath, "utf8"));
@@ -39,6 +43,19 @@ const requiredTextFields = [
 
 for (const field of requiredTextFields) {
   if (!hasText(evidence[field])) fail(`Backup restore evidence is missing ${field}.`);
+}
+
+const placeholderFragments = [
+  "backup snapshot identifier",
+  "approved test data only",
+  "name or role of reviewer",
+];
+
+for (const field of requiredTextFields) {
+  const value = String(evidence[field]).toLowerCase();
+  if (placeholderFragments.some((fragment) => value.includes(fragment))) {
+    fail(`Backup restore evidence ${field} still contains template placeholder text.`);
+  }
 }
 
 if (evidence.projectRef !== expectedProjectRef) {
