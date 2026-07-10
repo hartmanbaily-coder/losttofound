@@ -1,5 +1,6 @@
 import Observation
 import SwiftUI
+import UIKit
 import WebKit
 
 @MainActor
@@ -150,6 +151,8 @@ struct WorkspaceWebView: UIViewRepresentable {
     let url: URL
     let model: WebViewModel
 
+    private let nativeDownloadHandlerName = "lostToFoundDownload"
+
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
     }
@@ -162,6 +165,10 @@ struct WorkspaceWebView: UIViewRepresentable {
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         configuration.websiteDataStore = websiteDataStore
         configuration.applicationNameForUserAgent = "LostToFound-iOS/0.1"
+        configuration.userContentController.add(
+            WeakScriptMessageHandler(delegate: context.coordinator),
+            name: nativeDownloadHandlerName
+        )
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.allowsBackForwardNavigationGestures = true
@@ -187,12 +194,34 @@ struct WorkspaceWebView: UIViewRepresentable {
         model.updateNavigationState(from: webView)
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         private let allowedHosts = Set(["losttofound.org", "www.losttofound.org"])
+        private let allowedTextExportContentTypes = Set(["text/csv", "application/json"])
+        private let maximumTextExportBytes = 10 * 1024 * 1024
         private let model: WebViewModel
 
         init(model: WebViewModel) {
             self.model = model
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "lostToFoundDownload",
+                  message.frameInfo.isMainFrame,
+                  let host = message.webView?.url?.host,
+                  allowedHosts.contains(host),
+                  let payload = message.body as? [String: Any],
+                  let requestedFileName = payload["fileName"] as? String,
+                  let body = payload["body"] as? String,
+                  let contentType = payload["contentType"] as? String,
+                  allowedTextExportContentTypes.contains(contentType),
+                  body.utf8.count <= maximumTextExportBytes,
+                  let data = body.data(using: .utf8),
+                  let fileURL = writeTextExport(data: data, requestedFileName: requestedFileName)
+            else {
+                return
+            }
+
+            presentShareSheet(for: fileURL)
         }
 
         func webView(
@@ -246,5 +275,77 @@ struct WorkspaceWebView: UIViewRepresentable {
             model.navigationFailed(with: error)
             model.updateNavigationState(from: webView)
         }
+
+        private func writeTextExport(data: Data, requestedFileName: String) -> URL? {
+            let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
+            let safeFileName = requestedFileName.unicodeScalars
+                .map { allowedCharacters.contains($0) ? String($0) : "-" }
+                .joined()
+                .prefix(160)
+            guard !safeFileName.isEmpty else { return nil }
+
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("LostToFoundExports", isDirectory: true)
+            let fileURL = directory.appendingPathComponent(String(safeFileName), isDirectory: false)
+
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try data.write(to: fileURL, options: .atomic)
+                return fileURL
+            } catch {
+                return nil
+            }
+        }
+
+        private func presentShareSheet(for fileURL: URL) {
+            guard let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }),
+                  let rootViewController = windowScene.windows.first(where: \.isKeyWindow)?.rootViewController
+            else {
+                return
+            }
+
+            let presenter = visibleViewController(from: rootViewController)
+            let shareSheet = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+            shareSheet.completionWithItemsHandler = { _, _, _, _ in
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+
+            if let popover = shareSheet.popoverPresentationController {
+                popover.sourceView = presenter.view
+                popover.sourceRect = presenter.view.bounds
+                popover.permittedArrowDirections = []
+            }
+
+            presenter.present(shareSheet, animated: true)
+        }
+
+        private func visibleViewController(from viewController: UIViewController) -> UIViewController {
+            if let presented = viewController.presentedViewController {
+                return visibleViewController(from: presented)
+            }
+            if let navigation = viewController as? UINavigationController,
+               let visible = navigation.visibleViewController {
+                return visibleViewController(from: visible)
+            }
+            if let tab = viewController as? UITabBarController,
+               let selected = tab.selectedViewController {
+                return visibleViewController(from: selected)
+            }
+            return viewController
+        }
+    }
+}
+
+private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+    weak var delegate: WKScriptMessageHandler?
+
+    init(delegate: WKScriptMessageHandler) {
+        self.delegate = delegate
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        delegate?.userContentController(userContentController, didReceive: message)
     }
 }

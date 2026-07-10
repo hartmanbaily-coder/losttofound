@@ -555,7 +555,27 @@ export function parseTags(value: string) {
     .slice(0, 12);
 }
 
+type NativeDownloadHandler = {
+  postMessage: (message: { fileName: string; body: string; contentType: string }) => void;
+};
+
+declare global {
+  interface Window {
+    webkit?: {
+      messageHandlers?: {
+        lostToFoundDownload?: NativeDownloadHandler;
+      };
+    };
+  }
+}
+
 export function downloadTextFile(fileName: string, body: string, contentType: string) {
+  const nativeDownloadHandler = window.webkit?.messageHandlers?.lostToFoundDownload;
+  if (nativeDownloadHandler) {
+    nativeDownloadHandler.postMessage({ fileName, body, contentType });
+    return;
+  }
+
   const blob = new Blob([body], { type: contentType });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
