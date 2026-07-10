@@ -20,6 +20,14 @@ The native Records tab loads `https://losttofound.org/records`. A website releas
 
 Use internal testing while iterating. External testers require a separate external group and may require Beta App Review.
 
+## Xcode Cloud exception
+
+Automatic distribution applies to builds uploaded from Xcode. Builds created by **Xcode Cloud** must still be added to an internal testing group manually in App Store Connect after their upload status becomes **Complete**. This is why builds can appear in Xcode Cloud and App Store Connect but testers remain on an older build.
+
+For an already-complete Cloud build: open **Apps > Lost to Found > TestFlight > iOS**, select the build, then add it to `Core Testers` and enter the **What to Test** notes. Do this now for build `12` after confirming that it is Complete and has no missing compliance prompt.
+
+Use the local `npm run ios:testflight` lane below when automatic internal distribution is the priority. Do not alternate release lanes without checking the TestFlight group assignment.
+
 ## Every native release
 
 1. Merge the native change to `main` and push it. Wait for the production validation/deploy workflow to pass.
@@ -31,7 +39,7 @@ Use internal testing while iterating. External testers require a separate extern
    npm run ios:testflight
    ```
 
-The command creates a Release archive and uploads it to App Store Connect. It uses the Xcode-supported `manageAppVersionAndBuildNumber` option, which chooses the next unused build number at upload time. Do not manually edit `CURRENT_PROJECT_VERSION` before every TestFlight build.
+The command creates a Release archive and uploads it to App Store Connect. It uses the Xcode-supported `manageAppVersionAndBuildNumber` option, which chooses the next unused build number at upload time. The project’s configured build is synchronized to the latest known Cloud build (`12`); do not manually edit `CURRENT_PROJECT_VERSION` before every TestFlight build.
 
 After the upload, open **Apps > Lost to Found > TestFlight > iOS > Build Uploads**:
 
