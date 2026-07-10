@@ -235,7 +235,7 @@ const parentingSchedulePresets: Array<{
 
 const timelineFilterOptions: Array<{ value: TimelineFilter; label: string }> = [
   { value: "all", label: "All records" },
-  { value: "attention", label: "Needs review" },
+  { value: "attention", label: "Recorded issues" },
   { value: "scheduled_exchange", label: "Scheduled exchanges" },
   { value: "logged_exchange", label: "Logged exchanges" },
   { value: "custody_note", label: "Notes" },
@@ -1472,7 +1472,7 @@ function DashboardView({
                 ))}
               </div>
               <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
-                <StatMini label="Needs review" value={String(stats.attentionCount)} />
+                <StatMini label="Recorded issues" value={String(stats.attentionCount)} />
                 <StatMini label="Files in profile" value={String(evidenceCount)} />
               </div>
               <div className="rounded-md border border-slate-200 bg-slate-50/70 p-3">
@@ -1547,6 +1547,7 @@ function CalendarView({
   const [paintDraftDates, setPaintDraftDates] = useState<Set<string>>(() => new Set());
   const [paintSelectionDates, setPaintSelectionDates] = useState<Set<string>>(() => new Set());
   const [optimisticPaintAssignments, setOptimisticPaintAssignments] = useState<CustodyDayAssignment[]>([]);
+  const calendarScrollRef = useRef<HTMLDivElement>(null);
   const paintingRef = useRef(false);
   const paintAnchorDateRef = useRef<string | null>(null);
   const activePaintPointerIdRef = useRef<number | null>(null);
@@ -1563,6 +1564,22 @@ function CalendarView({
   const optimisticCustodyDayMap = buildCustodyDayMap(optimisticPaintAssignments, monthRange);
   const selectedAssignment = optimisticCustodyDayMap.get(selectedDay) || custodyDayMap.get(selectedDay);
   const dayEvents = eventsByDate.get(selectedDay) || [];
+
+  useEffect(() => {
+    const scroller = calendarScrollRef.current;
+    if (!scroller || scroller.scrollWidth <= scroller.clientWidth) return;
+    const selectedCell = scroller.querySelector<HTMLElement>(`[data-calendar-day="${selectedDay}"]`);
+    if (!selectedCell) return;
+
+    const scrollerRect = scroller.getBoundingClientRect();
+    const selectedRect = selectedCell.getBoundingClientRect();
+    const centeredLeft =
+      scroller.scrollLeft +
+      selectedRect.left -
+      scrollerRect.left -
+      (scroller.clientWidth - selectedRect.width) / 2;
+    scroller.scrollTo({ left: Math.max(0, centeredLeft) });
+  }, [monthKey, selectedDay]);
 
   function showCalendarMonth(nextMonthKey: string) {
     const nextRange = getMonthBounds(nextMonthKey, timezone);
@@ -2106,129 +2123,135 @@ function CalendarView({
                 Scheduled exchange time
               </span>
             </div>
-            <div className="grid grid-cols-7 gap-2 text-xs font-semibold text-slate-500">
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                <div key={day} className="px-2 py-1">
-                  {day}
+            <div
+              ref={calendarScrollRef}
+              data-testid="calendar-scroll"
+              role="region"
+              aria-label="Monthly calendar grid"
+              className="-mx-2 overflow-x-auto px-2 pb-2 [overscroll-behavior-inline:contain]"
+            >
+              <div className="min-w-[42rem] sm:min-w-0">
+                <div className="grid grid-cols-7 gap-2 text-xs font-semibold text-slate-500">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                    <div key={day} className="px-2 py-1">
+                      {day}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <div className="mt-2 grid grid-cols-7 gap-2">
-              {monthDays.map((day, index) => {
-                const dayEventsForCell = day ? eventsByDate.get(day) || [] : [];
-                const recordEventsForCell = dayEventsForCell.filter(
-                  (event) => event.type !== "custody_day"
-                );
-                const exchangeTimeMarkers = Array.from(
-                  new Set(
-                    dayEventsForCell.flatMap((event) =>
-                      event.type === "scheduled_exchange" && event.time ? [event.time] : []
-                    )
-                  )
-                ).flatMap((time) => {
-                  const position = timeOfDayPositionPercent(time);
-                  return position === null ? [] : [{ position, time }];
-                });
-                const assignment = day
-                  ? optimisticCustodyDayMap.get(day) || custodyDayMap.get(day)
-                  : undefined;
-                const isPaintDraft = day ? paintDraftDates.has(day) : false;
-                const isToday = day === today;
-                const visibleColor = isPaintDraft ? paintColor : assignment?.color;
-                const visibleLabel = isPaintDraft
-                  ? paintCaregiverLabel.trim() || "Parent A"
-                  : assignment?.caregiverLabel;
-                return (
-                  <button
-                    key={day || `blank-${index}`}
-                    type="button"
-                    disabled={!day}
-                    data-calendar-day={day || undefined}
-                    aria-label={day ? `Edit calendar day ${day}` : undefined}
-                    onPointerDown={(event) => day && beginPaint(day, event)}
-                    onPointerEnter={() => day && extendPaint(day)}
-                    onPointerMove={() => day && extendPaint(day)}
-                    onMouseEnter={() => day && extendPaint(day)}
-                    onPointerUp={() => finishPaint()}
-                    onClick={() => day && handleCalendarDayClick(day)}
-                    style={
-                      visibleColor
-                        ? {
-                            backgroundColor: withAlpha(visibleColor, isPaintDraft ? 0.16 : 0.1),
-                            borderColor: visibleColor,
-                            touchAction: "none",
-                            userSelect: "none",
-                          }
-                        : {
-                            touchAction: "none",
-                            userSelect: "none",
-                          }
-                    }
-                    className={`relative min-h-28 overflow-hidden select-none rounded-md border p-2 text-left transition ${
-                      day === selectedDay
-                        ? "ring-2 ring-teal-500 ring-offset-1"
-                        : "border-slate-200 bg-white hover:border-teal-300"
-                    } ${isToday ? "shadow-[inset_0_0_0_2px_rgba(15,118,110,0.35)]" : ""} ${day ? "cursor-crosshair" : ""} ${!day ? "bg-transparent hover:border-slate-200" : ""}`}
-                  >
-                    {day && (
-                      <>
-                        {exchangeTimeMarkers.map(({ position, time }) => (
-                          <span
-                            key={time}
-                            aria-hidden="true"
-                            data-exchange-time-marker={time}
-                            title={`Scheduled exchange at ${time}`}
-                            className="pointer-events-none absolute inset-y-0 z-0 w-0.5 -translate-x-1/2 bg-amber-600/70"
-                            style={{ left: `${position}%` }}
-                          />
-                        ))}
-                        <div className="relative z-10">
-                          <div className="flex items-start justify-between gap-1">
-                            <p className="text-sm font-semibold text-slate-900">{Number(day.slice(-2))}</p>
-                            <div className="flex flex-wrap justify-end gap-1">
-                              {isToday && (
-                                <span className="rounded bg-teal-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                  Today
-                                </span>
-                              )}
-                              {assignment?.exchangeTime && (
-                                <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
-                                  {assignment.exchangeTime}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {visibleColor && visibleLabel && (
-                            <div
-                              className="mt-2 truncate rounded px-2 py-1 text-xs font-semibold text-white"
-                              style={{ backgroundColor: visibleColor }}
-                            >
-                              {visibleLabel}
-                            </div>
-                          )}
-                          <div className="mt-2 space-y-1">
-                            {recordEventsForCell
-                              .slice(0, 2)
-                              .map((event) => (
+                <div className="mt-2 grid grid-cols-7 gap-2">
+                  {monthDays.map((day, index) => {
+                    const dayEventsForCell = day ? eventsByDate.get(day) || [] : [];
+                    const recordEventsForCell = dayEventsForCell.filter(
+                      (event) => event.type !== "custody_day"
+                    );
+                    const exchangeTimeMarkers = Array.from(
+                      new Set(
+                        dayEventsForCell.flatMap((event) =>
+                          event.type === "scheduled_exchange" && event.time ? [event.time] : []
+                        )
+                      )
+                    ).flatMap((time) => {
+                      const position = timeOfDayPositionPercent(time);
+                      return position === null ? [] : [{ position, time }];
+                    });
+                    const assignment = day
+                      ? optimisticCustodyDayMap.get(day) || custodyDayMap.get(day)
+                      : undefined;
+                    const isPaintDraft = day ? paintDraftDates.has(day) : false;
+                    const isToday = day === today;
+                    const visibleColor = isPaintDraft ? paintColor : assignment?.color;
+                    const visibleLabel = isPaintDraft
+                      ? paintCaregiverLabel.trim() || "Parent A"
+                      : assignment?.caregiverLabel;
+                    return (
+                      <button
+                        key={day || `blank-${index}`}
+                        type="button"
+                        disabled={!day}
+                        data-calendar-day={day || undefined}
+                        data-calendar-selected={day === selectedDay ? "true" : undefined}
+                        aria-label={day ? `Edit calendar day ${day}` : undefined}
+                        onPointerDown={(event) => day && beginPaint(day, event)}
+                        onPointerEnter={() => day && extendPaint(day)}
+                        onPointerMove={() => day && extendPaint(day)}
+                        onMouseEnter={() => day && extendPaint(day)}
+                        onPointerUp={() => finishPaint()}
+                        onClick={() => day && handleCalendarDayClick(day)}
+                        style={
+                          visibleColor
+                            ? {
+                                backgroundColor: withAlpha(visibleColor, isPaintDraft ? 0.16 : 0.1),
+                                borderColor: visibleColor,
+                              }
+                            : undefined
+                        }
+                        className={`relative min-h-28 touch-pan-x overflow-hidden select-none rounded-md border p-2 text-left transition sm:touch-none ${
+                          day === selectedDay
+                            ? "ring-2 ring-teal-500 ring-offset-1"
+                            : "border-slate-200 bg-white hover:border-teal-300"
+                        } ${isToday ? "shadow-[inset_0_0_0_2px_rgba(15,118,110,0.35)]" : ""} ${day ? "cursor-crosshair" : ""} ${!day ? "bg-transparent hover:border-slate-200" : ""}`}
+                      >
+                        {day && (
+                          <>
+                            {exchangeTimeMarkers.map(({ position, time }) => (
                               <span
-                                key={event.id}
-                                className="block truncate rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700"
-                              >
-                                {event.title}
-                              </span>
+                                key={time}
+                                aria-hidden="true"
+                                data-exchange-time-marker={time}
+                                title={`Scheduled exchange at ${time}`}
+                                className="pointer-events-none absolute inset-y-0 z-0 w-0.5 -translate-x-1/2 bg-amber-600/70"
+                                style={{ left: `${position}%` }}
+                              />
                             ))}
-                            {recordEventsForCell.length > 2 && (
-                              <span className="text-[11px] text-slate-500">
-                                +{recordEventsForCell.length - 2} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </button>
-                );
-              })}
+                            <div className="relative z-10">
+                              <div className="flex items-start justify-between gap-1">
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {Number(day.slice(-2))}
+                                </p>
+                                <div className="flex flex-wrap justify-end gap-1">
+                                  {isToday && (
+                                    <span className="rounded bg-teal-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                      Today
+                                    </span>
+                                  )}
+                                  {assignment?.exchangeTime && (
+                                    <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+                                      {assignment.exchangeTime}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {visibleColor && visibleLabel && (
+                                <div
+                                  className="mt-2 truncate rounded px-2 py-1 text-xs font-semibold text-white"
+                                  style={{ backgroundColor: visibleColor }}
+                                >
+                                  {visibleLabel}
+                                </div>
+                              )}
+                              <div className="mt-2 space-y-1">
+                                {recordEventsForCell.slice(0, 2).map((event) => (
+                                  <span
+                                    key={event.id}
+                                    className="block truncate rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700"
+                                  >
+                                    {event.title}
+                                  </span>
+                                ))}
+                                {recordEventsForCell.length > 2 && (
+                                  <span className="text-[11px] text-slate-500">
+                                    +{recordEventsForCell.length - 2} more
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </Panel>
 
@@ -2441,7 +2464,7 @@ function TimelineView({
     <div className="space-y-4">
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Timeline records" value={visibleEvents.length} detail={`${range.from} to ${range.to}`} />
-        <StatCard label="Needs review" value={attentionCount} detail="Attention or critical markers" tone="amber" />
+        <StatCard label="Recorded issues" value={attentionCount} detail="Attention or critical markers" tone="amber" />
         <StatCard label="Exchange entries" value={exchangeCount} detail="Scheduled and logged" />
         <StatCard label="Notes" value={noteCount} detail="Date based records" tone="slate" />
         <StatCard label="Files" value={evidenceCount} detail="Dated file attachments" />
@@ -6858,7 +6881,7 @@ function timelineSeverity(event: CalendarEvent) {
 
 function timelineSeverityLabel(severity: NonNullable<CalendarEvent["severity"]>) {
   if (severity === "critical") return "Critical";
-  if (severity === "attention") return "Needs review";
+  if (severity === "attention") return "Recorded issue";
   if (severity === "positive") return "Recorded";
   return "Neutral";
 }

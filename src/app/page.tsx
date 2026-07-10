@@ -28,7 +28,7 @@ const workflowSteps = [
 
 const previewRows = [
   { date: "Jul 03", title: "Scheduled exchange", status: "Recorded" },
-  { date: "Jul 05", title: "FaceTime not conducted", status: "Needs review" },
+  { date: "Jul 05", title: "FaceTime not conducted", status: "Recorded issue" },
   { date: "Jul 08", title: "Uploaded message archive", status: "Attached" },
 ];
 

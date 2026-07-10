@@ -218,7 +218,7 @@ function includesAny(value: string, terms: string[]) {
 
 function eventSeverityLabel(value: string | undefined) {
   if (value === "critical") return "Critical";
-  if (value === "attention") return "Needs review";
+  if (value === "attention") return "Recorded issue";
   if (value === "positive") return "Recorded";
   return "Neutral";
 }
@@ -470,12 +470,12 @@ export function buildSectionExportPacket(
       ...base,
       summaries: [
         `From ${range.from} to ${range.to}, the calendar includes ${custodyAssignments.length} custody day assignment${custodyAssignments.length === 1 ? "" : "s"} and ${events.length} dated event${events.length === 1 ? "" : "s"}.`,
-        `${attentionEvents.length} dated event${attentionEvents.length === 1 ? "" : "s"} in this range are marked for review based on status/category.`,
+        `${attentionEvents.length} dated event${attentionEvents.length === 1 ? "" : "s"} in this range are classified as recorded issues based on status/category.`,
       ],
       metrics: [
         { label: "Custody days", value: custodyAssignments.length, detail: "Color coded calendar entries" },
         { label: "Dated records", value: events.length, detail: "Timeline visible sources" },
-        { label: "Needs review", value: attentionEvents.length, detail: "Attention or critical severity" },
+        { label: "Recorded issues", value: attentionEvents.length, detail: "Attention or critical severity" },
       ],
       charts: [
         {
@@ -529,13 +529,13 @@ export function buildSectionExportPacket(
     return {
       ...base,
       summaries: [
-        `The timeline has ${events.length} dated record${events.length === 1 ? "" : "s"} in the selected range, with ${attentionEvents.length} marked for review.`,
+        `The timeline has ${events.length} dated record${events.length === 1 ? "" : "s"} in the selected range, including ${attentionEvents.length} recorded issue${attentionEvents.length === 1 ? "" : "s"}.`,
         "Timeline exports combine exchange, note, file, support, and expense records in chronological order.",
       ],
       metrics: [
         { label: "Timeline records", value: events.length, detail: `${range.from} to ${range.to}` },
-        { label: "Needs review", value: attentionEvents.length, detail: "Attention or critical severity" },
-        { label: "Review share", value: formatPercent(attentionEvents.length, events.length), detail: "Of timeline records" },
+        { label: "Recorded issues", value: attentionEvents.length, detail: "Attention or critical severity" },
+        { label: "Issue share", value: formatPercent(attentionEvents.length, events.length), detail: "Of timeline records" },
       ],
       charts: [
         {
@@ -544,7 +544,7 @@ export function buildSectionExportPacket(
           rows: countBy(events, (event) => labelEventType(event.type)),
         },
         {
-          title: "Timeline records by review level",
+          title: "Timeline records by status",
           unit: "records",
           rows: countBy(events, (event) => eventSeverityLabel(event.severity)),
         },

@@ -268,6 +268,17 @@ describe("privacy and safety helpers", () => {
     expect(csv).not.toContain("chart_data");
   });
 
+  it("describes attention-level timeline records as recorded issues", () => {
+    const dataset = createRecordsSeed();
+    const packet = buildSectionExportPacket(dataset, demoUserId, demoCaseId, range, "timeline");
+
+    expect(packet.metrics.map((metric) => metric.label)).toContain("Recorded issues");
+    expect(packet.metrics.map((metric) => metric.label)).toContain("Issue share");
+    expect(packet.metrics.map((metric) => metric.label)).not.toContain("Needs review");
+    expect(packet.charts.map((chart) => chart.title)).toContain("Timeline records by status");
+    expect(packet.summaries.join(" ")).not.toContain("marked for review");
+  });
+
   it("exports incident timeline rows from timeline-visible dated record sources", () => {
     const dataset = createRecordsSeed();
     const preview = buildReportPreview(dataset, demoUserId, demoCaseId, range, "incident_timeline");

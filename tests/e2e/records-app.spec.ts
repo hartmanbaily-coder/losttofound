@@ -50,7 +50,11 @@ test("records login and report workflow", async ({ page }) => {
   await enterWorkspace.click();
 
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
-  await expect(page.getByText("This tool helps organize records and does not provide legal advice.")).toBeVisible();
+  await expect(
+    page
+      .getByText("This tool helps organize records and does not provide legal advice.")
+      .filter({ visible: true })
+  ).toBeVisible();
   await expect(page.getByText("Late exchanges").first()).toBeVisible();
   await page.getByLabel("From date").fill("2026-01-01");
   await page.getByLabel("To date").fill("2026-01-31");
@@ -316,4 +320,58 @@ test("mobile workspace header stays compact and exposes its full controls", asyn
   const restoredBox = await header.boundingBox();
   expect(restoredBox?.height).toBeLessThanOrEqual(72);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
+
+test("mobile calendar, policy menu, and timeline labels remain usable", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/records");
+
+  const enterWorkspace = page.getByRole("button", { name: "Enter records workspace" });
+  await expect(enterWorkspace).toBeEnabled();
+  await enterWorkspace.click();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Calendar", exact: true })).toBeVisible();
+  const calendarScroll = page.getByTestId("calendar-scroll");
+  await expect(calendarScroll).toBeVisible();
+  const calendarMetrics = await calendarScroll.evaluate((element) => {
+    const day = element.querySelector<HTMLElement>("[data-calendar-day]");
+    const selectedDay = element.querySelector<HTMLElement>('[data-calendar-selected="true"]');
+    const scrollerRect = element.getBoundingClientRect();
+    const selectedRect = selectedDay?.getBoundingClientRect();
+    return {
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+      dayWidth: day?.getBoundingClientRect().width || 0,
+      touchAction: day ? window.getComputedStyle(day).touchAction : "",
+      selectedDayVisible: Boolean(
+        selectedRect &&
+          selectedRect.left >= scrollerRect.left &&
+          selectedRect.right <= scrollerRect.right
+      ),
+    };
+  });
+  expect(calendarMetrics.scrollWidth).toBeGreaterThan(calendarMetrics.clientWidth);
+  expect(calendarMetrics.dayWidth).toBeGreaterThanOrEqual(80);
+  expect(calendarMetrics.touchAction).toBe("pan-x");
+  expect(calendarMetrics.selectedDayVisible).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+
+  const policyMenu = page.getByTestId("mobile-policy-menu");
+  await expect(policyMenu).not.toHaveAttribute("open", "");
+  await expect(page.getByRole("link", { name: "Privacy", exact: true })).not.toBeVisible();
+  await policyMenu.locator("summary").click();
+  await expect(policyMenu).toHaveAttribute("open", "");
+  await expect(page.getByRole("link", { name: "Privacy", exact: true })).toBeVisible();
+
+  const timelineNavButton = page.locator("aside nav button").filter({ hasText: "Timeline" });
+  await expect(timelineNavButton).toHaveCount(1);
+  await timelineNavButton.click();
+  await expect(page.getByRole("heading", { name: "Timeline", exact: true })).toBeVisible();
+  const timelineControls = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Timeline controls", exact: true }),
+  });
+  await expect(timelineControls.getByText("Recorded issue", { exact: true })).toBeVisible();
+  await expect(page.getByText("Needs review", { exact: true })).toHaveCount(0);
 });
