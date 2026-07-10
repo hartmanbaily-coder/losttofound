@@ -17,6 +17,8 @@ import {
   exchangeChartRows,
   formatMoney,
   generateExpectedExchangeEvents,
+  getExchangeArrivingParty,
+  getExchangeLateParty,
   getIsoDateFromDateTime,
   isLateExchangeTimelineEvent,
   isMissedExchangeTimelineEvent,
@@ -24,6 +26,8 @@ import {
   isPostCallFaceTimeNotice,
   isTimelineVisibleEvent,
   labelEventType,
+  labelExchangeParty,
+  labelExchangeScheduledTimeSource,
   labelExchangeStatus,
   labelNoteCategory,
   labelPaymentStatus,
@@ -470,6 +474,11 @@ export default function RecordsApp() {
   }
 
   function exportSectionPacket(packet: SectionExportPacket, format: SectionExportFormat) {
+    if (!packet.tables.some((table) => table.rows.length > 0)) {
+      flash("No records match the selected date range. Adjust the range before exporting.");
+      return;
+    }
+
     const slug = `${packet.id}-${packet.range.from}-${packet.range.to}`;
 
     if (format === "json") {
@@ -2310,6 +2319,11 @@ function TimelineView({
   }
 
   function downloadTimelineCsv() {
+    if (filteredEvents.length === 0) {
+      flash("No timeline records match this filter and date range.");
+      return;
+    }
+
     const rows = filteredEvents.map((event) => ({
       date: event.date,
       time: event.time || "",
@@ -2367,7 +2381,12 @@ function TimelineView({
                   ))}
                 </select>
               </Field>
-              <button type="button" onClick={downloadTimelineCsv} className="btn-primary">
+              <button
+                type="button"
+                onClick={downloadTimelineCsv}
+                disabled={filteredEvents.length === 0}
+                className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
                 Export timeline CSV
               </button>
               <p className="text-xs leading-5 text-slate-500">
@@ -2433,6 +2452,11 @@ function ExchangesView({
   onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
+  const [editingExchangeId, setEditingExchangeId] = useState("");
+  const editingExchange = selected.exchangeLogs.find((log) => log.id === editingExchangeId) || null;
+  const userRoleLabel = selected.matter?.userRoleLabel || "Me";
+  const otherParentLabel = selected.matter?.otherParentLabel || "Other parent";
+
   function addRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -2487,6 +2511,9 @@ function ExchangesView({
       orderedExchangeAt: `${text(formData, "orderedDate")}T${text(formData, "orderedTime")}:00.000Z`,
       actualExchangeAt: actualDate && actualTime ? `${actualDate}T${actualTime}:00.000Z` : null,
       direction: text(formData, "direction"),
+      arrivingParty: text(formData, "arrivingParty"),
+      lateParty: text(formData, "lateParty"),
+      scheduledTimeSource: text(formData, "scheduledTimeSource"),
       status: text(formData, "status"),
       location: text(formData, "location"),
       reasonGiven: text(formData, "reasonGiven"),
@@ -2526,6 +2553,56 @@ function ExchangesView({
     flash("Exchange outcome logged.");
   }
 
+  function updateExchangeLog(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingExchange) return flash("Choose an exchange record to edit.");
+
+    const formData = new FormData(event.currentTarget);
+    const actualDate = text(formData, "actualDate");
+    const actualTime = text(formData, "actualTime");
+    const parsed = exchangeLogSchema.safeParse({
+      orderedExchangeAt: `${text(formData, "orderedDate")}T${text(formData, "orderedTime")}:00.000Z`,
+      actualExchangeAt: actualDate && actualTime ? `${actualDate}T${actualTime}:00.000Z` : null,
+      direction: text(formData, "direction"),
+      arrivingParty: text(formData, "arrivingParty"),
+      lateParty: text(formData, "lateParty"),
+      scheduledTimeSource: text(formData, "scheduledTimeSource"),
+      status: text(formData, "status"),
+      location: text(formData, "location"),
+      reasonGiven: text(formData, "reasonGiven"),
+      notes: text(formData, "notes"),
+      tags: parseTags(text(formData, "tags")),
+      witnesses: text(formData, "witnesses"),
+    });
+    if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the exchange log form.");
+
+    updateDataset((current) =>
+      withAudit(
+        {
+          ...current,
+          exchangeLogs: current.exchangeLogs.map((log) =>
+            log.id === editingExchange.id && log.userId === userId && log.caseId === caseId
+              ? {
+                  ...log,
+                  ...emptyToUndefined(parsed.data),
+                  updatedAt: nowIso(),
+                }
+              : log
+          ),
+        },
+        {
+          userId,
+          caseId,
+          action: "updated",
+          entityType: "exchangeLog",
+          entityId: editingExchange.id,
+          metadataSummary: "Exchange timing and responsibility details updated without note body in audit metadata.",
+        }
+      )
+    );
+    flash("Exchange details updated.");
+  }
+
   function deleteExchangeRule(ruleId: string) {
     updateDataset((current) =>
       withAudit(
@@ -2557,6 +2634,7 @@ function ExchangesView({
   }
 
   function deleteExchangeLog(logId: string) {
+    if (editingExchangeId === logId) setEditingExchangeId("");
     updateDataset((current) =>
       withAudit(
         {
@@ -2606,8 +2684,8 @@ function ExchangesView({
             </div>
             <Field label="Direction">
               <select name="direction" className="input" defaultValue="other_parent_to_me">
-                <option value="other_parent_to_me">Other Parent to Me</option>
-                <option value="me_to_other_parent">Me to Other Parent</option>
+                <option value="other_parent_to_me">{otherParentLabel} to {userRoleLabel}</option>
+                <option value="me_to_other_parent">{userRoleLabel} to {otherParentLabel}</option>
               </select>
             </Field>
             <Field label="Location">
@@ -2632,10 +2710,10 @@ function ExchangesView({
         <Panel title="Log actual exchange outcome" action="Factual record">
           <form onSubmit={addExchangeLog} className="grid gap-3">
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Ordered date">
+              <Field label="Scheduled exchange date">
                 <input name="orderedDate" type="date" className="input" defaultValue="2026-06-12" />
               </Field>
-              <Field label="Ordered time">
+              <Field label="Scheduled exchange time">
                 <input name="orderedTime" type="time" className="input" defaultValue="18:00" />
               </Field>
               <Field label="Actual date">
@@ -2656,8 +2734,36 @@ function ExchangesView({
             </Field>
             <Field label="Direction">
               <select name="direction" className="input" defaultValue="other_parent_to_me">
-                <option value="other_parent_to_me">Other Parent to Me</option>
-                <option value="me_to_other_parent">Me to Other Parent</option>
+                <option value="other_parent_to_me">{otherParentLabel} to {userRoleLabel}</option>
+                <option value="me_to_other_parent">{userRoleLabel} to {otherParentLabel}</option>
+              </select>
+            </Field>
+            <Field label="Scheduled time source">
+              <select name="scheduledTimeSource" className="input" defaultValue="court_order">
+                <option value="court_order">Court order</option>
+                <option value="parenting_plan">Parenting plan</option>
+                <option value="written_agreement">Written agreement</option>
+                <option value="verbal_agreement">Verbal agreement</option>
+                <option value="other">Other recorded source</option>
+                <option value="unknown">Not recorded</option>
+              </select>
+            </Field>
+            <Field label="Arriving / drop-off party">
+              <select name="arrivingParty" className="input" defaultValue="other_parent">
+                <option value="other_parent">{otherParentLabel}</option>
+                <option value="me">{userRoleLabel}</option>
+                <option value="third_party">Third party</option>
+                <option value="unknown">Not recorded</option>
+              </select>
+            </Field>
+            <Field label="Who was late?">
+              <select name="lateParty" className="input" defaultValue="other_parent">
+                <option value="other_parent">{otherParentLabel}</option>
+                <option value="me">{userRoleLabel}</option>
+                <option value="third_party">Third party</option>
+                <option value="both">Both parties</option>
+                <option value="unknown">Not recorded</option>
+                <option value="not_applicable">No one / not applicable</option>
               </select>
             </Field>
             <Field label="Location">
@@ -2684,6 +2790,145 @@ function ExchangesView({
             </button>
           </form>
         </Panel>
+
+        <Panel title="Edit saved exchange" action="Timing + responsibility">
+          <div className="grid gap-3">
+            <Field label="Exchange record">
+              <select
+                value={editingExchangeId}
+                onChange={(event) => setEditingExchangeId(event.target.value)}
+                className="input"
+              >
+                <option value="">Choose a saved exchange</option>
+                {selected.exchangeLogs.map((log) => (
+                  <option key={log.id} value={log.id}>
+                    {getIsoDateFromDateTime(log.orderedExchangeAt)} · {log.orderedExchangeAt.slice(11, 16)} · {labelExchangeStatus(log.status)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            {editingExchange && (
+              <form
+                key={`${editingExchange.id}-${editingExchange.updatedAt}`}
+                onSubmit={updateExchangeLog}
+                className="grid gap-3"
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Scheduled exchange date">
+                    <input
+                      name="orderedDate"
+                      type="date"
+                      className="input"
+                      defaultValue={editingExchange.orderedExchangeAt.slice(0, 10)}
+                    />
+                  </Field>
+                  <Field label="Scheduled exchange time">
+                    <input
+                      name="orderedTime"
+                      type="time"
+                      className="input"
+                      defaultValue={editingExchange.orderedExchangeAt.slice(11, 16)}
+                    />
+                  </Field>
+                  <Field label="Actual date">
+                    <input
+                      name="actualDate"
+                      type="date"
+                      className="input"
+                      defaultValue={editingExchange.actualExchangeAt?.slice(0, 10) || ""}
+                    />
+                  </Field>
+                  <Field label="Actual time">
+                    <input
+                      name="actualTime"
+                      type="time"
+                      className="input"
+                      defaultValue={editingExchange.actualExchangeAt?.slice(11, 16) || ""}
+                    />
+                  </Field>
+                </div>
+                <Field label="Status">
+                  <select name="status" className="input" defaultValue={editingExchange.status}>
+                    {exchangeStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {labelExchangeStatus(status)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Direction">
+                  <select name="direction" className="input" defaultValue={editingExchange.direction}>
+                    <option value="other_parent_to_me">{otherParentLabel} to {userRoleLabel}</option>
+                    <option value="me_to_other_parent">{userRoleLabel} to {otherParentLabel}</option>
+                  </select>
+                </Field>
+                <Field label="Scheduled time source">
+                  <select
+                    name="scheduledTimeSource"
+                    className="input"
+                    defaultValue={editingExchange.scheduledTimeSource || "unknown"}
+                  >
+                    <option value="court_order">Court order</option>
+                    <option value="parenting_plan">Parenting plan</option>
+                    <option value="written_agreement">Written agreement</option>
+                    <option value="verbal_agreement">Verbal agreement</option>
+                    <option value="other">Other recorded source</option>
+                    <option value="unknown">Not recorded</option>
+                  </select>
+                </Field>
+                <Field label="Arriving / drop-off party">
+                  <select
+                    name="arrivingParty"
+                    className="input"
+                    defaultValue={getExchangeArrivingParty(editingExchange)}
+                  >
+                    <option value="other_parent">{otherParentLabel}</option>
+                    <option value="me">{userRoleLabel}</option>
+                    <option value="third_party">Third party</option>
+                    <option value="unknown">Not recorded</option>
+                  </select>
+                </Field>
+                <Field label="Who was late?">
+                  <select
+                    name="lateParty"
+                    className="input"
+                    defaultValue={getExchangeLateParty(editingExchange)}
+                  >
+                    <option value="other_parent">{otherParentLabel}</option>
+                    <option value="me">{userRoleLabel}</option>
+                    <option value="third_party">Third party</option>
+                    <option value="both">Both parties</option>
+                    <option value="unknown">Not recorded</option>
+                    <option value="not_applicable">No one / not applicable</option>
+                  </select>
+                </Field>
+                <Field label="Location">
+                  <input name="location" className="input" defaultValue={editingExchange.location || ""} />
+                </Field>
+                <Field label="Reason given">
+                  <input name="reasonGiven" className="input" defaultValue={editingExchange.reasonGiven || ""} />
+                </Field>
+                <Field label="Notes">
+                  <textarea
+                    name="notes"
+                    className="input min-h-20"
+                    defaultValue={editingExchange.notes || ""}
+                  />
+                </Field>
+                <Field label="Tags">
+                  <input name="tags" className="input" defaultValue={editingExchange.tags.join(", ")} />
+                </Field>
+                <Field label="Witnesses">
+                  <input name="witnesses" className="input" defaultValue={editingExchange.witnesses || ""} />
+                </Field>
+                <button className="btn-primary" type="submit">
+                  Update exchange details
+                </button>
+              </form>
+            )}
+          </div>
+        </Panel>
       </div>
 
       <div className="space-y-4">
@@ -2700,7 +2945,9 @@ function ExchangesView({
               rule.ruleName,
               ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][rule.dayOfWeek],
               rule.orderedExchangeTime,
-              rule.direction.replaceAll("_", " "),
+              rule.direction === "other_parent_to_me"
+                ? `${otherParentLabel} to ${userRoleLabel}`
+                : `${userRoleLabel} to ${otherParentLabel}`,
               <DeleteButton
                 key={rule.id}
                 label="Delete"
@@ -2717,29 +2964,54 @@ function ExchangesView({
             rows={expectedExchanges.slice(0, 12).map((event) => [
               getIsoDateFromDateTime(event.orderedExchangeAt),
               event.orderedExchangeAt.slice(11, 16),
-              event.direction.replaceAll("_", " "),
+              event.direction === "other_parent_to_me"
+                ? `${otherParentLabel} to ${userRoleLabel}`
+                : `${userRoleLabel} to ${otherParentLabel}`,
               event.location || "",
             ])}
           />
         </Panel>
         <Panel title="Logged exchanges" action={`${selected.exchangeLogs.length} records`}>
           <Table
-            headers={["Date", "Ordered", "Actual", "Status", "Tags", "Action"]}
+            headers={[
+              "Date",
+              "Scheduled",
+              "Actual",
+              "Arriving / drop-off",
+              "Late party",
+              "Time source",
+              "Status",
+              "Actions",
+            ]}
             rows={selected.exchangeLogs
-              .filter((log) => getIsoDateFromDateTime(log.orderedExchangeAt) >= range.from)
+              .filter((log) => {
+                const date = getIsoDateFromDateTime(log.orderedExchangeAt);
+                return date >= range.from && date <= range.to;
+              })
               .slice(0, 12)
               .map((log) => [
                 getIsoDateFromDateTime(log.orderedExchangeAt),
                 log.orderedExchangeAt.slice(11, 16),
                 log.actualExchangeAt?.slice(11, 16) || "",
+                labelExchangeParty(getExchangeArrivingParty(log), userRoleLabel, otherParentLabel),
+                labelExchangeParty(getExchangeLateParty(log), userRoleLabel, otherParentLabel),
+                labelExchangeScheduledTimeSource(log.scheduledTimeSource),
                 <StatusPill key={log.id} label={labelExchangeStatus(log.status)} />,
-                log.tags.join(", "),
-                <DeleteButton
-                  key={log.id}
-                  label="Delete"
-                  ariaLabel={`Delete exchange log ${getIsoDateFromDateTime(log.orderedExchangeAt)}`}
-                  onClick={() => deleteExchangeLog(log.id)}
-                />,
+                <div key={log.id} className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    aria-label={`Edit exchange log ${getIsoDateFromDateTime(log.orderedExchangeAt)}`}
+                    onClick={() => setEditingExchangeId(log.id)}
+                    className="inline-flex min-h-8 items-center justify-center rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-teal-500"
+                  >
+                    Edit
+                  </button>
+                  <DeleteButton
+                    label="Delete"
+                    ariaLabel={`Delete exchange log ${getIsoDateFromDateTime(log.orderedExchangeAt)}`}
+                    onClick={() => deleteExchangeLog(log.id)}
+                  />
+                </div>,
               ])}
           />
         </Panel>
@@ -5368,8 +5640,8 @@ function ReportsView({
             Download report JSON
           </button>
           <p className="text-xs leading-5 text-slate-500">
-            CSV includes report metrics, chart data, and table rows. PDF output uses your browser print dialog.
-            Downloaded reports leave protected storage.
+            CSV contains the report&apos;s dated record rows in a clean table. PDF output uses your browser print
+            dialog. Downloaded reports leave protected storage.
           </p>
         </div>
       </Panel>
@@ -6042,6 +6314,8 @@ function SectionExportPanel({
   packet: SectionExportPacket;
   onExport: (packet: SectionExportPacket, format: SectionExportFormat) => void;
 }) {
+  const hasRecords = packet.tables.some((table) => table.rows.length > 0);
+
   return (
     <Panel title="Lawyer/court export" action="Summary + charts">
       <div className="space-y-4">
@@ -6067,16 +6341,36 @@ function SectionExportPanel({
         </div>
 
         <div className="grid gap-2 sm:grid-cols-3">
-          <button type="button" className="btn-primary" onClick={() => onExport(packet, "pdf")}>
+          <button
+            type="button"
+            disabled={!hasRecords}
+            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => onExport(packet, "pdf")}
+          >
             Print / save PDF
           </button>
-          <button type="button" className="btn-secondary" onClick={() => onExport(packet, "csv")}>
+          <button
+            type="button"
+            disabled={!hasRecords}
+            className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => onExport(packet, "csv")}
+          >
             Download CSV
           </button>
-          <button type="button" className="btn-secondary" onClick={() => onExport(packet, "json")}>
+          <button
+            type="button"
+            disabled={!hasRecords}
+            className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => onExport(packet, "json")}
+          >
             Download JSON
           </button>
         </div>
+        {!hasRecords && (
+          <p className="text-xs font-medium text-amber-700">
+            No records match the selected date range.
+          </p>
+        )}
         <p className="text-xs leading-5 text-slate-500">
           Exports leave protected storage. Review names, account numbers, and third party details before sharing.
         </p>

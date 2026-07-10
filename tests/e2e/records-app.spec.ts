@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 function pad2(value: number) {
   return String(value).padStart(2, "0");
@@ -128,7 +129,20 @@ test("records login and report workflow", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Export timeline CSV" })).toBeVisible();
   await expect(page.getByText("Lawyer/court export")).toBeVisible();
   await expect(page.getByText("Timeline records by type")).toBeVisible();
+  const timelineDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export timeline CSV" }).click();
+  const timelineDownload = await timelineDownloadPromise;
+  const timelinePath = await timelineDownload.path();
+  if (!timelinePath) throw new Error("Timeline CSV download did not produce a file.");
+  const timelineCsv = await readFile(timelinePath, "utf8");
+  expect(timelineCsv.split("\n")[0]).toContain("date,time,type,source,title");
+  expect(timelineCsv.trim().split("\n").length).toBeGreaterThan(1);
+  await page.getByLabel("From date").fill("2030-01-01");
+  await page.getByLabel("To date").fill("2030-01-31");
   await page.getByLabel("Show").selectOption("logged_exchange");
+  await expect(page.getByRole("button", { name: "Export timeline CSV" })).toBeDisabled();
+  await page.getByLabel("From date").fill("2026-05-01");
+  await page.getByLabel("To date").fill("2026-06-15");
   const lateExchange = page.locator("details").filter({ hasText: "Logged exchange: completed late" }).first();
   await expect(lateExchange).toBeVisible();
   await lateExchange.locator("summary").click();
@@ -136,6 +150,31 @@ test("records login and report workflow", async ({ page }) => {
   await lateExchange.getByRole("button", { name: "Delete timeline item Logged exchange: completed late" }).click();
   await expect(page.getByText("Logged exchange deleted from timeline.")).toBeVisible();
   await expect(page.getByText("Logged exchange: completed late")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Exchanges", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Exchanges", exact: true })).toBeVisible();
+  const addExchangePanel = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Log actual exchange outcome" }),
+  });
+  await expect(addExchangePanel.getByLabel("Scheduled time source")).toBeVisible();
+  await expect(addExchangePanel.getByLabel("Arriving / drop-off party")).toBeVisible();
+  await expect(addExchangePanel.getByLabel("Who was late?")).toBeVisible();
+
+  await page.getByRole("button", { name: "Edit exchange log 2026-05-01" }).click();
+  const editExchangePanel = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Edit saved exchange" }),
+  });
+  await editExchangePanel.getByLabel("Scheduled time source").selectOption("written_agreement");
+  await editExchangePanel.getByLabel("Who was late?").selectOption("not_applicable");
+  await editExchangePanel.getByRole("button", { name: "Update exchange details" }).click();
+  await expect(page.getByText("Exchange details updated.")).toBeVisible();
+
+  const loggedExchangePanel = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Logged exchanges" }),
+  });
+  const editedExchangeRow = loggedExchangePanel.locator("tr").filter({ hasText: "2026-05-01" });
+  await expect(editedExchangeRow).toContainText("Not applicable");
+  await expect(editedExchangeRow).toContainText("Written agreement");
 
   await page.getByRole("button", { name: "Child Support", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Child Support", exact: true })).toBeVisible();
@@ -148,14 +187,25 @@ test("records login and report workflow", async ({ page }) => {
 
   await page.getByRole("button", { name: "Reports", exact: true }).click();
   await expect(
-    page.getByRole("article").getByRole("heading", { name: "Exchange Lateness Report" })
+    page.getByRole("article").getByRole("heading", { name: "Exchange Lateness & Responsibility Report" })
   ).toBeVisible();
+  await expect(page.getByText(/CSV contains the report's dated record rows in a clean table/)).toBeVisible();
   await expect(page.getByText("Pre-export privacy review")).toBeVisible();
   await expect(page.getByRole("button", { name: "Download CSV" })).toBeDisabled();
   await page.getByLabel(/Names, file titles/).check();
   await page.getByLabel(/Payment references/).check();
   await page.getByLabel(/Notes are factual/).check();
   await expect(page.getByRole("button", { name: "Download CSV" })).toBeEnabled();
+  const reportDownloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download CSV" }).click();
+  const reportDownload = await reportDownloadPromise;
+  const reportPath = await reportDownload.path();
+  if (!reportPath) throw new Error("Exchange report CSV download did not produce a file.");
+  const reportCsv = await readFile(reportPath, "utf8");
+  expect(reportCsv.split("\n")[0]).toContain("scheduled_time_source");
+  expect(reportCsv.split("\n")[0]).toContain("arriving_or_drop_off_party");
+  expect(reportCsv.split("\n")[0]).toContain("late_party");
+  expect(reportCsv).not.toContain("chart_data");
 });
 
 test("records account recovery and deletion paths are reachable", async ({ page }) => {

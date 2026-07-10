@@ -12,6 +12,8 @@ import {
   generateExpectedExchangeEvents,
   getMonthKey,
   getIsoDateFromDateTime,
+  getExchangeArrivingParty,
+  getExchangeLateParty,
   isLateExchangeTimelineEvent,
   isMissedExchangeTimelineEvent,
   isNoFaceTimeTimelineEvent,
@@ -19,12 +21,21 @@ import {
   isTimelineVisibleEvent,
   isWithinDateRange,
   labelEventType,
+  labelExchangeDirectionWithParties,
+  labelExchangeParty,
+  labelExchangeScheduledTimeSource,
   labelExchangeStatus,
   labelNoteCategory,
   labelPaymentStatus,
   timelineSearchText,
 } from "./calculations";
-import type { CalendarEvent, DateRange, ExchangeLog, RecordsDataset, ReportType } from "./types";
+import type {
+  CalendarEvent,
+  DateRange,
+  ExchangeLog,
+  RecordsDataset,
+  ReportType,
+} from "./types";
 
 export type SectionExportId =
   | "calendar"
@@ -87,7 +98,7 @@ export interface SectionExportPacket {
 }
 
 export const reportTypeLabels: Record<ReportType, string> = {
-  exchange_compliance: "Exchange Lateness Report",
+  exchange_compliance: "Exchange Lateness & Responsibility Report",
   facetime_cancellations: "FaceTime Cancellation Report",
   incident_timeline: "Issue Timeline Report",
   filing_facetime_correlation: "Filing / FaceTime Timing Report",
@@ -101,7 +112,7 @@ export const reportsTabReportTypes: Array<{ value: ReportType; label: string; de
   {
     value: "exchange_compliance",
     label: reportTypeLabels.exchange_compliance,
-    description: "Shows ordered exchange times against recorded arrival times.",
+    description: "Shows scheduled and actual times, arriving/drop-off responsibility, and who was late.",
   },
   {
     value: "facetime_cancellations",
@@ -170,6 +181,13 @@ export function rowsToCsv(rows: Array<Record<string, unknown>>) {
   ].join("\n");
 }
 
+function tableToCsv(table: SectionExportTable) {
+  return [
+    table.headers.map(escapeCsvCell).join(","),
+    ...table.rows.map((row) => table.headers.map((_, index) => escapeCsvCell(row[index] || "")).join(",")),
+  ].join("\n");
+}
+
 function ownedCaseRecords<T extends { userId: string; caseId: string }>(
   records: T[],
   userId: string,
@@ -207,10 +225,6 @@ function eventSeverityLabel(value: string | undefined) {
 
 function evidenceRecordDate(item: RecordsDataset["evidenceItems"][number]) {
   return item.evidenceDate || item.uploadedAt.slice(0, 10);
-}
-
-function labelExchangeDirection(direction: ExchangeLog["direction"]) {
-  return direction === "other_parent_to_me" ? "Other parent to me" : "Me to other parent";
 }
 
 function formatMinutes(value: number) {
@@ -295,11 +309,20 @@ function isIssueReportEvent(event: CalendarEvent) {
   );
 }
 
-function lateExchangeRows(exchangeLogs: ExchangeLog[]) {
+function lateExchangeRows(
+  exchangeLogs: ExchangeLog[],
+  userRoleLabel: string,
+  otherParentLabel: string
+) {
   return exchangeLogs.map((log) => {
     const timing = calculateExchangeTiming(log);
+    const responsibleParty = timing.isLate ? getExchangeLateParty(log) : getExchangeArrivingParty(log);
     return {
-      label: getIsoDateFromDateTime(log.orderedExchangeAt),
+      label: `${getIsoDateFromDateTime(log.orderedExchangeAt)} · ${labelExchangeParty(
+        responsibleParty,
+        userRoleLabel,
+        otherParentLabel
+      )}`,
       value: timing.minutesEarlyOrLate ?? 0,
     };
   });
@@ -309,17 +332,15 @@ function exchangeOutcomeRows(exchangeLogs: ExchangeLog[]) {
   return countBy(exchangeLogs, (log) => labelExchangeStatus(log.status));
 }
 
-function exchangeDirectionRows(exchangeLogs: ExchangeLog[]) {
-  const labels = ["Other parent to me", "Me to other parent"];
-  return labels.map((label) => {
-    const logs = exchangeLogs.filter((log) => labelExchangeDirection(log.direction) === label);
-    const late = logs.filter((log) => calculateExchangeTiming(log).isLate).length;
-    return {
-      label,
-      value: late,
-      secondaryValue: Math.max(logs.length - late, 0),
-    };
-  });
+function exchangeLatePartyRows(
+  exchangeLogs: ExchangeLog[],
+  userRoleLabel: string,
+  otherParentLabel: string
+) {
+  return countBy(
+    exchangeLogs.filter((log) => calculateExchangeTiming(log).isLate),
+    (log) => labelExchangeParty(getExchangeLateParty(log), userRoleLabel, otherParentLabel)
+  );
 }
 
 function noFaceTimeRows(events: CalendarEvent[]) {
@@ -378,48 +399,20 @@ function toTableRows<T>(records: T[], mapper: (record: T) => string[]) {
 }
 
 export function sectionExportToCsv(packet: SectionExportPacket) {
-  const rows: Array<Record<string, unknown>> = [];
-
-  for (const metric of packet.metrics) {
-    rows.push({
-      export_part: "metric",
-      section: packet.title,
-      item: metric.label,
-      value: metric.value,
-      detail: metric.detail || "",
-    });
+  if (packet.tables.length === 1) return tableToCsv(packet.tables[0]);
+  if (!packet.tables.some((table) => table.rows.length > 0)) {
+    return rowsToCsv([{ table: packet.title, status: "No records in the selected date range" }]);
   }
 
-  for (const chart of packet.charts) {
-    for (const row of chart.rows) {
-      rows.push({
-        export_part: "chart_data",
-        section: packet.title,
-        chart: chart.title,
-        label: row.label,
-        value: row.value,
-        secondary_value: row.secondaryValue ?? "",
-        tertiary_value: row.tertiaryValue ?? "",
-        unit: chart.unit || "",
-      });
-    }
-  }
-
-  for (const table of packet.tables) {
-    for (const row of table.rows) {
-      const record: Record<string, unknown> = {
-        export_part: "table_row",
-        section: packet.title,
-        table: table.title,
-      };
-      table.headers.forEach((header, index) => {
-        record[header.toLowerCase().replaceAll(" ", "_")] = row[index] || "";
-      });
-      rows.push(record);
-    }
-  }
-
-  return rowsToCsv(rows);
+  return packet.tables
+    .flatMap((table) => [
+      [table.title],
+      table.headers,
+      ...table.rows,
+      [],
+    ])
+    .map((row) => row.map(escapeCsvCell).join(","))
+    .join("\n");
 }
 
 export function buildSectionExportPacket(
@@ -431,6 +424,8 @@ export function buildSectionExportPacket(
 ): SectionExportPacket {
   const matter = dataset.matters.find((item) => item.id === caseId && item.userId === userId);
   const caseName = matter?.caseName || "Selected custody matter";
+  const userRoleLabel = matter?.userRoleLabel || "Me";
+  const otherParentLabel = matter?.otherParentLabel || "Other parent";
   const generatedAt = formatGeneratedAt();
   const disclaimer =
     "This export organizes user entered records. It is not legal advice; review with a qualified attorney before filing or sharing.";
@@ -578,13 +573,7 @@ export function buildSectionExportPacket(
   }
 
   if (id === "exchanges") {
-    const timingRows = exchangeLogs.map((log) => {
-      const timing = calculateExchangeTiming(log);
-      return {
-        label: getIsoDateFromDateTime(log.orderedExchangeAt),
-        value: timing.minutesEarlyOrLate ?? 0,
-      };
-    });
+    const timingRows = lateExchangeRows(exchangeLogs, userRoleLabel, otherParentLabel);
 
     return {
       ...base,
@@ -616,17 +605,40 @@ export function buildSectionExportPacket(
           unit: "records",
           rows: countBy(exchangeLogs, (log) => labelExchangeStatus(log.status)),
         },
+        {
+          title: "Late exchanges by recorded party",
+          description: "Uses the explicitly recorded late party, with direction-based inference for older records.",
+          unit: "records",
+          rows: exchangeLatePartyRows(exchangeLogs, userRoleLabel, otherParentLabel),
+        },
       ],
       tables: [
         {
           title: "Logged exchange outcomes",
-          headers: ["Date", "Ordered", "Actual", "Minutes late/early", "Status", "Reason", "Notes", "Tags"],
+          headers: [
+            "Date",
+            "Scheduled time",
+            "Actual time",
+            "Scheduled source",
+            "Direction",
+            "Arriving / drop-off party",
+            "Late party",
+            "Minutes late/early",
+            "Status",
+            "Reason",
+            "Notes",
+            "Tags",
+          ],
           rows: toTableRows(exchangeLogs, (log) => {
             const timing = calculateExchangeTiming(log);
             return [
               getIsoDateFromDateTime(log.orderedExchangeAt),
               log.orderedExchangeAt.slice(11, 16),
               log.actualExchangeAt?.slice(11, 16) || "",
+              labelExchangeScheduledTimeSource(log.scheduledTimeSource),
+              labelExchangeDirectionWithParties(log.direction, userRoleLabel, otherParentLabel),
+              labelExchangeParty(getExchangeArrivingParty(log), userRoleLabel, otherParentLabel),
+              labelExchangeParty(getExchangeLateParty(log), userRoleLabel, otherParentLabel),
               timing.minutesEarlyOrLate === null ? "" : String(timing.minutesEarlyOrLate),
               labelExchangeStatus(log.status),
               log.reasonGiven || "",
@@ -642,7 +654,7 @@ export function buildSectionExportPacket(
             getIsoDateFromDateTime(event.orderedExchangeAt),
             event.orderedExchangeAt.slice(11, 16),
             event.ruleName,
-            event.direction.replaceAll("_", " "),
+            labelExchangeDirectionWithParties(event.direction, userRoleLabel, otherParentLabel),
             event.location || "",
           ]),
         },
@@ -870,6 +882,9 @@ export function buildReportRows(
   range: DateRange,
   reportType: ReportType
 ) {
+  const matter = dataset.matters.find((item) => item.id === caseId && item.userId === userId);
+  const userRoleLabel = matter?.userRoleLabel || "Me";
+  const otherParentLabel = matter?.otherParentLabel || "Other parent";
   const events = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent);
   const noFaceTimeEvents = events.filter(isNoFaceTimeTimelineEvent);
   const filingEvents = events.filter(eventMatchesFilingLanguage);
@@ -882,9 +897,16 @@ export function buildReportRows(
       const timing = calculateExchangeTiming(log);
       return {
         date: getIsoDateFromDateTime(log.orderedExchangeAt),
-        ordered_exchange_time: log.orderedExchangeAt.slice(11, 16),
+        scheduled_exchange_time: log.orderedExchangeAt.slice(11, 16),
         actual_exchange_time: log.actualExchangeAt ? log.actualExchangeAt.slice(11, 16) : "",
-        direction: labelExchangeDirection(log.direction),
+        scheduled_time_source: labelExchangeScheduledTimeSource(log.scheduledTimeSource),
+        direction: labelExchangeDirectionWithParties(log.direction, userRoleLabel, otherParentLabel),
+        arriving_or_drop_off_party: labelExchangeParty(
+          getExchangeArrivingParty(log),
+          userRoleLabel,
+          otherParentLabel
+        ),
+        late_party: labelExchangeParty(getExchangeLateParty(log), userRoleLabel, otherParentLabel),
         minutes_early_or_late: timing.minutesEarlyOrLate ?? "",
         status: labelExchangeStatus(log.status),
         location: log.location || "",
@@ -1038,14 +1060,29 @@ export function buildReportPreview(
   if (reportType === "exchange_compliance") {
     const exchangeTable: SectionExportTable = {
       title: "Logged exchange timing",
-      headers: ["Date", "Ordered", "Actual", "Direction", "Minutes late/early", "Status", "Reason", "Notes"],
+      headers: [
+        "Date",
+        "Scheduled time",
+        "Actual time",
+        "Scheduled source",
+        "Direction",
+        "Arriving / drop-off party",
+        "Late party",
+        "Minutes late/early",
+        "Status",
+        "Reason",
+        "Notes",
+      ],
       rows: toTableRows(exchangeLogs, (log) => {
         const timing = calculateExchangeTiming(log);
         return [
           getIsoDateFromDateTime(log.orderedExchangeAt),
           log.orderedExchangeAt.slice(11, 16),
           log.actualExchangeAt?.slice(11, 16) || "",
-          labelExchangeDirection(log.direction),
+          labelExchangeScheduledTimeSource(log.scheduledTimeSource),
+          labelExchangeDirectionWithParties(log.direction, userRoleLabel, otherParentLabel),
+          labelExchangeParty(getExchangeArrivingParty(log), userRoleLabel, otherParentLabel),
+          labelExchangeParty(getExchangeLateParty(log), userRoleLabel, otherParentLabel),
           timing.minutesEarlyOrLate === null ? "" : String(timing.minutesEarlyOrLate),
           labelExchangeStatus(log.status),
           log.reasonGiven || "",
@@ -1062,7 +1099,11 @@ export function buildReportPreview(
         loggedCount === 0
           ? `No logged exchanges are recorded from ${range.from} to ${range.to}.`
           : `${lateLogs.length} of ${loggedCount} logged exchanges are marked late (${lateShare}). Average recorded delay is ${formatMinutes(exchangeStats.averageLatenessMinutes)}.`,
-        `${otherParentLabel} to ${userRoleLabel} and ${userRoleLabel} to ${otherParentLabel} are separated in the direction chart so the report shows which exchange direction is driving the count.`,
+        lateLogs.length === 0
+          ? "No late party is recorded in this range."
+          : `Late-party counts identify ${exchangeLatePartyRows(lateLogs, userRoleLabel, otherParentLabel)
+              .map((row) => `${row.label}: ${row.value}`)
+              .join(", ")}. Older records use exchange direction when an explicit late party was not saved.`,
         longestDelay > 0
           ? `The longest recorded delay in this range is ${formatMinutes(longestDelay)}.`
           : "No positive delay is recorded in this range.",
@@ -1076,21 +1117,20 @@ export function buildReportPreview(
       charts: [
         {
           kind: "bar",
-          title: "Minutes late/early by exchange date",
-          description: "Positive values are minutes after the ordered time; negative values are early.",
+          title: "Minutes late/early by exchange and responsible party",
+          description: "Positive values are minutes after the scheduled time; labels identify the recorded or inferred responsible party.",
           unit: "minutes",
-          rows: lateExchangeRows(exchangeLogs),
+          rows: lateExchangeRows(exchangeLogs, userRoleLabel, otherParentLabel),
           emptyLabel: "No logged exchange timing records in this range.",
         },
         {
           kind: "bar",
           orientation: "horizontal",
-          title: "Late exchanges by direction",
-          description: "Compares late count against not late count for each exchange direction.",
+          title: "Late exchanges by recorded party",
+          description: "Counts who was recorded as late, with direction-based inference for older records.",
           unit: "exchanges",
-          seriesLabels: ["Late", "Not late"],
-          rows: exchangeDirectionRows(exchangeLogs),
-          emptyLabel: "No exchange direction data in this range.",
+          rows: exchangeLatePartyRows(exchangeLogs, userRoleLabel, otherParentLabel),
+          emptyLabel: "No late-party data in this range.",
         },
         {
           kind: "bar",
@@ -1325,11 +1365,10 @@ export function buildReportPreview(
       {
         kind: "bar",
         orientation: "horizontal",
-        title: "Late exchanges by direction",
+        title: "Late exchanges by recorded party",
         unit: "exchanges",
-        seriesLabels: ["Late", "Not late"],
-        rows: exchangeDirectionRows(exchangeLogs),
-        emptyLabel: "No exchange direction data in this range.",
+        rows: exchangeLatePartyRows(exchangeLogs, userRoleLabel, otherParentLabel),
+        emptyLabel: "No late-party data in this range.",
       },
     ],
     tables: [issueTable],
@@ -1337,56 +1376,7 @@ export function buildReportPreview(
 }
 
 export function reportPreviewToCsv(preview: ReportPreview) {
-  const rows: Array<Record<string, unknown>> = [];
-
-  for (const metric of preview.metrics) {
-    rows.push({
-      export_part: "metric",
-      report: preview.title,
-      item: metric.label,
-      value: metric.value,
-      detail: metric.detail || "",
-    });
-  }
-
-  for (const chart of preview.charts) {
-    for (const row of chart.rows) {
-      rows.push({
-        export_part: "chart_data",
-        report: preview.title,
-        chart: chart.title,
-        label: row.label,
-        value: row.value,
-        secondary_value: row.secondaryValue ?? "",
-        tertiary_value: row.tertiaryValue ?? "",
-        unit: chart.unit || "",
-      });
-    }
-  }
-
-  for (const table of preview.tables) {
-    for (const row of table.rows) {
-      const record: Record<string, unknown> = {
-        export_part: "table_row",
-        report: preview.title,
-        table: table.title,
-      };
-      table.headers.forEach((header, index) => {
-        record[header.toLowerCase().replaceAll(" ", "_").replaceAll("/", "_")] = row[index] || "";
-      });
-      rows.push(record);
-    }
-  }
-
-  if (rows.length === 0) {
-    rows.push({
-      export_part: "empty_report",
-      report: preview.title,
-      item: "No report data",
-      value: "",
-      detail: preview.focus,
-    });
-  }
-
-  return rowsToCsv(rows);
+  if (preview.rows.length > 0) return rowsToCsv(preview.rows);
+  if (preview.tables[0]) return tableToCsv(preview.tables[0]);
+  return rowsToCsv([{ report: preview.title, status: "No records in the selected date range" }]);
 }

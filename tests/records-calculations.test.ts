@@ -222,7 +222,7 @@ describe("privacy and safety helpers", () => {
       })
     );
     expect(csv.split("\n")[0]).toContain("caregiver_label");
-    expect(csv.split("\n")[0]).toContain("ordered_exchange_time");
+    expect(csv.split("\n")[0]).toContain("scheduled_exchange_time");
   });
 
   it("neutralizes spreadsheet formulas in CSV exports", () => {
@@ -252,8 +252,10 @@ describe("privacy and safety helpers", () => {
     expect(packet.metrics.map((metric) => metric.label)).toContain("Late");
     expect(packet.charts.map((chart) => chart.title)).toContain("Minutes early/late by logged exchange");
     expect(packet.tables.map((table) => table.title)).toContain("Logged exchange outcomes");
-    expect(csv).toContain("chart_data");
-    expect(csv).toContain("Logged exchange outcomes");
+    expect(csv).toContain("Arriving / drop-off party");
+    expect(csv).toContain("Late party");
+    expect(csv).toContain("Parent B");
+    expect(csv).not.toContain("chart_data");
   });
 
   it("exports incident timeline rows from timeline-visible dated record sources", () => {
@@ -321,15 +323,31 @@ describe("privacy and safety helpers", () => {
     );
     const csv = reportPreviewToCsv(facetimePreview);
 
-    expect(exchangePreview.charts.map((chart) => chart.title)).toContain("Late exchanges by direction");
+    expect(exchangePreview.charts.map((chart) => chart.title)).toContain("Late exchanges by recorded party");
     expect(facetimePreview.metrics.map((metric) => metric.label)).toContain("After call/request");
     expect(facetimePreview.charts.map((chart) => chart.title)).toContain("No FaceTime records by month");
     expect(correlationPreview.charts.map((chart) => chart.title)).toContain(
       "No FaceTime records after filing notes"
     );
     expect(correlationPreview.summaries.join(" ")).toContain("timing overlap only");
-    expect(csv).toContain("chart_data");
-    expect(csv).toContain("No FaceTime records");
+    expect(csv.split("\n")[0]).toContain("date");
+    expect(csv).toContain("No FaceTime conducted");
+    expect(csv).not.toContain("chart_data");
+  });
+
+  it("exports exchange responsibility and scheduled-time source as a clean table", () => {
+    const dataset = createRecordsSeed();
+    const preview = buildReportPreview(dataset, demoUserId, demoCaseId, range, "exchange_compliance");
+    const csv = reportPreviewToCsv(preview);
+    const headers = csv.split("\n")[0];
+
+    expect(headers).toContain("scheduled_time_source");
+    expect(headers).toContain("arriving_or_drop_off_party");
+    expect(headers).toContain("late_party");
+    expect(csv).toContain("Court order");
+    expect(csv).toContain("Parent B");
+    expect(csv).not.toContain("metric");
+    expect(csv).not.toContain("chart_data");
   });
 
   it("derives dashboard counts from timeline records including imported text notes", () => {

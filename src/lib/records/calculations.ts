@@ -6,7 +6,10 @@ import type {
   DateNote,
   DateRange,
   EvidenceItem,
+  ExchangeLateParty,
   ExchangeLog,
+  ExchangeParty,
+  ExchangeScheduledTimeSource,
   ExpenseItem,
   ExpectedExchangeEvent,
   RecordsDataset,
@@ -145,6 +148,47 @@ export function calculateExchangeTiming(log: ExchangeLog) {
     isMissed: log.status === "missed",
     isEarly: log.status === "completed_early" || (minutesEarlyOrLate ?? 0) < 0,
   };
+}
+
+export function getExchangeArrivingParty(log: ExchangeLog): ExchangeParty {
+  return log.arrivingParty || (log.direction === "other_parent_to_me" ? "other_parent" : "me");
+}
+
+export function getExchangeLateParty(log: ExchangeLog): ExchangeLateParty {
+  if (log.lateParty) return log.lateParty;
+  return calculateExchangeTiming(log).isLate ? getExchangeArrivingParty(log) : "not_applicable";
+}
+
+export function labelExchangeParty(
+  party: ExchangeLateParty,
+  userRoleLabel = "Me",
+  otherParentLabel = "Other parent"
+) {
+  if (party === "me") return userRoleLabel;
+  if (party === "other_parent") return otherParentLabel;
+  if (party === "third_party") return "Third party";
+  if (party === "both") return `${userRoleLabel} and ${otherParentLabel}`;
+  if (party === "not_applicable") return "Not applicable";
+  return "Not recorded";
+}
+
+export function labelExchangeDirectionWithParties(
+  direction: ExchangeLog["direction"],
+  userRoleLabel = "Me",
+  otherParentLabel = "Other parent"
+) {
+  return direction === "other_parent_to_me"
+    ? `${otherParentLabel} to ${userRoleLabel}`
+    : `${userRoleLabel} to ${otherParentLabel}`;
+}
+
+export function labelExchangeScheduledTimeSource(source: ExchangeScheduledTimeSource | undefined) {
+  if (source === "court_order") return "Court order";
+  if (source === "parenting_plan") return "Parenting plan";
+  if (source === "written_agreement") return "Written agreement";
+  if (source === "verbal_agreement") return "Verbal agreement";
+  if (source === "other") return "Other recorded source";
+  return "Not recorded";
 }
 
 export function calculateExchangeStats(
@@ -350,6 +394,9 @@ export function buildCalendarEvents(
   caseId: string,
   range: DateRange
 ): CalendarEvent[] {
+  const matter = dataset.matters.find((item) => item.userId === userId && item.id === caseId);
+  const userRoleLabel = matter?.userRoleLabel || "Me";
+  const otherParentLabel = matter?.otherParentLabel || "Other parent";
   const rules = filterOwnedCaseRecords(dataset.exchangeRules, userId, caseId);
   const expected = generateExpectedExchangeEvents(rules, range);
   const custodyAssignments = filterOwnedCaseRecords(dataset.custodyDayAssignments, userId, caseId);
@@ -370,11 +417,14 @@ export function buildCalendarEvents(
       title: `Scheduled exchange: ${event.ruleName}`,
       detail: joinParts([
         timeFromIso(event.orderedExchangeAt) ? `Ordered time ${timeFromIso(event.orderedExchangeAt)}` : undefined,
-        event.direction.replaceAll("_", " "),
+        labelExchangeDirectionWithParties(event.direction, userRoleLabel, otherParentLabel),
         event.location,
       ]),
       summary: joinParts([`Rule: ${event.ruleName}`, event.location ? `Location: ${event.location}` : undefined]),
-      tags: ["scheduled exchange", event.direction.replaceAll("_", " ")],
+      tags: [
+        "scheduled exchange",
+        labelExchangeDirectionWithParties(event.direction, userRoleLabel, otherParentLabel),
+      ],
       severity: "neutral" as const,
       sourceLabel: "Exchange schedule",
       relatedIds: [event.custodyExchangeRuleId],
@@ -391,7 +441,13 @@ export function buildCalendarEvents(
         title: `Scheduled exchange: ${assignment.caregiverLabel}`,
         detail: joinParts([
           assignment.exchangeTime ? `Ordered time ${assignment.exchangeTime}` : undefined,
-          assignment.exchangeDirection?.replaceAll("_", " "),
+          assignment.exchangeDirection
+            ? labelExchangeDirectionWithParties(
+                assignment.exchangeDirection,
+                userRoleLabel,
+                otherParentLabel
+              )
+            : undefined,
           assignment.exchangeLocation,
         ]),
         summary: joinParts([
@@ -402,7 +458,13 @@ export function buildCalendarEvents(
         tags: [
           "scheduled exchange",
           "custody calendar",
-          assignment.exchangeDirection?.replaceAll("_", " "),
+          assignment.exchangeDirection
+            ? labelExchangeDirectionWithParties(
+                assignment.exchangeDirection,
+                userRoleLabel,
+                otherParentLabel
+              )
+            : undefined,
         ].filter(Boolean) as string[],
         severity: "neutral" as const,
         sourceLabel: "Custody calendar",
@@ -435,11 +497,28 @@ export function buildCalendarEvents(
           orderedTime ? `Ordered ${orderedDate} ${orderedTime}` : undefined,
           actualTime ? `Actual ${actualDate} ${actualTime}` : "No actual time recorded",
           timingLabel,
+          `Scheduled source: ${labelExchangeScheduledTimeSource(log.scheduledTimeSource)}`,
           log.location,
         ]),
         summary: joinParts([
           `Status: ${labelExchangeStatus(log.status)}`,
-          log.direction.replaceAll("_", " "),
+          `Direction: ${labelExchangeDirectionWithParties(
+            log.direction,
+            userRoleLabel,
+            otherParentLabel
+          )}`,
+          `Arriving/drop-off: ${labelExchangeParty(
+            getExchangeArrivingParty(log),
+            userRoleLabel,
+            otherParentLabel
+          )}`,
+          timing.isLate
+            ? `Late party: ${labelExchangeParty(
+                getExchangeLateParty(log),
+                userRoleLabel,
+                otherParentLabel
+              )}`
+            : undefined,
           log.reasonGiven ? `Reason given: ${log.reasonGiven}` : undefined,
         ]),
         body: joinParts([log.notes, log.witnesses ? `Witnesses: ${log.witnesses}` : undefined]),

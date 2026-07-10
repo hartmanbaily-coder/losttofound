@@ -57,6 +57,20 @@ export const exchangeLogSchema = z.object({
   orderedExchangeAt: z.string().datetime(),
   actualExchangeAt: z.string().datetime().optional().nullable(),
   direction: z.enum(["other_parent_to_me", "me_to_other_parent"]),
+  arrivingParty: z.enum(["me", "other_parent", "third_party", "unknown"]).optional(),
+  lateParty: z
+    .enum(["me", "other_parent", "third_party", "unknown", "both", "not_applicable"])
+    .optional(),
+  scheduledTimeSource: z
+    .enum([
+      "court_order",
+      "parenting_plan",
+      "written_agreement",
+      "verbal_agreement",
+      "other",
+      "unknown",
+    ])
+    .optional(),
   status: z.enum([
     "completed_on_time",
     "completed_late",

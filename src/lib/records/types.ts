@@ -2,6 +2,18 @@ export type Id = string;
 
 export type ExchangeDirection = "other_parent_to_me" | "me_to_other_parent";
 
+export type ExchangeParty = "me" | "other_parent" | "third_party" | "unknown";
+
+export type ExchangeLateParty = ExchangeParty | "both" | "not_applicable";
+
+export type ExchangeScheduledTimeSource =
+  | "court_order"
+  | "parenting_plan"
+  | "written_agreement"
+  | "verbal_agreement"
+  | "other"
+  | "unknown";
+
 export type ExchangeStatus =
   | "completed_on_time"
   | "completed_late"
@@ -199,6 +211,9 @@ export interface ExchangeLog {
   orderedExchangeAt: string;
   actualExchangeAt?: string | null;
   direction: ExchangeDirection;
+  arrivingParty?: ExchangeParty;
+  lateParty?: ExchangeLateParty;
+  scheduledTimeSource?: ExchangeScheduledTimeSource;
   status: ExchangeStatus;
   location?: string;
   reasonGiven?: string;
