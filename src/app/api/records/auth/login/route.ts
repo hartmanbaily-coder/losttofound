@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Session } from "@supabase/supabase-js";
+import { isAuthApiError, type Session } from "@supabase/supabase-js";
 import { createServerSupabaseAuthClient } from "@/lib/supabaseClient";
 import {
   getAccessTokenAal,
@@ -50,6 +50,41 @@ function recordFailedLogin(key: string) {
     count: current && current.resetAt > Date.now() ? current.count + 1 : 1,
     resetAt,
   });
+}
+
+function loginFailure(error: unknown) {
+  const code = isAuthApiError(error) ? error.code : "auth_response_invalid";
+
+  if (code === "invalid_credentials") {
+    return { code, error: "Invalid email or password.", status: 401 };
+  }
+  if (code === "email_not_confirmed") {
+    return {
+      code,
+      error: "Confirm your email address before signing in. Check your inbox or contact support.",
+      status: 403,
+    };
+  }
+  if (code === "user_banned") {
+    return {
+      code,
+      error: "This account is temporarily unavailable. Contact support for help.",
+      status: 403,
+    };
+  }
+  if (code === "over_request_rate_limit") {
+    return {
+      code,
+      error: "Too many sign in attempts. Wait a few minutes and try again.",
+      status: 429,
+    };
+  }
+
+  return {
+    code,
+    error: "Authentication service is temporarily unavailable.",
+    status: 503,
+  };
 }
 
 function sessionBody(input: { userId: string; email: string }) {
@@ -187,7 +222,7 @@ async function handleLoginPost(request: NextRequest) {
   }
 
   const body = parsed as { email?: unknown; password?: unknown; adultConfirmed?: unknown };
-  const email = typeof body.email === "string" ? body.email.trim() : "";
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const password = typeof body.password === "string" ? body.password : "";
   const adultConfirmed = body.adultConfirmed === true;
 
@@ -204,14 +239,19 @@ async function handleLoginPost(request: NextRequest) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error || !data.session?.access_token || !data.user?.id) {
-    recordFailedLogin(key);
+    const failure = loginFailure(error);
+    if (failure.code === "invalid_credentials") recordFailedLogin(key);
     await recordSecurityEvent({
       type: "auth_login_failed",
       severity: "warning",
       request,
-      status: 401,
+      status: failure.status,
+      detail: `Supabase Auth login failure: ${failure.code}.`,
     });
-    return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+    return NextResponse.json(
+      { error: failure.error },
+      { status: failure.status, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   failedLogins.delete(key);

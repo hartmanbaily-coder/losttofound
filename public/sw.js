@@ -1,4 +1,4 @@
-const CACHE_NAME = "lost-to-found-shell-v1";
+const CACHE_NAME = "lost-to-found-shell-v2";
 const PUBLIC_ASSETS = [
   "/",
   "/manifest.webmanifest",

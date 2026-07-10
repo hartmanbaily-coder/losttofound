@@ -39,6 +39,12 @@ test("records login and report workflow", async ({ page }) => {
 
   await expect(page.getByRole("heading", { name: "Lost to Found Case Organization" })).toBeVisible();
   await page.getByRole("link", { name: "Open records workspace" }).click();
+  const loginPassword = page.getByLabel("Password", { exact: true });
+  await expect(loginPassword).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(loginPassword).toHaveAttribute("type", "text");
+  await page.getByRole("button", { name: "Hide password" }).click();
+  await expect(loginPassword).toHaveAttribute("type", "password");
   const enterWorkspace = page.getByRole("button", { name: "Enter records workspace" });
   await expect(enterWorkspace).toBeEnabled();
   await enterWorkspace.click();

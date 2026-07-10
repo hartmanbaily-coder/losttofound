@@ -882,6 +882,7 @@ function LoginScreen({
   const [mfaEnrollment, setMfaEnrollment] = useState<RecordsMfaEnrollment | null>(null);
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
   const [recoveryHydrating, setRecoveryHydrating] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const recoveryHandledRef = useRef(false);
   const minimumPasswordLength = 12;
   const signupsEnabled =
@@ -936,6 +937,7 @@ function LoginScreen({
     setMessage("");
     setMfaMode(null);
     setMfaEnrollment(null);
+    setShowLoginPassword(false);
   }
 
   async function onLoginSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1195,7 +1197,15 @@ function LoginScreen({
             ) : mode === "reset" ? (
               <form method="post" onSubmit={onResetSubmit} className="mt-5 space-y-4">
                 <Field label="Email">
-                  <input name="email" type="email" className="input" autoComplete="email" />
+                  <input
+                    name="email"
+                    type="email"
+                    className="input"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
                 </Field>
                 <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
                   <input name="adult" type="checkbox" defaultChecked className="mt-1" />
@@ -1220,7 +1230,15 @@ function LoginScreen({
             ) : mode === "signup" ? (
               <form method="post" onSubmit={onSignupSubmit} className="mt-5 space-y-4">
                 <Field label="Email">
-                  <input name="email" type="email" className="input" autoComplete="email" />
+                  <input
+                    name="email"
+                    type="email"
+                    className="input"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
                 </Field>
                 <Field label="Password">
                   <input name="password" type="password" className="input" autoComplete="new-password" />
@@ -1299,25 +1317,53 @@ function LoginScreen({
                     type="email"
                     defaultValue={recordsStorageMode === "local" ? "parent-a@example.test" : ""}
                     className="input"
+                    autoCapitalize="none"
                     autoComplete="email"
+                    autoCorrect="off"
+                    spellCheck={false}
                   />
                 </Field>
-                <Field label="Password">
+                <div className="grid gap-1.5 text-sm font-medium text-slate-700">
+                  <div className="flex items-center justify-between gap-3">
+                    <label htmlFor="records-login-password">Password</label>
+                    <button
+                      type="button"
+                      aria-controls="records-login-password"
+                      aria-pressed={showLoginPassword}
+                      onClick={() => setShowLoginPassword((current) => !current)}
+                      className="text-xs font-semibold text-teal-700 hover:text-teal-900"
+                    >
+                      {showLoginPassword ? "Hide password" : "Show password"}
+                    </button>
+                  </div>
                   <input
+                    id="records-login-password"
                     name="password"
-                    type="password"
+                    type={showLoginPassword ? "text" : "password"}
                     defaultValue={recordsStorageMode === "local" ? "demo-password" : ""}
                     className="input"
+                    autoCapitalize="none"
                     autoComplete="current-password"
+                    autoCorrect="off"
+                    spellCheck={false}
                   />
-                </Field>
+                </div>
                 <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
                   <input name="adult" type="checkbox" defaultChecked className="mt-1" />
                   <span>
                     I am an adult user and will use privacy minded labels for sensitive records.
                   </span>
                 </label>
-                {error && <p className="text-sm font-medium text-red-700">{error}</p>}
+                {error && (
+                  <div role="alert" className="space-y-1 text-sm text-red-700">
+                    <p className="font-medium">{error}</p>
+                    {error === "Invalid email or password." && (
+                      <p className="text-xs leading-5 text-slate-600">
+                        Password AutoFill may have saved an older value. Verify it with Show password or use Forgot password.
+                      </p>
+                    )}
+                  </div>
+                )}
                 <button
                   type="submit"
                   disabled={!appReady || submitting}

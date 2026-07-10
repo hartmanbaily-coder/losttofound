@@ -6,6 +6,15 @@ export default function PwaRegistration() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
+    if (process.env.NODE_ENV !== "production") {
+      void navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) =>
+          Promise.all(registrations.map((registration) => registration.unregister()))
+        );
+      return;
+    }
+
     const isSupportedOrigin =
       window.location.protocol === "https:" ||
       window.location.hostname === "localhost" ||
