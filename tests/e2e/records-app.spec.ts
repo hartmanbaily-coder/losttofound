@@ -63,11 +63,18 @@ test("records login and report workflow", async ({ page }) => {
   await expect(page.getByRole("button", { name: `Edit calendar day ${currentCalendar.today}` })).toBeVisible();
   await expect(page.getByText("Color selected day")).toBeVisible();
   await page.getByLabel("Child will be with").fill("Parent C");
+  await page.getByLabel("Exchange time").fill("17:00");
   await page.getByRole("button", { name: "Save color" }).click();
   await expect(page.getByText("Custody day color saved.")).toBeVisible();
   const paintedDay = page.getByRole("button", { name: `Edit calendar day ${currentCalendar.today}` });
   await expect(paintedDay).toBeVisible();
   await expect(paintedDay.getByText("Parent C", { exact: true })).toBeVisible();
+  const fivePmMarker = paintedDay.locator('[data-exchange-time-marker="17:00"]');
+  await expect(fivePmMarker).toHaveCount(1);
+  const fivePmPosition = await fivePmMarker.evaluate((element) =>
+    Number.parseFloat((element as HTMLElement).style.left)
+  );
+  expect(fivePmPosition).toBeCloseTo(70.8333, 4);
   await page.getByRole("button", { name: "Clear selected day" }).click();
   await expect(page.getByText("Custody day color cleared.")).toBeVisible();
   await expect(paintedDay.getByText("Parent C", { exact: true })).toHaveCount(0);

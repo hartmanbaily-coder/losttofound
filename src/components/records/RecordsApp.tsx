@@ -31,6 +31,7 @@ import {
   labelExchangeStatus,
   labelNoteCategory,
   labelPaymentStatus,
+  timeOfDayPositionPercent,
 } from "@/lib/records/calculations";
 import {
   acceptRecordsRecoverySession,
@@ -2044,6 +2045,12 @@ function CalendarView({
                   </button>
                 </span>
               ))}
+              <span className="inline-flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-900">
+                <span className="relative h-4 w-4 overflow-hidden rounded-sm border border-amber-200 bg-white">
+                  <span className="absolute inset-y-0 left-[70.833%] w-0.5 -translate-x-1/2 bg-amber-600" />
+                </span>
+                Scheduled exchange time
+              </span>
             </div>
             <div className="grid grid-cols-7 gap-2 text-xs font-semibold text-slate-500">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
@@ -2058,6 +2065,16 @@ function CalendarView({
                 const recordEventsForCell = dayEventsForCell.filter(
                   (event) => event.type !== "custody_day"
                 );
+                const exchangeTimeMarkers = Array.from(
+                  new Set(
+                    dayEventsForCell.flatMap((event) =>
+                      event.type === "scheduled_exchange" && event.time ? [event.time] : []
+                    )
+                  )
+                ).flatMap((time) => {
+                  const position = timeOfDayPositionPercent(time);
+                  return position === null ? [] : [{ position, time }];
+                });
                 const assignment = day
                   ? optimisticCustodyDayMap.get(day) || custodyDayMap.get(day)
                   : undefined;
@@ -2093,7 +2110,7 @@ function CalendarView({
                             userSelect: "none",
                           }
                     }
-                    className={`min-h-28 select-none rounded-md border p-2 text-left transition ${
+                    className={`relative min-h-28 overflow-hidden select-none rounded-md border p-2 text-left transition ${
                       day === selectedDay
                         ? "ring-2 ring-teal-500 ring-offset-1"
                         : "border-slate-200 bg-white hover:border-teal-300"
@@ -2101,45 +2118,57 @@ function CalendarView({
                   >
                     {day && (
                       <>
-                        <div className="flex items-start justify-between gap-1">
-                          <p className="text-sm font-semibold text-slate-900">{Number(day.slice(-2))}</p>
-                          <div className="flex flex-wrap justify-end gap-1">
-                            {isToday && (
-                              <span className="rounded bg-teal-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                Today
-                              </span>
-                            )}
-                            {assignment?.exchangeTime && (
-                              <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
-                                {assignment.exchangeTime}
-                              </span>
-                            )}
+                        {exchangeTimeMarkers.map(({ position, time }) => (
+                          <span
+                            key={time}
+                            aria-hidden="true"
+                            data-exchange-time-marker={time}
+                            title={`Scheduled exchange at ${time}`}
+                            className="pointer-events-none absolute inset-y-0 z-0 w-0.5 -translate-x-1/2 bg-amber-600/70"
+                            style={{ left: `${position}%` }}
+                          />
+                        ))}
+                        <div className="relative z-10">
+                          <div className="flex items-start justify-between gap-1">
+                            <p className="text-sm font-semibold text-slate-900">{Number(day.slice(-2))}</p>
+                            <div className="flex flex-wrap justify-end gap-1">
+                              {isToday && (
+                                <span className="rounded bg-teal-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                  Today
+                                </span>
+                              )}
+                              {assignment?.exchangeTime && (
+                                <span className="rounded bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">
+                                  {assignment.exchangeTime}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        {visibleColor && visibleLabel && (
-                          <div
-                            className="mt-2 truncate rounded px-2 py-1 text-xs font-semibold text-white"
-                            style={{ backgroundColor: visibleColor }}
-                          >
-                            {visibleLabel}
-                          </div>
-                        )}
-                        <div className="mt-2 space-y-1">
-                          {recordEventsForCell
-                            .slice(0, 2)
-                            .map((event) => (
-                            <span
-                              key={event.id}
-                              className="block truncate rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700"
+                          {visibleColor && visibleLabel && (
+                            <div
+                              className="mt-2 truncate rounded px-2 py-1 text-xs font-semibold text-white"
+                              style={{ backgroundColor: visibleColor }}
                             >
-                              {event.title}
-                            </span>
-                          ))}
-                          {recordEventsForCell.length > 2 && (
-                            <span className="text-[11px] text-slate-500">
-                              +{recordEventsForCell.length - 2} more
-                            </span>
+                              {visibleLabel}
+                            </div>
                           )}
+                          <div className="mt-2 space-y-1">
+                            {recordEventsForCell
+                              .slice(0, 2)
+                              .map((event) => (
+                              <span
+                                key={event.id}
+                                className="block truncate rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700"
+                              >
+                                {event.title}
+                              </span>
+                            ))}
+                            {recordEventsForCell.length > 2 && (
+                              <span className="text-[11px] text-slate-500">
+                                +{recordEventsForCell.length - 2} more
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </>
                     )}

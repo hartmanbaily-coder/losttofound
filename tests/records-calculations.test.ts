@@ -17,6 +17,7 @@ import {
   isNoFaceTimeTimelineEvent,
   isPostCallFaceTimeNotice,
   isTimelineVisibleEvent,
+  timeOfDayPositionPercent,
 } from "@/lib/records/calculations";
 import { createRecordsSeed, demoCaseId, demoUserId } from "@/lib/records/seed";
 import {
@@ -32,6 +33,15 @@ import { validateEvidenceFile } from "@/lib/records/validation";
 const range = { from: "2026-05-01", to: "2026-05-31" };
 
 describe("records calculations", () => {
+  it("positions calendar exchange times across a 24 hour day", () => {
+    expect(timeOfDayPositionPercent("00:00")).toBe(0);
+    expect(timeOfDayPositionPercent("12:00")).toBe(50);
+    expect(timeOfDayPositionPercent("17:00")).toBeCloseTo(70.8333, 4);
+    expect(timeOfDayPositionPercent("23:59")).toBeCloseTo(99.9306, 4);
+    expect(timeOfDayPositionPercent("5:00 PM")).toBeNull();
+    expect(timeOfDayPositionPercent("24:00")).toBeNull();
+  });
+
   it("calculates late, early, and missed exchange timing", () => {
     const dataset = createRecordsSeed();
     const late = dataset.exchangeLogs.find((log) => log.id === "exchange-2026-05-08");

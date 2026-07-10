@@ -45,6 +45,14 @@ export function combineDateTime(date: string, time: string) {
   return `${date}T${time}:00.000Z`;
 }
 
+export function timeOfDayPositionPercent(time?: string | null) {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(time || "");
+  if (!match) return null;
+
+  const minutesSinceMidnight = Number(match[1]) * 60 + Number(match[2]);
+  return (minutesSinceMidnight / (24 * 60)) * 100;
+}
+
 export function minutesBetween(orderedAt: string, actualAt?: string | null) {
   if (!actualAt) return null;
   return Math.round((new Date(actualAt).getTime() - new Date(orderedAt).getTime()) / 60_000);
