@@ -639,47 +639,17 @@ export default function RecordsApp() {
         </aside>
 
         <main className="min-w-0">
-          <header className="sticky top-0 z-10 border-b border-slate-200 bg-[#f4f7f6]/95 px-4 py-3 backdrop-blur lg:px-6">
-            <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
-                  {recordsTagline}
-                </p>
-                <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
-                  {activeView}
-                </h1>
-              </div>
-
-              <div className="grid w-full min-w-0 gap-2 rounded-lg border border-slate-200 bg-white p-1 shadow-sm sm:flex sm:flex-wrap sm:items-center xl:flex-nowrap 2xl:w-auto">
-                <select
-                  value={selectedCaseId}
-                  onChange={(event) => selectCase(event.target.value)}
-                  className="h-10 min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 sm:w-auto xl:w-60"
-                >
-                  {selected.matters.map((matter) => (
-                    <option key={matter.id} value={matter.id}>
-                      {matter.caseName}
-                    </option>
-                  ))}
-                </select>
-                <RangeToolbar range={range} setRange={setRange} timezone={caseTimezone} />
-                <button
-                  type="button"
-                  onClick={() => openView("Reports")}
-                  className="h-10 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
-                >
-                  Export
-                </button>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="h-10 rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-teal-500 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-teal-100"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </header>
+          <WorkspaceHeader
+            activeView={activeView}
+            matters={selected.matters}
+            selectedCaseId={selectedCaseId}
+            onSelectCase={selectCase}
+            range={range}
+            setRange={setRange}
+            timezone={caseTimezone}
+            onExport={() => openView("Reports")}
+            onLogout={logout}
+          />
 
           <div className="space-y-5 px-4 py-5 lg:px-6">
             {toast && (
@@ -6291,6 +6261,180 @@ function SettingsView({
         </Panel>
       </div>
     </div>
+  );
+}
+
+const compactMonthNames = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+function compactDateRangeLabel(range: DateRange) {
+  const parseDate = (value: string) => {
+    const [year, month, day] = value.split("-").map(Number);
+    if (!year || !month || !day || month < 1 || month > 12) return null;
+    return { year, month, day };
+  };
+  const from = parseDate(range.from);
+  const to = parseDate(range.to);
+  if (!from || !to) return `${range.from} to ${range.to}`;
+
+  if (from.year === to.year && from.month === to.month) {
+    return `${compactMonthNames[from.month - 1]} ${from.day}-${to.day}`;
+  }
+  if (from.year === to.year) {
+    return `${compactMonthNames[from.month - 1]} ${from.day}-${compactMonthNames[to.month - 1]} ${to.day}`;
+  }
+  return `${compactMonthNames[from.month - 1]} ${from.day}, ${from.year}-${compactMonthNames[to.month - 1]} ${to.day}, ${to.year}`;
+}
+
+function WorkspaceHeader({
+  activeView,
+  matters,
+  selectedCaseId,
+  onSelectCase,
+  range,
+  setRange,
+  timezone,
+  onExport,
+  onLogout,
+}: {
+  activeView: ActiveView;
+  matters: Array<{ id: string; caseName: string }>;
+  selectedCaseId: string;
+  onSelectCase: (caseId: string) => void;
+  range: DateRange;
+  setRange: (range: DateRange) => void;
+  timezone: string;
+  onExport: () => void;
+  onLogout: () => void;
+}) {
+  const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
+  const selectedCaseName = matters.find((matter) => matter.id === selectedCaseId)?.caseName || "Records workspace";
+  const mobileOptionsId = "mobile-workspace-options";
+
+  return (
+    <header
+      data-testid="workspace-header"
+      className="sticky top-0 z-10 border-b border-slate-200 bg-[#f4f7f6]/95 px-3 py-2 backdrop-blur lg:px-6 lg:py-3"
+    >
+      {mobileOptionsOpen && (
+        <button
+          type="button"
+          aria-label="Close workspace options"
+          onClick={() => setMobileOptionsOpen(false)}
+          className="fixed inset-0 z-10 cursor-default bg-slate-950/10 lg:hidden"
+        />
+      )}
+
+      <div className="flex flex-col gap-0 lg:gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+        <div className="min-w-0">
+          <div className="flex min-h-12 items-center gap-2 lg:hidden">
+            <div className="min-w-0 flex-1">
+              <h1 className="truncate text-lg font-semibold tracking-tight text-slate-950">
+                {activeView}
+              </h1>
+              <p className="truncate text-[11px] leading-4 text-slate-500">
+                {selectedCaseName} | {compactDateRangeLabel(range)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileOptionsOpen(false);
+                onExport();
+              }}
+              className="h-10 shrink-0 rounded-md bg-slate-950 px-3 text-xs font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            >
+              Export
+            </button>
+            <button
+              type="button"
+              aria-controls={mobileOptionsId}
+              aria-expanded={mobileOptionsOpen}
+              onClick={() => setMobileOptionsOpen((current) => !current)}
+              className="h-10 shrink-0 rounded-md border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-teal-500 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-teal-100"
+            >
+              Options
+            </button>
+          </div>
+
+          <div className="hidden lg:block">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
+              {recordsTagline}
+            </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
+              {activeView}
+            </h1>
+          </div>
+        </div>
+
+        <div
+          id={mobileOptionsId}
+          className={`${mobileOptionsOpen ? "grid" : "hidden"} absolute left-3 right-3 top-[calc(100%+0.5rem)] z-20 max-h-[calc(100vh-6rem)] min-w-0 gap-3 overflow-y-auto rounded-lg border border-slate-200 bg-white p-4 shadow-xl lg:static lg:z-auto lg:flex lg:w-full lg:flex-wrap lg:items-center lg:gap-2 lg:overflow-visible lg:p-1 lg:shadow-sm xl:flex-nowrap 2xl:w-auto`}
+        >
+          <div className="lg:hidden">
+            <h2 className="text-sm font-semibold text-slate-950">Workspace options</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Change the case or reporting dates.</p>
+          </div>
+
+          <label className="grid gap-1 text-xs font-semibold text-slate-600 lg:block">
+            <span className="lg:sr-only">Case</span>
+            <select
+              aria-label="Case"
+              value={selectedCaseId}
+              onChange={(event) => onSelectCase(event.target.value)}
+              className="h-10 min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 lg:w-auto xl:w-60"
+            >
+              {matters.map((matter) => (
+                <option key={matter.id} value={matter.id}>
+                  {matter.caseName}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="grid gap-1">
+            <span className="text-xs font-semibold text-slate-600 lg:sr-only">Date range</span>
+            <RangeToolbar range={range} setRange={setRange} timezone={timezone} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 lg:contents">
+            <button
+              type="button"
+              onClick={onExport}
+              className="hidden h-10 rounded-md bg-slate-950 px-4 text-sm font-semibold text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300 lg:block"
+            >
+              Export
+            </button>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="h-10 rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:border-teal-500 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-teal-100"
+            >
+              Logout
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileOptionsOpen(false)}
+              className="h-10 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-200 lg:hidden"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
   );
 }
 

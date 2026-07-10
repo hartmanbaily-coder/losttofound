@@ -281,3 +281,39 @@ test("records account recovery and deletion paths are reachable", async ({ page 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByText("Create or select a custody matter before setting a case timezone.")).toBeVisible();
 });
+
+test("mobile workspace header stays compact and exposes its full controls", async ({ page }) => {
+  const currentCalendar = localDateParts();
+  const [year, month] = currentCalendar.monthKey.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const shortMonth = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(
+    new Date(Date.UTC(year, month - 1, 1))
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/records");
+
+  const enterWorkspace = page.getByRole("button", { name: "Enter records workspace" });
+  await expect(enterWorkspace).toBeEnabled();
+  await enterWorkspace.click();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  const header = page.getByTestId("workspace-header");
+  const collapsedBox = await header.boundingBox();
+  expect(collapsedBox?.height).toBeLessThanOrEqual(72);
+  await expect(page.getByText(`Parenting Plan Records | ${shortMonth} 1-${lastDay}`)).toBeVisible();
+  await expect(page.getByLabel("Date range preset")).not.toBeVisible();
+
+  await page.getByRole("button", { name: "Options", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Workspace options", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Case")).toBeVisible();
+  await expect(page.getByLabel("Date range preset")).toBeVisible();
+  await expect(page.getByLabel("From date")).toBeVisible();
+  await expect(page.getByLabel("To date")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Logout", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Workspace options", exact: true })).not.toBeVisible();
+  const restoredBox = await header.boundingBox();
+  expect(restoredBox?.height).toBeLessThanOrEqual(72);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
