@@ -41,7 +41,7 @@ struct AuthenticationGate: View {
             Button {
                 Task { await authenticate() }
             } label: {
-                Label(isAuthenticating ? "Unlocking" : "Unlock records workspace", systemImage: "faceid")
+                Label(isAuthenticating ? "Unlocking" : "Unlock app", systemImage: "faceid")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -96,7 +96,7 @@ struct AuthenticationGate: View {
         do {
             let success = try await context.evaluatePolicy(
                 .deviceOwnerAuthentication,
-                localizedReason: "Unlock your private records workspace."
+                localizedReason: "Unlock Lost to Found on this device."
             )
             if success {
                 onUnlock()

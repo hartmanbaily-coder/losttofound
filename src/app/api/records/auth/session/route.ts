@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   attachRefreshedRecordsSession,
+  clearRecordsSessionCookies,
   getRecordsAuthContext,
   isSupabaseRecordsMode,
 } from "@/lib/records/authServer";
@@ -21,7 +22,16 @@ export async function GET(request: NextRequest) {
   if (!isSupabaseRecordsMode()) return disabledResponse();
 
   const context = await getRecordsAuthContext(request);
-  if ("error" in context) return context.error;
+  if ("error" in context) {
+    const errorResponse = context.error;
+    if (!errorResponse) {
+      return NextResponse.json({ error: "Records session unavailable." }, { status: 503 });
+    }
+    if (errorResponse.status === 401) {
+      clearRecordsSessionCookies(errorResponse);
+    }
+    return errorResponse;
+  }
 
   const response = NextResponse.json(
     {

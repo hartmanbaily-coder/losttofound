@@ -43,6 +43,8 @@ export type RecordsAuthMessage = {
   message: string;
 };
 
+let remoteSessionStateRequest: Promise<RecordsSessionReadResult> | null = null;
+
 export const recordsStorageMode: RecordsStorageMode =
   process.env.NEXT_PUBLIC_RECORDS_STORAGE_MODE === "supabase" ? "supabase" : "local";
 
@@ -101,7 +103,7 @@ export function parseRecordsSessionResponse(
   return { status: "signed_in", session: body.session };
 }
 
-async function readRemoteSessionState() {
+async function fetchRemoteSessionState() {
   const response = await fetch("/api/records/auth/session", {
     cache: "no-store",
     credentials: "same-origin",
@@ -113,6 +115,19 @@ async function readRemoteSessionState() {
   };
 
   return parseRecordsSessionResponse(response.status, body);
+}
+
+async function readRemoteSessionState() {
+  const request = remoteSessionStateRequest || fetchRemoteSessionState();
+  remoteSessionStateRequest = request;
+
+  try {
+    return await request;
+  } finally {
+    if (remoteSessionStateRequest === request) {
+      remoteSessionStateRequest = null;
+    }
+  }
 }
 
 async function readRemoteSession() {

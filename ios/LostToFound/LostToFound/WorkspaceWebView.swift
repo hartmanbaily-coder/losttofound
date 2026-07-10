@@ -156,10 +156,11 @@ struct WorkspaceWebView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
+        let websiteDataStore = WKWebsiteDataStore.default()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.limitsNavigationsToAppBoundDomains = true
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
-        configuration.websiteDataStore = .default()
+        configuration.websiteDataStore = websiteDataStore
         configuration.applicationNameForUserAgent = "LostToFound-iOS/0.1"
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -173,7 +174,12 @@ struct WorkspaceWebView: UIViewRepresentable {
             timeoutInterval: 30
         )
         model.attach(webView, initialRequest: request)
-        webView.load(request)
+        model.isLoading = true
+
+        Task { @MainActor in
+            await SecureSessionCookieStore.shared.prepare(websiteDataStore.httpCookieStore)
+            webView.load(request)
+        }
         return webView
     }
 
