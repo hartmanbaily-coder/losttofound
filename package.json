@@ -26,7 +26,9 @@
     "verify:supabase-auth": "node scripts/verify-supabase-auth-public-settings.mjs",
     "verify:security-events": "node scripts/verify-security-event-sink.mjs",
     "verify:backup-restore": "node scripts/verify-backup-restore-evidence.mjs",
-    "cleanup:retired-grant-bucket": "node scripts/delete-retired-grant-bucket.mjs"
+    "cleanup:retired-grant-bucket": "node scripts/delete-retired-grant-bucket.mjs",
+    "ios:testflight": "bash scripts/ios/release-testflight.sh",
+    "ios:testflight:dry-run": "bash scripts/ios/release-testflight.sh --dry-run"
   },
   "dependencies": {
     "@playwright/test": "^1.60.0",

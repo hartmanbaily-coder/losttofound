@@ -1,0 +1,57 @@
+# Lost to Found TestFlight Release Lane
+
+## The rule
+
+There are two different release paths:
+
+| Change | Release action | TestFlight action |
+| --- | --- | --- |
+| Records website, Next.js UI, API, or content | Merge and push to `main`; the existing GitHub workflow deploys `losttofound.org` | None. Reload the Records tab or relaunch the installed app. |
+| SwiftUI shell, native tabs, Face ID, WebView behavior, native assets, or iOS settings | Merge and push to `main`, then run the native release command below | A new build is uploaded and becomes available once Apple processing completes. |
+
+The native Records tab loads `https://losttofound.org/records`. A website release is therefore visible inside the installed TestFlight app without a new iOS binary.
+
+## One-time App Store Connect setup
+
+1. In **Apps > Lost to Found > TestFlight**, create an **Internal Testing** group, such as `Core Testers`.
+2. Add the internal App Store Connect users who should receive builds.
+3. Enable **Automatic distribution** for that group.
+4. In the TestFlight app on every test device, enable **Automatic Updates** for Lost to Found.
+
+Use internal testing while iterating. External testers require a separate external group and may require Beta App Review.
+
+## Every native release
+
+1. Merge the native change to `main` and push it. Wait for the production validation/deploy workflow to pass.
+2. Use a clean checkout that is exactly `origin/main`.
+3. Confirm that the Apple account for team `HQG9VJ8JK2` is signed in under **Xcode > Settings > Accounts**.
+4. Run:
+
+   ```bash
+   npm run ios:testflight
+   ```
+
+The command creates a Release archive and uploads it to App Store Connect. It uses the Xcode-supported `manageAppVersionAndBuildNumber` option, which chooses the next unused build number at upload time. Do not manually edit `CURRENT_PROJECT_VERSION` before every TestFlight build.
+
+After the upload, open **Apps > Lost to Found > TestFlight > iOS > Build Uploads**:
+
+- **Processing**: wait for Apple. Nothing else to do.
+- **Complete**: the build is ready; the automatic internal group distributes it.
+- **Failed**: open the status for the exact error. A failed build number can be reused after the error is fixed.
+- **Missing Compliance**: complete the encryption/export-compliance prompt for that build.
+
+The **Distribution** tab is only for a public App Store version. Do not create a new App Store version for routine TestFlight iterations. Keep the marketing version at `0.1.0` while testing that release and change it only when preparing a new public App Store version.
+
+## Safe preflight
+
+Before a release, verify the current checkout and Xcode configuration without creating an archive:
+
+```bash
+npm run ios:testflight:dry-run
+```
+
+The release command rejects dirty or stale checkouts. This prevents archiving a feature branch or a build number that has not reached production.
+
+## Required account authority
+
+The project deliberately does not contain Apple credentials. `xcodebuild` uses the Apple account signed into Xcode for automatic signing and upload. If this is later moved to GitHub Actions or Xcode Cloud, configure App Store Connect API credentials and signing assets in the provider’s encrypted secrets; never commit the `.p8` key.
