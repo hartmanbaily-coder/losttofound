@@ -89,7 +89,7 @@ Current native build snapshot:
 
 - Product: `LostToFound.app`
 - Bundle ID: `io.lendori.losttofound`
-- Version/build: `0.1.0 (1)`
+- Version/build: `0.1.0 (2)`
 - Deployment target: iOS 17.0
 - Records URL: `https://losttofound.org/records`
 - Account deletion URL: `https://losttofound.org/account/delete`

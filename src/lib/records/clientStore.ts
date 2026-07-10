@@ -104,11 +104,15 @@ async function readRemoteDataset(session: RecordsSession) {
     credentials: "same-origin",
   });
 
+  const body = (await response.json().catch(() => ({}))) as {
+    dataset?: Partial<RecordsDataset> | null;
+    error?: string;
+  };
+
   if (!response.ok) {
-    throw new Error(`Records dataset load failed with ${response.status}.`);
+    throw new Error(body.error || `Records dataset load failed with ${response.status}.`);
   }
 
-  const body = (await response.json()) as { dataset: Partial<RecordsDataset> | null };
   const emptyDataset = createEmptyRecordsDatasetForUser(session.userId, session.email);
   if (body.dataset) return normalizeDataset(body.dataset, emptyDataset);
 
@@ -138,6 +142,7 @@ export function useRecordsStore() {
   const [storageStatus, setStorageStatus] = useState(
     recordsStorageMode === "supabase" ? "Cloud records storage pending." : "Private drafting storage."
   );
+  const [storageError, setStorageError] = useState<string | null>(null);
   const datasetRef = useRef(dataset);
   const remoteWriteChainRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -175,11 +180,14 @@ export function useRecordsStore() {
         const remote = await readRemoteDataset(remoteSession);
         setCurrentDataset(remote);
         setStorageStatus("Cloud records storage connected.");
+        setStorageError(null);
       } else {
         setCurrentDataset(readLocalDataset());
         setStorageStatus("Private drafting storage.");
+        setStorageError(null);
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : "Records storage unavailable.";
       if (recordsStorageMode === "supabase") {
         setCurrentDataset({
           users: [],
@@ -198,7 +206,8 @@ export function useRecordsStore() {
       } else {
         setCurrentDataset(createRecordsSeed());
       }
-      setStorageStatus(error instanceof Error ? error.message : "Records storage unavailable.");
+      setStorageStatus(message);
+      setStorageError(message);
     } finally {
       setHydrated(true);
     }
@@ -240,6 +249,7 @@ export function useRecordsStore() {
     resetDemoData,
     reloadDataset,
     storageStatus,
+    storageError,
     recordsStorageMode,
   };
 }

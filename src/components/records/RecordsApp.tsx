@@ -329,8 +329,16 @@ type AiImportDraftPayload = {
 };
 
 export default function RecordsApp() {
-  const { dataset, hydrated, updateDataset, resetDemoData, reloadDataset, storageStatus, recordsStorageMode } =
-    useRecordsStore();
+  const {
+    dataset,
+    hydrated,
+    updateDataset,
+    resetDemoData,
+    reloadDataset,
+    storageStatus,
+    storageError,
+    recordsStorageMode,
+  } = useRecordsStore();
   const [session, setSession] = useState<Session | null>(null);
   const [activeView, setActiveView] = useState<ActiveView>("Dashboard");
   const [selectedCaseId, setSelectedCaseId] = useState(demoCaseId);
@@ -497,7 +505,6 @@ export default function RecordsApp() {
   }
 
   async function finishAuthenticatedSession(nextSession: Session) {
-    setSession(nextSession);
     clearFailedLoginAttempts();
     setSelectedCaseId(nextSession.caseId);
 
@@ -516,6 +523,7 @@ export default function RecordsApp() {
       );
     }
 
+    setSession(nextSession);
     return { status: "complete" as const };
   }
 
@@ -545,6 +553,16 @@ export default function RecordsApp() {
         onLogin={login}
         onMfaVerified={finishAuthenticatedSession}
         recordsStorageMode={recordsStorageMode}
+      />
+    );
+  }
+
+  if (recordsStorageMode === "supabase" && storageError) {
+    return (
+      <RecordsLoadFailureScreen
+        message={storageError}
+        onRetry={() => void reloadDataset()}
+        onLogout={logout}
       />
     );
   }
@@ -791,6 +809,47 @@ export default function RecordsApp() {
         </main>
       </div>
     </div>
+  );
+}
+
+function RecordsLoadFailureScreen({
+  message,
+  onRetry,
+  onLogout,
+}: {
+  message: string;
+  onRetry: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <main className="flex min-h-screen flex-col bg-[#f6f8f7] text-slate-950">
+      <section className="mx-auto flex w-full max-w-xl flex-1 items-center px-4 py-10 sm:px-6">
+        <div role="alert" className="w-full rounded-lg border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
+            Records workspace
+          </p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">Unable to load records</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">{message}</p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={onRetry}
+              className="min-h-11 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
+            >
+              Try again
+            </button>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="min-h-11 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      </section>
+      <PolicyFooter />
+    </main>
   );
 }
 

@@ -8,8 +8,10 @@ final class WebViewModel {
     var canGoBack = false
     var canGoForward = false
     var isLoading = false
+    var loadErrorMessage: String?
 
     fileprivate weak var webView: WKWebView?
+    private var initialRequest: URLRequest?
 
     func goBack() {
         webView?.goBack()
@@ -20,7 +22,58 @@ final class WebViewModel {
     }
 
     func reload() {
-        webView?.reload()
+        loadErrorMessage = nil
+
+        if webView?.url != nil {
+            webView?.reload()
+        } else if let initialRequest {
+            webView?.load(initialRequest)
+        }
+    }
+
+    func retry() {
+        loadErrorMessage = nil
+        guard let webView, let initialRequest else { return }
+        webView.load(initialRequest)
+    }
+
+    fileprivate func attach(_ webView: WKWebView, initialRequest: URLRequest) {
+        self.webView = webView
+        self.initialRequest = initialRequest
+    }
+
+    fileprivate func navigationStarted() {
+        loadErrorMessage = nil
+    }
+
+    fileprivate func navigationFailed(with error: Error) {
+        let error = error as NSError
+        guard error.code != NSURLErrorCancelled else { return }
+
+        if error.domain == NSURLErrorDomain {
+            switch error.code {
+            case NSURLErrorNotConnectedToInternet:
+                loadErrorMessage = "Your device appears to be offline. Reconnect to the internet and try again."
+            case NSURLErrorTimedOut:
+                loadErrorMessage = "The connection timed out before the records workspace responded."
+            case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost:
+                loadErrorMessage = "Lost to Found could not reach the records service. Check your connection and try again."
+            case NSURLErrorSecureConnectionFailed, NSURLErrorServerCertificateUntrusted,
+                 NSURLErrorServerCertificateHasBadDate, NSURLErrorServerCertificateHasUnknownRoot:
+                loadErrorMessage = "A secure connection to Lost to Found could not be established."
+            default:
+                loadErrorMessage = "The records workspace could not be loaded. Please try again."
+            }
+            return
+        }
+
+        if error.domain == WKError.errorDomain,
+           error.code == WKError.Code.navigationAppBoundDomain.rawValue {
+            loadErrorMessage = "This link cannot open inside the secure records workspace."
+            return
+        }
+
+        loadErrorMessage = "The records workspace could not be loaded. Please try again."
     }
 
     fileprivate func updateNavigationState(from webView: WKWebView) {
@@ -36,7 +89,25 @@ struct WorkspaceScreen: View {
     @State private var model = WebViewModel()
 
     var body: some View {
-        WorkspaceWebView(url: workspaceURL, model: model)
+        ZStack {
+            WorkspaceWebView(url: workspaceURL, model: model)
+
+            if let loadErrorMessage = model.loadErrorMessage {
+                ContentUnavailableView {
+                    Label("Unable to Load Records", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(loadErrorMessage)
+                } actions: {
+                    Button {
+                        model.retry()
+                    } label: {
+                        Label("Try Again", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .background(Color(uiColor: .systemBackground))
+            }
+        }
             .navigationTitle("Records")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -89,15 +160,20 @@ struct WorkspaceWebView: UIViewRepresentable {
         configuration.limitsNavigationsToAppBoundDomains = true
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         configuration.websiteDataStore = .default()
+        configuration.applicationNameForUserAgent = "LostToFound-iOS/0.1"
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.allowsBackForwardNavigationGestures = true
-        webView.customUserAgent = "LostToFound-iOS/0.1"
         webView.isInspectable = false
         webView.navigationDelegate = context.coordinator
 
-        model.webView = webView
-        webView.load(URLRequest(url: url, cachePolicy: .reloadRevalidatingCacheData))
+        let request = URLRequest(
+            url: url,
+            cachePolicy: .reloadRevalidatingCacheData,
+            timeoutInterval: 30
+        )
+        model.attach(webView, initialRequest: request)
+        webView.load(request)
         return webView
     }
 
@@ -143,6 +219,7 @@ struct WorkspaceWebView: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            model.navigationStarted()
             model.updateNavigationState(from: webView)
         }
 
@@ -151,6 +228,7 @@ struct WorkspaceWebView: UIViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            model.navigationFailed(with: error)
             model.updateNavigationState(from: webView)
         }
 
@@ -159,6 +237,7 @@ struct WorkspaceWebView: UIViewRepresentable {
             didFailProvisionalNavigation navigation: WKNavigation!,
             withError error: Error
         ) {
+            model.navigationFailed(with: error)
             model.updateNavigationState(from: webView)
         }
     }
