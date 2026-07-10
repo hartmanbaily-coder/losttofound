@@ -4,6 +4,7 @@ import SwiftUI
 struct AuthenticationGate: View {
     let onUnlock: () -> Void
 
+    @Environment(\.scenePhase) private var scenePhase
     @State private var errorMessage: String?
     @State private var isAuthenticating = false
 
@@ -64,7 +65,12 @@ struct AuthenticationGate: View {
             .padding(.bottom, 20)
         }
         .task {
+            guard scenePhase == .active else { return }
             await authenticate()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            Task { await authenticate() }
         }
     }
 

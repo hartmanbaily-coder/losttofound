@@ -34,11 +34,12 @@ struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var isUnlocked = false
+    @State private var hasUnlockedOnce = false
     @State private var selectedTab: AppTab = .workspace
 
     var body: some View {
-        Group {
-            if isUnlocked {
+        ZStack {
+            if hasUnlockedOnce {
                 TabView(selection: $selectedTab) {
                     NavigationStack {
                         WorkspaceScreen()
@@ -58,18 +59,27 @@ struct AppRootView: View {
                     .tabItem { Label(AppTab.support.title, systemImage: AppTab.support.symbolName) }
                     .tag(AppTab.support)
                 }
+                .allowsHitTesting(isUnlocked)
+                .accessibilityHidden(!isUnlocked)
             } else {
+                Color(uiColor: .systemBackground)
+                    .ignoresSafeArea()
+            }
+
+            if !isUnlocked {
                 AuthenticationGate {
                     withAnimation(.snappy) {
+                        hasUnlockedOnce = true
                         isUnlocked = true
                     }
                 }
+                .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+                .zIndex(1)
             }
         }
         .tint(Color("AccentColor"))
         .onChange(of: scenePhase) { _, newPhase in
             guard isUnlocked, newPhase != .active else { return }
-            selectedTab = .workspace
             isUnlocked = false
         }
     }

@@ -42,7 +42,6 @@ import {
   nowIso,
   parseTags,
   readRecordsSession,
-  readSession,
   requestRecordsPasswordReset,
   signInRecordsSession,
   signUpRecordsAccount,
@@ -345,6 +344,7 @@ export default function RecordsApp() {
     recordsStorageMode,
   } = useRecordsStore();
   const [session, setSession] = useState<Session | null>(null);
+  const [mfaResumeRequired, setMfaResumeRequired] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("Dashboard");
   const [selectedCaseId, setSelectedCaseId] = useState(demoCaseId);
   const [range, setRange] = useState<DateRange>(() =>
@@ -390,11 +390,15 @@ export default function RecordsApp() {
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       async function loadSession() {
-        const stored =
-          recordsStorageMode === "supabase" ? await readRecordsSession().catch(() => null) : readSession();
-        if (stored) {
-          setSession(stored);
-          setSelectedCaseId(stored.caseId);
+        const state = await readRecordsSession().catch(() => ({ status: "signed_out" as const }));
+        if (state.status === "mfa_required") {
+          setMfaResumeRequired(true);
+          return;
+        }
+        if (state.status === "signed_in") {
+          setMfaResumeRequired(false);
+          setSession(state.session);
+          setSelectedCaseId(state.session.caseId);
           setSelectedDay(formatLocalDate(new Date(), defaultRecordsTimezone));
         }
       }
@@ -516,6 +520,7 @@ export default function RecordsApp() {
 
   async function finishAuthenticatedSession(nextSession: Session) {
     clearFailedLoginAttempts();
+    setMfaResumeRequired(false);
     setSelectedCaseId(nextSession.caseId);
 
     if (recordsStorageMode === "supabase") {
@@ -540,7 +545,10 @@ export default function RecordsApp() {
   async function login(email: string, password: string, adultConfirmed: boolean): Promise<LoginFlowResult> {
     if (recordsStorageMode === "supabase") {
       const result = await signInRecordsSession(email, password, adultConfirmed);
-      if (result.status === "mfa_required") return { status: "mfa_required" };
+      if (result.status === "mfa_required") {
+        setMfaResumeRequired(true);
+        return { status: "mfa_required" };
+      }
       if (result.status === "mfa_enrollment_required") {
         return { status: "mfa_enrollment_required", enrollment: result.enrollment };
       }
@@ -553,6 +561,7 @@ export default function RecordsApp() {
   function logout() {
     void signOutRecordsSession();
     clearSession();
+    setMfaResumeRequired(false);
     setSession(null);
   }
 
@@ -560,6 +569,8 @@ export default function RecordsApp() {
     return (
       <LoginScreen
         appReady={hydrated}
+        mfaResumeRequired={mfaResumeRequired}
+        onCancelMfa={logout}
         onLogin={login}
         onMfaVerified={finishAuthenticatedSession}
         recordsStorageMode={recordsStorageMode}
@@ -865,11 +876,15 @@ function RecordsLoadFailureScreen({
 
 function LoginScreen({
   appReady,
+  mfaResumeRequired,
+  onCancelMfa,
   onLogin,
   onMfaVerified,
   recordsStorageMode,
 }: {
   appReady: boolean;
+  mfaResumeRequired: boolean;
+  onCancelMfa: () => void;
   onLogin: (email: string, password: string, adultConfirmed: boolean) => Promise<LoginFlowResult>;
   onMfaVerified: (session: Session) => Promise<LoginFlowResult>;
   recordsStorageMode: "local" | "supabase";
@@ -887,6 +902,19 @@ function LoginScreen({
   const minimumPasswordLength = 12;
   const signupsEnabled =
     recordsStorageMode === "supabase" && process.env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED === "true";
+
+  useEffect(() => {
+    if (!mfaResumeRequired || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    if (params.has("auth") || hash.has("access_token")) return;
+
+    setMode("login");
+    setMfaMode("verify");
+    setMfaEnrollment(null);
+    setError("");
+    setMessage("Your password was accepted. Enter the current code from your authenticator app.");
+  }, [mfaResumeRequired]);
 
   useEffect(() => {
     if (recordsStorageMode !== "supabase" || typeof window === "undefined") return;
@@ -1185,6 +1213,16 @@ function LoginScreen({
                   className="min-h-11 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
                 >
                   {mfaSubmitting ? "Verifying..." : "Verify authenticator"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCancelMfa();
+                    switchMode("login");
+                  }}
+                  className="min-h-11 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
+                >
+                  Use a different account
                 </button>
                 <p className="text-xs leading-5 text-slate-500">
                   Lost authenticator access? Email{" "}

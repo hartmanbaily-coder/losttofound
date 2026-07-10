@@ -33,6 +33,11 @@ export type RecordsSignInResult =
   | { status: "mfa_required" }
   | { status: "mfa_enrollment_required"; enrollment: RecordsMfaEnrollment };
 
+export type RecordsSessionReadResult =
+  | { status: "signed_in"; session: RecordsSession }
+  | { status: "mfa_required" }
+  | { status: "signed_out" };
+
 export type RecordsAuthMessage = {
   ok: boolean;
   message: string;
@@ -80,22 +85,43 @@ function persistLocalDataset(dataset: RecordsDataset) {
   window.localStorage.setItem(storageKey, JSON.stringify(dataset));
 }
 
-async function readRemoteSession() {
-  const response = await fetch("/api/records/auth/session", {
-    cache: "no-store",
-    credentials: "same-origin",
-  });
-
-  if (!response.ok) {
-    throw new Error(response.status === 401 ? "Sign in to your records workspace." : "Records session unavailable.");
+export function parseRecordsSessionResponse(
+  status: number,
+  body: { session?: RecordsSession; error?: string; mfaRequired?: boolean }
+): RecordsSessionReadResult {
+  if (status === 403 && body.mfaRequired) return { status: "mfa_required" };
+  if (status === 401) return { status: "signed_out" };
+  if (status < 200 || status >= 300) {
+    throw new Error(body.error || "Records session unavailable.");
   }
-
-  const body = (await response.json()) as { session?: RecordsSession };
   if (!body.session?.userId || !body.session.email) {
     throw new Error("Records session response was invalid.");
   }
 
-  return body.session;
+  return { status: "signed_in", session: body.session };
+}
+
+async function readRemoteSessionState() {
+  const response = await fetch("/api/records/auth/session", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const body = (await response.json().catch(() => ({}))) as {
+    session?: RecordsSession;
+    error?: string;
+    mfaRequired?: boolean;
+  };
+
+  return parseRecordsSessionResponse(response.status, body);
+}
+
+async function readRemoteSession() {
+  const state = await readRemoteSessionState();
+  if (state.status === "signed_in") return state.session;
+  if (state.status === "mfa_required") {
+    throw new Error("Multi factor verification required.");
+  }
+  throw new Error("Sign in to your records workspace.");
 }
 
 async function readRemoteDataset(session: RecordsSession) {
@@ -277,8 +303,9 @@ export function clearSession() {
 }
 
 export async function readRecordsSession() {
-  if (recordsStorageMode === "supabase") return readRemoteSession();
-  return readSession();
+  if (recordsStorageMode === "supabase") return readRemoteSessionState();
+  const session = readSession();
+  return session ? { status: "signed_in" as const, session } : { status: "signed_out" as const };
 }
 
 export async function signInRecordsSession(

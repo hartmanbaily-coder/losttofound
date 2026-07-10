@@ -109,7 +109,7 @@ export function mfaRequiredResponse() {
       error: "Multi factor verification required.",
       mfaRequired: true,
     },
-    { status: 403 }
+    { status: 403, headers: { "Cache-Control": "no-store" } }
   );
 }
 
