@@ -458,8 +458,13 @@ export async function updateRecordsPassword(password: string): Promise<RecordsAu
 async function verifyMfaAt(endpoint: string, body: Record<string, string>) {
   const response = await fetch(endpoint, {
     method: "POST",
+    cache: "no-store",
     credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      Accept: "application/json",
+      "Cache-Control": "no-store",
+      "Content-Type": "application/json",
+    },
     body: JSON.stringify(body),
   });
 
@@ -468,8 +473,18 @@ async function verifyMfaAt(endpoint: string, body: Record<string, string>) {
     error?: string;
   };
 
-  if (!response.ok || !parsed.session) {
+  if (!response.ok) {
     throw new Error(parsed.error || `MFA verification failed with ${response.status}.`);
+  }
+
+  if (!parsed.session) {
+    const state = await fetchRemoteSessionState().catch(() => null);
+    if (state?.status === "signed_in") return state.session;
+    if (state?.status === "mfa_required") {
+      throw new Error("Authenticator verification did not complete. Enter a fresh code and try again.");
+    }
+
+    throw new Error(parsed.error || "MFA verification response was incomplete. Sign in and try again.");
   }
 
   return parsed.session;
