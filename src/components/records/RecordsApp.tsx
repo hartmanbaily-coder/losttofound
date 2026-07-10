@@ -38,6 +38,7 @@ import {
   clearFailedLoginAttempts,
   clearSession,
   createId,
+  downloadBlobFile,
   downloadTextFile,
   nowIso,
   parseTags,
@@ -46,6 +47,7 @@ import {
   signInRecordsSession,
   signUpRecordsAccount,
   signOutRecordsSession,
+  shareHtmlAsPdf,
   updateRecordsPassword,
   useRecordsStore,
   useSelectedRecords,
@@ -63,6 +65,7 @@ import {
   reportsTabReportTypes,
   rowsToCsv,
   sectionExportToCsv,
+  type ReportPreview,
   type SectionExportPacket,
 } from "@/lib/records/reports";
 import {
@@ -495,14 +498,17 @@ export default function RecordsApp() {
     } else if (format === "csv") {
       downloadTextFile(`lost-to-found-${slug}.csv`, sectionExportToCsv(packet), "text/csv");
     } else {
-      const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1000,height=760");
-      if (!printWindow) {
-        flash("Popup blocked. Allow popups to print the section packet.");
-        return;
-      }
+      const printHtml = buildSectionExportPrintHtml(packet);
+      if (!shareHtmlAsPdf(`lost-to-found-${slug}.pdf`, printHtml)) {
+        const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1000,height=760");
+        if (!printWindow) {
+          flash("Popup blocked. Allow popups to print the section packet.");
+          return;
+        }
 
-      printWindow.document.write(buildSectionExportPrintHtml(packet));
-      printWindow.document.close();
+        printWindow.document.write(printHtml);
+        printWindow.document.close();
+      }
     }
 
     updateDataset((current) =>
@@ -4732,12 +4738,7 @@ function EvidenceView({
       }
 
       const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = item.originalFileName;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      await downloadBlobFile(item.originalFileName, blob);
       flash("File downloaded.");
     } catch (error) {
       flash(error instanceof Error ? error.message : "File download failed.");
@@ -4779,58 +4780,17 @@ function EvidenceView({
   }
 
   function printEvidenceSheet(item: EvidenceItem) {
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
-    if (!printWindow) {
-      flash("Popup blocked. Allow popups to print the file sheet.");
-      return;
+    const printHtml = buildEvidencePrintHtml(item);
+    if (!shareHtmlAsPdf(`lost-to-found-file-sheet-${item.id}.pdf`, printHtml)) {
+      const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
+      if (!printWindow) {
+        flash("Popup blocked. Allow popups to print the file sheet.");
+        return;
+      }
+
+      printWindow.document.write(printHtml);
+      printWindow.document.close();
     }
-
-    const rows = [
-      ["File name", item.originalFileName],
-      ["Record date", item.evidenceDate || ""],
-      ["Uploaded", item.uploadedAt],
-      ["File type", item.fileType],
-      ["File size", `${item.fileSize} bytes`],
-      ["Storage", item.storagePath ? "Private file attached" : "Metadata only"],
-      ["Scan status", item.malwareScanStatus || "pending"],
-      ["Review status", evidenceReviewStatusLabels[item.reviewStatus || "needs_review"]],
-      ["Included in reports", item.includeInReports ? "Yes" : "No"],
-      ["Tags", item.tags.join(", ")],
-      ["Description", item.description || ""],
-    ];
-
-    printWindow.document.write(`<!doctype html>
-      <html>
-        <head>
-          <title>File Sheet - ${escapeHtml(item.originalFileName)}</title>
-          <style>
-            body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #0f172a; margin: 32px; }
-            h1 { font-size: 22px; margin: 0 0 8px; }
-            p { color: #475569; line-height: 1.5; }
-            table { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 13px; }
-            th, td { border: 1px solid #cbd5e1; padding: 10px; vertical-align: top; text-align: left; }
-            th { width: 180px; background: #f8fafc; }
-            .notice { border: 1px solid #fde68a; background: #fffbeb; padding: 12px; margin-top: 20px; font-size: 13px; }
-          </style>
-        </head>
-        <body>
-          <h1>{siteName} File Sheet</h1>
-          <p>Private custody records workspace. Use privacy minded labels and verify the source document before submission.</p>
-          <div class="notice">This sheet is metadata for organizing records. It is not legal advice and does not replace the original document.</div>
-          <table>
-            <tbody>
-              ${rows
-                .map(
-                  ([label, value]) =>
-                    `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`
-                )
-                .join("")}
-            </tbody>
-          </table>
-          <script>window.print();</script>
-        </body>
-      </html>`);
-    printWindow.document.close();
 
     updateDataset((current) =>
       withAudit(current, {
@@ -5684,6 +5644,10 @@ function ReportsView({
       flash("Complete the export review first.");
       return;
     }
+    const printHtml = buildReportPrintHtml(preview, range);
+    if (!shareHtmlAsPdf(`lost-to-found-records-${reportType}-${range.from}-${range.to}.pdf`, printHtml)) {
+      window.print();
+    }
     updateDataset((current) =>
       withAudit(current, {
         userId,
@@ -5694,7 +5658,6 @@ function ReportsView({
         metadataSummary: "Printable report opened for PDF save.",
       })
     );
-    window.print();
   }
 
   return (
@@ -7892,7 +7855,12 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
-function buildSectionExportPrintHtml(packet: SectionExportPacket) {
+type PrintableExportPacket = Pick<
+  SectionExportPacket,
+  "title" | "caseName" | "generatedAt" | "range" | "disclaimer" | "metrics" | "summaries" | "charts" | "tables" | "suggestedUses"
+>;
+
+function buildSectionExportPrintHtml(packet: PrintableExportPacket) {
   return `<!doctype html>
     <html>
       <head>
@@ -7948,6 +7916,70 @@ function buildSectionExportPrintHtml(packet: SectionExportPacket) {
         <ul>${packet.suggestedUses.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
         <h2>Tables</h2>
         ${packet.tables.map(buildPrintableTableHtml).join("")}
+        <script>window.print();</script>
+      </body>
+    </html>`;
+}
+
+function buildReportPrintHtml(preview: ReportPreview, range: DateRange) {
+  return buildSectionExportPrintHtml({
+    title: preview.title,
+    caseName: preview.caseName,
+    generatedAt: preview.generatedAt,
+    range,
+    disclaimer: preview.disclaimer,
+    metrics: preview.metrics,
+    summaries: [preview.focus, ...preview.summaries],
+    charts: preview.charts,
+    tables: preview.tables,
+    suggestedUses: [
+      "Review the dated entries against original records before sharing.",
+      "Use this factual organization aid with an attorney or other qualified professional as appropriate.",
+    ],
+  });
+}
+
+function buildEvidencePrintHtml(item: EvidenceItem) {
+  const rows = [
+    ["File name", item.originalFileName],
+    ["Record date", item.evidenceDate || ""],
+    ["Uploaded", item.uploadedAt],
+    ["File type", item.fileType],
+    ["File size", `${item.fileSize} bytes`],
+    ["Storage", item.storagePath ? "Private file attached" : "Metadata only"],
+    ["Scan status", item.malwareScanStatus || "pending"],
+    ["Review status", evidenceReviewStatusLabels[item.reviewStatus || "needs_review"]],
+    ["Included in reports", item.includeInReports ? "Yes" : "No"],
+    ["Tags", item.tags.join(", ")],
+    ["Description", item.description || ""],
+  ];
+
+  return `<!doctype html>
+    <html>
+      <head>
+        <title>File Sheet - ${escapeHtml(item.originalFileName)}</title>
+        <style>
+          @page { margin: 0.55in; }
+          body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #0f172a; margin: 0; }
+          h1 { font-size: 22px; margin: 0 0 8px; }
+          p { color: #475569; line-height: 1.5; }
+          table { width: 100%; border-collapse: collapse; margin-top: 24px; font-size: 13px; }
+          th, td { border: 1px solid #cbd5e1; padding: 10px; vertical-align: top; text-align: left; }
+          th { width: 180px; background: #f8fafc; }
+          .notice { border: 1px solid #fde68a; background: #fffbeb; padding: 12px; margin-top: 20px; font-size: 13px; }
+        </style>
+      </head>
+      <body>
+        <h1>${escapeHtml(siteName)} File Sheet</h1>
+        <p>Private custody records workspace. Use privacy minded labels and verify the source document before submission.</p>
+        <div class="notice">This sheet is metadata for organizing records. It is not legal advice and does not replace the original document.</div>
+        <table>
+          <tbody>
+            ${rows
+              .map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`)
+              .join("")}
+          </tbody>
+        </table>
         <script>window.print();</script>
       </body>
     </html>`;

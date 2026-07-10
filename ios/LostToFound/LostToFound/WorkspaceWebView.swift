@@ -198,6 +198,7 @@ struct WorkspaceWebView: UIViewRepresentable {
         private let allowedHosts = Set(["losttofound.org", "www.losttofound.org"])
         private let allowedTextExportContentTypes = Set(["text/csv", "application/json"])
         private let maximumTextExportBytes = 10 * 1024 * 1024
+        private let maximumBinaryExportBytes = 25 * 1024 * 1024
         private let model: WebViewModel
 
         init(model: WebViewModel) {
@@ -205,23 +206,49 @@ struct WorkspaceWebView: UIViewRepresentable {
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            let payload = message.body as? [String: Any]
+            let renderAsPDF = payload?["renderAsPDF"] as? Bool ?? false
+            let base64Encoded = payload?["base64Encoded"] as? Bool ?? false
             guard message.name == "lostToFoundDownload",
                   message.frameInfo.isMainFrame,
                   let host = message.webView?.url?.host,
                   allowedHosts.contains(host),
-                  let payload = message.body as? [String: Any],
+                  let payload,
                   let requestedFileName = payload["fileName"] as? String,
                   let body = payload["body"] as? String,
                   let contentType = payload["contentType"] as? String,
-                  allowedTextExportContentTypes.contains(contentType),
-                  body.utf8.count <= maximumTextExportBytes,
-                  let data = body.data(using: .utf8),
-                  let fileURL = writeTextExport(data: data, requestedFileName: requestedFileName)
+                  renderAsPDF ? contentType == "text/html" : base64Encoded || allowedTextExportContentTypes.contains(contentType),
+                  let data = exportData(
+                    body: body,
+                    base64Encoded: base64Encoded,
+                    renderAsPDF: renderAsPDF
+                  ),
+                  let fileURL = writeTextExport(
+                    data: data,
+                    requestedFileName: requestedFileName,
+                    renderAsPDF: renderAsPDF
+                  )
             else {
                 return
             }
 
             presentShareSheet(for: fileURL)
+        }
+
+        private func exportData(body: String, base64Encoded: Bool, renderAsPDF: Bool) -> Data? {
+            if base64Encoded {
+                let maximumBase64Bytes = (maximumBinaryExportBytes * 4 / 3) + 8
+                guard body.utf8.count <= maximumBase64Bytes,
+                      let data = Data(base64Encoded: body),
+                      data.count <= maximumBinaryExportBytes
+                else {
+                    return nil
+                }
+                return data
+            }
+
+            guard body.utf8.count <= maximumTextExportBytes else { return nil }
+            return body.data(using: .utf8)
         }
 
         func webView(
@@ -276,25 +303,61 @@ struct WorkspaceWebView: UIViewRepresentable {
             model.updateNavigationState(from: webView)
         }
 
-        private func writeTextExport(data: Data, requestedFileName: String) -> URL? {
+        private func writeTextExport(data: Data, requestedFileName: String, renderAsPDF: Bool) -> URL? {
             let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
-            let safeFileName = requestedFileName.unicodeScalars
+            let sanitizedFileName = requestedFileName.unicodeScalars
                 .map { allowedCharacters.contains($0) ? String($0) : "-" }
                 .joined()
                 .prefix(160)
-            guard !safeFileName.isEmpty else { return nil }
+            guard !sanitizedFileName.isEmpty else { return nil }
+
+            let output: (fileName: String, data: Data)
+            if renderAsPDF {
+                guard let html = String(data: data, encoding: .utf8),
+                      let pdf = renderPDF(html: html)
+                else {
+                    return nil
+                }
+                let baseName = URL(fileURLWithPath: String(sanitizedFileName))
+                    .deletingPathExtension()
+                    .lastPathComponent
+                output = (fileName: "\(baseName).pdf", data: pdf)
+            } else {
+                output = (fileName: String(sanitizedFileName), data: data)
+            }
 
             let directory = FileManager.default.temporaryDirectory
                 .appendingPathComponent("LostToFoundExports", isDirectory: true)
-            let fileURL = directory.appendingPathComponent(String(safeFileName), isDirectory: false)
+            let fileURL = directory.appendingPathComponent(output.fileName, isDirectory: false)
 
             do {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                try data.write(to: fileURL, options: .atomic)
+                try output.data.write(to: fileURL, options: .atomic)
                 return fileURL
             } catch {
                 return nil
             }
+        }
+
+        private func renderPDF(html: String) -> Data? {
+            let renderer = UIPrintPageRenderer()
+            let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
+            let printableRect = pageRect.insetBy(dx: 36, dy: 36)
+            renderer.setValue(NSValue(cgRect: pageRect), forKey: "paperRect")
+            renderer.setValue(NSValue(cgRect: printableRect), forKey: "printableRect")
+            renderer.addPrintFormatter(UIMarkupTextPrintFormatter(markupText: html), startingAtPageAt: 0)
+            renderer.prepare(forDrawingPages: NSMakeRange(0, renderer.numberOfPages))
+
+            guard renderer.numberOfPages > 0 else { return nil }
+
+            let pdf = NSMutableData()
+            UIGraphicsBeginPDFContextToData(pdf, pageRect, nil)
+            for page in 0 ..< renderer.numberOfPages {
+                UIGraphicsBeginPDFPage()
+                renderer.drawPage(at: page, in: UIGraphicsGetPDFContextBounds())
+            }
+            UIGraphicsEndPDFContext()
+            return pdf as Data
         }
 
         private func presentShareSheet(for fileURL: URL) {

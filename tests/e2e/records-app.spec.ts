@@ -32,6 +32,7 @@ function shiftMonthKey(monthKey: string, offset: number) {
 }
 
 test("records login and report workflow", async ({ page }) => {
+  test.setTimeout(60_000);
   const currentCalendar = localDateParts();
   const calendarDay = (day: number) => `${currentCalendar.monthKey}-${pad2(day)}`;
 
@@ -223,6 +224,27 @@ test("records login and report workflow", async ({ page }) => {
   expect(reportCsv.split("\n")[0]).toContain("arriving_or_drop_off_party");
   expect(reportCsv.split("\n")[0]).toContain("late_party");
   expect(reportCsv).not.toContain("chart_data");
+
+  const additionalReportTypes = [
+    ["facetime_cancellations", "FaceTime Cancellation Report"],
+    ["incident_timeline", "Issue Timeline Report"],
+    ["filing_facetime_correlation", "Filing / FaceTime Timing Report"],
+    ["combined_attorney_summary", "Attorney Issue Summary"],
+    ["combined_court_packet", "Combined Court Issue Packet"],
+  ] as const;
+
+  for (const [value, title] of additionalReportTypes) {
+    await page.getByLabel("Report type").selectOption(value);
+    await expect(page.getByRole("article").getByRole("heading", { name: title })).toBeVisible();
+
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download CSV" }).click();
+    const download = await downloadPromise;
+    const path = await download.path();
+    if (!path) throw new Error(`${title} CSV download did not produce a file.`);
+    const csv = await readFile(path, "utf8");
+    expect(csv).not.toContain("chart_data");
+  }
 });
 
 test("records account recovery and deletion paths are reachable", async ({ page }) => {

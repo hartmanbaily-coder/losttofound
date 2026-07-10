@@ -23,11 +23,13 @@ import { createRecordsSeed, demoCaseId, demoUserId } from "@/lib/records/seed";
 import {
   buildReportPreview,
   buildSectionExportPacket,
+  reportTypeLabels,
   reportPreviewToCsv,
+  reportsTabReportTypes,
   rowsToCsv,
   sectionExportToCsv,
 } from "@/lib/records/reports";
-import type { CalendarEvent } from "@/lib/records/types";
+import type { CalendarEvent, ReportType } from "@/lib/records/types";
 import { validateEvidenceFile } from "@/lib/records/validation";
 
 const range = { from: "2026-05-01", to: "2026-05-31" };
@@ -266,6 +268,51 @@ describe("privacy and safety helpers", () => {
     expect(csv).toContain("Late party");
     expect(csv).toContain("Parent B");
     expect(csv).not.toContain("chart_data");
+  });
+
+  it("builds CSV-ready output for every selectable report type", () => {
+    const dataset = createRecordsSeed();
+
+    for (const reportType of reportsTabReportTypes.map((item) => item.value)) {
+      const preview = buildReportPreview(dataset, demoUserId, demoCaseId, range, reportType);
+      const csv = reportPreviewToCsv(preview);
+
+      expect(preview.title).toBe(reportTypeLabels[reportType]);
+      expect(preview.metrics.length).toBeGreaterThan(0);
+      expect(preview.tables.length + preview.rows.length).toBeGreaterThan(0);
+      expect(csv).not.toContain("chart_data");
+    }
+  });
+
+  it("builds CSV-ready output for report types retained outside the visible report picker", () => {
+    const dataset = createRecordsSeed();
+    const visibleTypes = new Set(reportsTabReportTypes.map((item) => item.value));
+    const retainedTypes = (Object.keys(reportTypeLabels) as ReportType[]).filter(
+      (reportType) => !visibleTypes.has(reportType)
+    );
+
+    for (const reportType of retainedTypes) {
+      const preview = buildReportPreview(dataset, demoUserId, demoCaseId, range, reportType);
+
+      expect(preview.title).toBe(reportTypeLabels[reportType]);
+      expect(preview.metrics.length).toBeGreaterThan(0);
+      expect(reportPreviewToCsv(preview)).not.toContain("chart_data");
+    }
+  });
+
+  it("builds CSV-ready packets for every section export", () => {
+    const dataset = createRecordsSeed();
+    const sectionIds = ["calendar", "timeline", "exchanges", "notes", "evidence", "child_support", "expenses"] as const;
+
+    for (const sectionId of sectionIds) {
+      const packet = buildSectionExportPacket(dataset, demoUserId, demoCaseId, range, sectionId);
+      const csv = sectionExportToCsv(packet);
+
+      expect(packet.metrics.length).toBeGreaterThan(0);
+      expect(packet.tables.length).toBeGreaterThan(0);
+      expect(packet.suggestedUses.length).toBeGreaterThan(0);
+      expect(csv).not.toContain("chart_data");
+    }
   });
 
   it("describes attention-level timeline records as recorded issues", () => {

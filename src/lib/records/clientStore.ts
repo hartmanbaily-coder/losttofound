@@ -556,7 +556,13 @@ export function parseTags(value: string) {
 }
 
 type NativeDownloadHandler = {
-  postMessage: (message: { fileName: string; body: string; contentType: string }) => void;
+  postMessage: (message: {
+    fileName: string;
+    body: string;
+    contentType: string;
+    base64Encoded?: boolean;
+    renderAsPDF?: boolean;
+  }) => void;
 };
 
 declare global {
@@ -569,14 +575,64 @@ declare global {
   }
 }
 
+function nativeDownloadHandler() {
+  if (typeof window === "undefined") return undefined;
+  return window.webkit?.messageHandlers?.lostToFoundDownload;
+}
+
 export function downloadTextFile(fileName: string, body: string, contentType: string) {
-  const nativeDownloadHandler = window.webkit?.messageHandlers?.lostToFoundDownload;
-  if (nativeDownloadHandler) {
-    nativeDownloadHandler.postMessage({ fileName, body, contentType });
+  const nativeHandler = nativeDownloadHandler();
+  if (nativeHandler) {
+    nativeHandler.postMessage({ fileName, body, contentType });
     return;
   }
 
   const blob = new Blob([body], { type: contentType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export function shareHtmlAsPdf(fileName: string, html: string) {
+  const nativeHandler = nativeDownloadHandler();
+  if (!nativeHandler) return false;
+
+  nativeHandler.postMessage({
+    fileName,
+    body: html,
+    contentType: "text/html",
+    renderAsPDF: true,
+  });
+  return true;
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  const chunkSize = 0x8000;
+  let binary = "";
+
+  for (let start = 0; start < bytes.length; start += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(start, start + chunkSize));
+  }
+
+  return btoa(binary);
+}
+
+export async function downloadBlobFile(fileName: string, blob: Blob) {
+  const nativeHandler = nativeDownloadHandler();
+  if (nativeHandler) {
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    nativeHandler.postMessage({
+      fileName,
+      body: bytesToBase64(bytes),
+      contentType: blob.type || "application/octet-stream",
+      base64Encoded: true,
+    });
+    return;
+  }
+
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
