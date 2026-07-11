@@ -90,6 +90,8 @@ test("records login and report workflow", async ({ page }) => {
   await expect(page.getByText("Custody day color cleared.")).toBeVisible();
   await expect(paintedDay.getByText("Parent C", { exact: true })).toHaveCount(0);
   await page.getByLabel("Caregiver label").fill("Drag Parent");
+  await page.getByRole("button", { name: "Multi-day paint: Off" }).click();
+  await expect(page.getByRole("button", { name: "Multi-day paint: On" })).toHaveAttribute("aria-pressed", "true");
   const dragStartDay = page.getByRole("button", { name: `Edit calendar day ${calendarDay(9)}` });
   const dragMiddleDay = page.getByRole("button", { name: `Edit calendar day ${calendarDay(10)}` });
   const dragEndDay = page.getByRole("button", { name: `Edit calendar day ${calendarDay(11)}` });
@@ -247,6 +249,127 @@ test("records login and report workflow", async ({ page }) => {
   }
 });
 
+test("mobile child support records are visible, editable, and deletable", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/records");
+  await page.getByRole("button", { name: "Enter records workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Child Support", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Child Support", exact: true })).toBeVisible();
+
+  const orderForm = page.locator("#child-support-order-form");
+  await orderForm.getByLabel("Order nickname").fill("Mobile support order");
+  await orderForm.getByLabel("Ordered amount").fill("675");
+  await orderForm.getByRole("button", { name: "Save support order" }).click();
+
+  await expect(page.getByRole("status")).toContainText("Child support order saved");
+  const ordersPanel = page.getByTestId("mobile-support-orders");
+  await expect(ordersPanel).toContainText("Mobile support order");
+  await expect(ordersPanel).toContainText("$675.00");
+
+  await ordersPanel.getByRole("button", { name: "Edit support order Mobile support order" }).click();
+  await expect(page.getByRole("heading", { name: "Edit child support order" })).toBeVisible();
+  await orderForm.getByLabel("Ordered amount").fill("700");
+  await orderForm.getByRole("button", { name: "Update support order" }).click();
+  await expect(page.getByRole("status")).toContainText("Child support order updated");
+  await expect(ordersPanel).toContainText("$700.00");
+
+  const paymentForm = page.locator("#child-support-payment-form");
+  await paymentForm.locator('select[name="childSupportOrderId"]').selectOption({ label: "Mobile support order" });
+  await paymentForm.getByLabel("Amount due").fill("700");
+  await paymentForm.getByLabel("Amount paid").fill("350");
+  await paymentForm.getByLabel("Status").selectOption("partial");
+  await paymentForm.getByRole("button", { name: "Save payment record" }).click();
+
+  const paymentsPanel = page.getByTestId("mobile-support-payments");
+  await expect(paymentsPanel).toContainText("$350.00");
+  await paymentsPanel.getByRole("button", { name: "Edit payment record 2026-06-01 for $700.00" }).click();
+  await paymentForm.getByLabel("Amount paid").fill("700");
+  await paymentForm.getByLabel("Status").selectOption("paid");
+  await paymentForm.getByRole("button", { name: "Update payment record" }).click();
+  await expect(paymentsPanel).toContainText("$700.00");
+
+  await paymentsPanel.getByRole("button", { name: "Delete payment record 2026-06-01 for $700.00" }).click();
+  await expect(page.getByRole("status")).toContainText("Payment record deleted");
+  await ordersPanel.getByRole("button", { name: "Delete support order Mobile support order" }).click();
+  await expect(page.getByRole("status")).toContainText("Child support order deleted");
+  await expect(ordersPanel).not.toContainText("Mobile support order");
+});
+
+test("mobile quick issue saves directly to editable report notes", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/records");
+  await page.getByRole("button", { name: "Enter records workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  const quickIssueForm = page.getByTestId("quick-issue-form");
+  const issueText = "Missed call issue for attorney follow-up.";
+  await quickIssueForm.getByLabel("Issue type").selectOption("communication");
+  await quickIssueForm.getByLabel("What happened or needs attention?").fill(issueText);
+  await quickIssueForm.getByRole("button", { name: "Save issue" }).click();
+  await expect(page.getByRole("status")).toContainText(
+    "Issue saved to Notes and included in reports for attorney review"
+  );
+
+  await page.getByRole("button", { name: "Notes", exact: true }).click();
+  await expect(page.getByText(issueText, { exact: true })).toHaveCount(2);
+  await page.getByRole("button", { name: `Edit note ${issueText}` }).click();
+  const noteForm = page.locator("#date-note-form");
+  await noteForm.getByLabel("Title").fill("Updated attorney follow-up issue");
+  await noteForm.getByRole("button", { name: "Update note" }).click();
+  await expect(page.getByText("Updated attorney follow-up issue", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Delete note Updated attorney follow-up issue" }).click();
+  await expect(page.getByRole("status")).toContainText("Date based note deleted");
+});
+
+test("saved information records expose working edit and delete controls", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto("/records");
+  await page.getByRole("button", { name: "Enter records workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Exchanges", exact: true }).click();
+  await page.getByRole("button", { name: "Edit exchange rule Friday evening exchange" }).click();
+  const ruleForm = page.locator("#exchange-rule-form");
+  await ruleForm.getByLabel("Rule name").fill("Updated Friday exchange");
+  await ruleForm.getByRole("button", { name: "Update exchange rule" }).click();
+  await expect(page.getByRole("status")).toContainText("Exchange rule updated");
+  await expect(page.getByText("Updated Friday exchange", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Notes", exact: true }).click();
+  await page.getByRole("button", { name: "Edit note School pickup note" }).click();
+  const noteForm = page.locator("#date-note-form");
+  await noteForm.getByLabel("Title").fill("Updated school pickup note");
+  await noteForm.getByRole("button", { name: "Update note" }).click();
+  await expect(page.getByRole("status")).toContainText("Date based note updated");
+  await expect(page.getByText("Updated school pickup note", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Delete note Updated school pickup note" }).click();
+  await expect(page.getByRole("status")).toContainText("Date based note deleted");
+
+  await page.locator("nav").getByRole("button", { name: /^Files/ }).click();
+  await page.getByRole("button", { name: "Edit file information demo-payment-portal-screenshot.png" }).click();
+  const evidenceEditor = page.locator("form").filter({
+    has: page.getByRole("button", { name: "Update file information" }),
+  });
+  await evidenceEditor.getByLabel("Description").fill("Updated file description");
+  await evidenceEditor.getByRole("button", { name: "Update file information" }).click();
+  await expect(page.getByRole("status")).toContainText("File information updated");
+  await expect(page.getByText("Updated file description", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Expenses", exact: true }).click();
+  await page.getByRole("button", { name: "Edit expense School supply receipt" }).click();
+  const expenseForm = page.locator("#expense-record-form");
+  await expenseForm.getByLabel("Amount", { exact: true }).fill("99.50");
+  await expenseForm.getByRole("button", { name: "Update expense" }).click();
+  await expect(page.getByRole("status")).toContainText("Expense record updated");
+  await expect(page.getByText("$99.50", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Delete expense School supply receipt" }).click();
+  await expect(page.getByRole("status")).toContainText("Expense record deleted");
+});
+
 test("records account recovery and deletion paths are reachable", async ({ page }) => {
   await page.goto("/records?auth=recovery");
 
@@ -344,6 +467,38 @@ test("mobile workspace header stays compact and exposes its full controls", asyn
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
+test("a restored session never flashes the login screen", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "l2f.records.session.v1",
+      JSON.stringify({
+        userId: "user-demo-parent-a",
+        caseId: "case-demo-parenting-plan",
+        email: "demo@example.com",
+        authMode: "local",
+      })
+    );
+    (window as typeof window & { __sawRecordsSignIn?: boolean }).__sawRecordsSignIn = false;
+    const observer = new MutationObserver(() => {
+      const sawSignIn = Array.from(document.querySelectorAll("h1,h2")).some(
+        (element) => element.textContent?.trim() === "Sign in"
+      );
+      if (sawSignIn) {
+        (window as typeof window & { __sawRecordsSignIn?: boolean }).__sawRecordsSignIn = true;
+      }
+    });
+    observer.observe(document, { childList: true, subtree: true });
+  });
+
+  await page.goto("/records");
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => (window as typeof window & { __sawRecordsSignIn?: boolean }).__sawRecordsSignIn
+    )
+  ).toBe(false);
+});
+
 test("mobile calendar, policy menu, and timeline labels remain usable", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/records");
@@ -374,10 +529,12 @@ test("mobile calendar, policy menu, and timeline labels remain usable", async ({
       ),
     };
   });
-  expect(calendarMetrics.scrollWidth).toBeGreaterThan(calendarMetrics.clientWidth);
-  expect(calendarMetrics.dayWidth).toBeGreaterThanOrEqual(80);
-  expect(calendarMetrics.touchAction).toBe("pan-x");
+  expect(calendarMetrics.scrollWidth).toBeLessThanOrEqual(calendarMetrics.clientWidth + 1);
+  expect(calendarMetrics.dayWidth).toBeGreaterThanOrEqual(35);
+  expect(calendarMetrics.dayWidth).toBeLessThanOrEqual(50);
+  expect(calendarMetrics.touchAction).toBe("pan-y");
   expect(calendarMetrics.selectedDayVisible).toBe(true);
+  await expect(page.getByRole("button", { name: "Multi-day paint: Off" })).toHaveAttribute("aria-pressed", "false");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 
   const policyMenu = page.getByTestId("mobile-policy-menu");

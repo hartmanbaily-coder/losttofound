@@ -347,6 +347,7 @@ export default function RecordsApp() {
     recordsStorageMode,
   } = useRecordsStore();
   const [session, setSession] = useState<Session | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const [mfaResumeRequired, setMfaResumeRequired] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("Dashboard");
   const [selectedCaseId, setSelectedCaseId] = useState(demoCaseId);
@@ -393,16 +394,20 @@ export default function RecordsApp() {
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       async function loadSession() {
-        const state = await readRecordsSession().catch(() => ({ status: "signed_out" as const }));
-        if (state.status === "mfa_required") {
-          setMfaResumeRequired(true);
-          return;
-        }
-        if (state.status === "signed_in") {
-          setMfaResumeRequired(false);
-          setSession(state.session);
-          setSelectedCaseId(state.session.caseId);
-          setSelectedDay(formatLocalDate(new Date(), defaultRecordsTimezone));
+        try {
+          const state = await readRecordsSession().catch(() => ({ status: "signed_out" as const }));
+          if (state.status === "mfa_required") {
+            setMfaResumeRequired(true);
+            return;
+          }
+          if (state.status === "signed_in") {
+            setMfaResumeRequired(false);
+            setSession(state.session);
+            setSelectedCaseId(state.session.caseId);
+            setSelectedDay(formatLocalDate(new Date(), defaultRecordsTimezone));
+          }
+        } finally {
+          setSessionChecked(true);
         }
       }
 
@@ -571,7 +576,11 @@ export default function RecordsApp() {
     setSession(null);
   }
 
-  if (!hydrated || !session) {
+  if (!sessionChecked || (session && !hydrated)) {
+    return <RecordsSessionLoadingScreen />;
+  }
+
+  if (!session) {
     return (
       <LoginScreen
         appReady={hydrated}
@@ -659,7 +668,11 @@ export default function RecordsApp() {
 
           <div className="space-y-5 px-4 py-5 lg:px-6">
             {toast && (
-              <div className="rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-900">
+              <div
+                role="status"
+                aria-live="polite"
+                className="fixed bottom-[calc(env(safe-area-inset-bottom)+1rem)] left-4 right-4 z-50 rounded-md border border-teal-200 bg-teal-50 px-4 py-3 text-sm font-medium text-teal-900 shadow-lg sm:left-auto sm:max-w-md"
+              >
                 {toast}
               </div>
             )}
@@ -806,6 +819,34 @@ export default function RecordsApp() {
         </main>
       </div>
     </div>
+  );
+}
+
+function RecordsSessionLoadingScreen() {
+  return (
+    <main
+      data-testid="records-session-loading"
+      className="grid min-h-screen place-items-center bg-[#f4f7f6] px-6 text-slate-950"
+    >
+      <div className="grid justify-items-center gap-4 text-center">
+        <Image
+          src="/app-icons/icon-192.png"
+          alt=""
+          width={64}
+          height={64}
+          className="h-16 w-16 rounded-xl bg-slate-950 shadow-sm"
+          priority
+        />
+        <div>
+          <p className="text-lg font-semibold">Opening your records</p>
+          <p className="mt-1 text-sm text-slate-500">Restoring your secure session…</p>
+        </div>
+        <span
+          aria-label="Loading records workspace"
+          className="h-7 w-7 animate-spin rounded-full border-2 border-slate-300 border-t-teal-700"
+        />
+      </div>
+    </main>
   );
 }
 
@@ -1549,11 +1590,11 @@ function CalendarView({
   const [paintColor, setPaintColor] = useState<(typeof custodyDayColors)[number] | string>(
     custodyDayColors[0]
   );
+  const [multiDayPaintEnabled, setMultiDayPaintEnabled] = useState(false);
   const [isPainting, setIsPainting] = useState(false);
   const [paintDraftDates, setPaintDraftDates] = useState<Set<string>>(() => new Set());
   const [paintSelectionDates, setPaintSelectionDates] = useState<Set<string>>(() => new Set());
   const [optimisticPaintAssignments, setOptimisticPaintAssignments] = useState<CustodyDayAssignment[]>([]);
-  const calendarScrollRef = useRef<HTMLDivElement>(null);
   const paintingRef = useRef(false);
   const paintAnchorDateRef = useRef<string | null>(null);
   const activePaintPointerIdRef = useRef<number | null>(null);
@@ -1570,22 +1611,6 @@ function CalendarView({
   const optimisticCustodyDayMap = buildCustodyDayMap(optimisticPaintAssignments, monthRange);
   const selectedAssignment = optimisticCustodyDayMap.get(selectedDay) || custodyDayMap.get(selectedDay);
   const dayEvents = eventsByDate.get(selectedDay) || [];
-
-  useEffect(() => {
-    const scroller = calendarScrollRef.current;
-    if (!scroller || scroller.scrollWidth <= scroller.clientWidth) return;
-    const selectedCell = scroller.querySelector<HTMLElement>(`[data-calendar-day="${selectedDay}"]`);
-    if (!selectedCell) return;
-
-    const scrollerRect = scroller.getBoundingClientRect();
-    const selectedRect = selectedCell.getBoundingClientRect();
-    const centeredLeft =
-      scroller.scrollLeft +
-      selectedRect.left -
-      scrollerRect.left -
-      (scroller.clientWidth - selectedRect.width) / 2;
-    scroller.scrollTo({ left: Math.max(0, centeredLeft) });
-  }, [monthKey, selectedDay]);
 
   function showCalendarMonth(nextMonthKey: string) {
     const nextRange = getMonthBounds(nextMonthKey, timezone);
@@ -1810,6 +1835,7 @@ function CalendarView({
   }, [extendPaint, finishPaint]);
 
   function beginPaint(day: string, event: ReactPointerEvent<HTMLButtonElement>) {
+    if (!multiDayPaintEnabled) return;
     event.preventDefault();
     suppressNextCalendarClickRef.current = false;
     paintingRef.current = true;
@@ -1820,6 +1846,13 @@ function CalendarView({
     setSelectedDay(day);
     setPaintDraft(new Set([day]));
     setPaintSelection(new Set([day]));
+  }
+
+  function toggleMultiDayPaint() {
+    setMultiDayPaintEnabled((enabled) => {
+      if (enabled) clearPaintSelection();
+      return !enabled;
+    });
   }
 
   function handleCalendarDayClick(day: string) {
@@ -2061,6 +2094,14 @@ function CalendarView({
                 </Field>
               </div>
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  aria-pressed={multiDayPaintEnabled}
+                  onClick={toggleMultiDayPaint}
+                  className={multiDayPaintEnabled ? "btn-primary h-9 px-3 text-xs" : "btn-secondary h-9 px-3 text-xs"}
+                >
+                  Multi-day paint: {multiDayPaintEnabled ? "On" : "Off"}
+                </button>
                 {custodyDayColors.map((color) => (
                   <button
                     key={color}
@@ -2100,6 +2141,9 @@ function CalendarView({
                   </span>
                 )}
               </div>
+              <p className="text-xs leading-5 text-slate-500 2xl:col-span-2">
+                Tap a day to view or edit it. Turn on multi-day paint only when you want to drag across several days.
+              </p>
             </div>
             <div className="mb-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
               {Array.from(
@@ -2130,21 +2174,21 @@ function CalendarView({
               </span>
             </div>
             <div
-              ref={calendarScrollRef}
               data-testid="calendar-scroll"
               role="region"
               aria-label="Monthly calendar grid"
-              className="-mx-2 overflow-x-auto px-2 pb-2 [overscroll-behavior-inline:contain]"
+              className="w-full min-w-0 overflow-hidden"
             >
-              <div className="min-w-[42rem] sm:min-w-0">
-                <div className="grid grid-cols-7 gap-2 text-xs font-semibold text-slate-500">
+              <div className="w-full min-w-0">
+                <div className="grid grid-cols-7 gap-px text-center text-[10px] font-semibold text-slate-500 sm:gap-2 sm:text-left sm:text-xs">
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                    <div key={day} className="px-2 py-1">
-                      {day}
+                    <div key={day} className="min-w-0 px-0.5 py-1 sm:px-2">
+                      <span className="sm:hidden">{day.slice(0, 1)}</span>
+                      <span className="hidden sm:inline">{day}</span>
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 grid grid-cols-7 gap-2">
+                <div className="mt-1 grid w-full min-w-0 grid-cols-7 gap-px sm:mt-2 sm:gap-2">
                   {monthDays.map((day, index) => {
                     const dayEventsForCell = day ? eventsByDate.get(day) || [] : [];
                     const recordEventsForCell = dayEventsForCell.filter(
@@ -2191,7 +2235,7 @@ function CalendarView({
                               }
                             : undefined
                         }
-                        className={`relative min-h-28 touch-pan-x overflow-hidden select-none rounded-md border p-2 text-left transition sm:touch-none ${
+                        className={`relative min-h-16 min-w-0 overflow-hidden select-none rounded-sm border p-1 text-left transition sm:min-h-28 sm:rounded-md sm:p-2 ${multiDayPaintEnabled ? "touch-none" : "touch-pan-y"} ${
                           day === selectedDay
                             ? "ring-2 ring-teal-500 ring-offset-1"
                             : "border-slate-200 bg-white hover:border-teal-300"
@@ -2211,13 +2255,14 @@ function CalendarView({
                             ))}
                             <div className="relative z-10">
                               <div className="flex items-start justify-between gap-1">
-                                <p className="text-sm font-semibold text-slate-900">
+                                <p className="text-xs font-semibold text-slate-900 sm:text-sm">
                                   {Number(day.slice(-2))}
                                 </p>
                                 <div className="flex flex-wrap justify-end gap-1">
                                   {isToday && (
-                                    <span className="rounded bg-teal-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                                      Today
+                                    <span className="rounded bg-teal-700 px-1 py-0.5 text-[8px] font-semibold text-white sm:px-1.5 sm:text-[10px]">
+                                      <span className="sm:hidden">T</span>
+                                      <span className="hidden sm:inline">Today</span>
                                     </span>
                                   )}
                                   {assignment?.exchangeTime && (
@@ -2229,13 +2274,13 @@ function CalendarView({
                               </div>
                               {visibleColor && visibleLabel && (
                                 <div
-                                  className="mt-2 truncate rounded px-2 py-1 text-xs font-semibold text-white"
+                                  className="mt-1 truncate rounded px-1 py-0.5 text-[8px] font-semibold text-white sm:mt-2 sm:px-2 sm:py-1 sm:text-xs"
                                   style={{ backgroundColor: visibleColor }}
                                 >
                                   {visibleLabel}
                                 </div>
                               )}
-                              <div className="mt-2 space-y-1">
+                              <div className="mt-1 hidden space-y-1 sm:mt-2 sm:block">
                                 {recordEventsForCell.slice(0, 2).map((event) => (
                                   <span
                                     key={event.id}
@@ -2250,6 +2295,11 @@ function CalendarView({
                                   </span>
                                 )}
                               </div>
+                              {recordEventsForCell.length > 0 && (
+                                <span className="mt-1 inline-flex min-w-4 items-center justify-center rounded-full bg-slate-700 px-1 text-[8px] font-semibold text-white sm:hidden">
+                                  {recordEventsForCell.length}
+                                </span>
+                              )}
                             </div>
                           </>
                         )}
@@ -2564,12 +2614,14 @@ function ExchangesView({
   onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
+  const [editingRuleId, setEditingRuleId] = useState("");
   const [editingExchangeId, setEditingExchangeId] = useState("");
+  const editingRule = selected.exchangeRules.find((rule) => rule.id === editingRuleId) || null;
   const editingExchange = selected.exchangeLogs.find((log) => log.id === editingExchangeId) || null;
   const userRoleLabel = selected.matter?.userRoleLabel || "Me";
   const otherParentLabel = selected.matter?.otherParentLabel || "Other parent";
 
-  function addRule(event: FormEvent<HTMLFormElement>) {
+  function saveRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const parsed = exchangeRuleSchema.safeParse({
@@ -2584,34 +2636,45 @@ function ExchangesView({
     });
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the exchange rule form.");
 
+    const now = nowIso();
+    const ruleId = editingRule?.id || createId("rule");
     updateDataset((current) =>
       withAudit(
         {
           ...current,
-          exchangeRules: [
-            {
-              id: createId("rule"),
-              caseId,
-              userId,
-              createdAt: nowIso(),
-              updatedAt: nowIso(),
-              ...emptyToUndefined(parsed.data),
-            },
-            ...current.exchangeRules,
-          ],
+          exchangeRules: editingRule
+            ? current.exchangeRules.map((rule) =>
+                rule.id === editingRule.id && rule.userId === userId && rule.caseId === caseId
+                  ? { ...rule, ...emptyToUndefined(parsed.data), updatedAt: now }
+                  : rule
+              )
+            : [
+                {
+                  id: ruleId,
+                  caseId,
+                  userId,
+                  createdAt: now,
+                  updatedAt: now,
+                  ...emptyToUndefined(parsed.data),
+                },
+                ...current.exchangeRules,
+              ],
         },
         {
           userId,
           caseId,
-          action: "created",
+          action: editingRule ? "updated" : "created",
           entityType: "custodyExchangeRule",
-          entityId: "new-rule",
-          metadataSummary: "Exchange rule created without court detail in audit metadata.",
+          entityId: ruleId,
+          metadataSummary: editingRule
+            ? "Exchange rule updated without court detail in audit metadata."
+            : "Exchange rule created without court detail in audit metadata.",
         }
       )
     );
+    setEditingRuleId("");
     event.currentTarget.reset();
-    flash("Exchange rule saved.");
+    flash(editingRule ? "Exchange rule updated." : "Exchange rule saved.");
   }
 
   function addExchangeLog(event: FormEvent<HTMLFormElement>) {
@@ -2716,6 +2779,7 @@ function ExchangesView({
   }
 
   function deleteExchangeRule(ruleId: string) {
+    if (editingRuleId === ruleId) setEditingRuleId("");
     updateDataset((current) =>
       withAudit(
         {
@@ -2773,14 +2837,22 @@ function ExchangesView({
   return (
     <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
       <div className="space-y-4">
-        <Panel title="Court ordered exchange expectation" action="Simple recurring rule">
-          <form onSubmit={addRule} className="grid gap-3">
+        <Panel
+          title={editingRule ? "Edit exchange expectation" : "Court ordered exchange expectation"}
+          action={editingRule ? "Editing saved rule" : "Simple recurring rule"}
+        >
+          <form
+            id="exchange-rule-form"
+            key={editingRule?.id || "new-exchange-rule"}
+            onSubmit={saveRule}
+            className="grid gap-3"
+          >
             <Field label="Rule name">
-              <input name="ruleName" className="input" defaultValue="Friday evening exchange" />
+              <input name="ruleName" className="input" defaultValue={editingRule?.ruleName || "Friday evening exchange"} />
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Day">
-                <select name="dayOfWeek" className="input" defaultValue="5">
+                <select name="dayOfWeek" className="input" defaultValue={String(editingRule?.dayOfWeek ?? 5)}>
                   <option value="0">Sunday</option>
                   <option value="1">Monday</option>
                   <option value="2">Tuesday</option>
@@ -2791,31 +2863,42 @@ function ExchangesView({
                 </select>
               </Field>
               <Field label="Ordered time">
-                <input name="orderedExchangeTime" type="time" className="input" defaultValue="18:00" />
+                <input name="orderedExchangeTime" type="time" className="input" defaultValue={editingRule?.orderedExchangeTime || "18:00"} />
               </Field>
             </div>
             <Field label="Direction">
-              <select name="direction" className="input" defaultValue="other_parent_to_me">
+              <select name="direction" className="input" defaultValue={editingRule?.direction || "other_parent_to_me"}>
                 <option value="other_parent_to_me">{otherParentLabel} to {userRoleLabel}</option>
                 <option value="me_to_other_parent">{userRoleLabel} to {otherParentLabel}</option>
               </select>
             </Field>
             <Field label="Location">
-              <input name="location" className="input" defaultValue="Community center entrance" />
+              <input name="location" className="input" defaultValue={editingRule?.location || "Community center entrance"} />
             </Field>
             <Field label="Effective start">
-              <input name="effectiveStartDate" type="date" className="input" defaultValue="2026-06-01" />
+              <input name="effectiveStartDate" type="date" className="input" defaultValue={editingRule?.effectiveStartDate || "2026-06-01"} />
+            </Field>
+            <Field label="Effective end">
+              <input name="effectiveEndDate" type="date" className="input" defaultValue={editingRule?.effectiveEndDate || ""} />
             </Field>
             <Field label="Order provision notes">
               <textarea
                 name="orderProvisionNotes"
                 className="input min-h-20"
+                defaultValue={editingRule?.orderProvisionNotes || ""}
                 placeholder="What the order says, without legal conclusions."
               />
             </Field>
-            <button className="btn-primary" type="submit">
-              Save exchange rule
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn-primary" type="submit">
+                {editingRule ? "Update exchange rule" : "Save exchange rule"}
+              </button>
+              {editingRule && (
+                <button type="button" className="btn-secondary" onClick={() => setEditingRuleId("")}>
+                  Cancel editing
+                </button>
+              )}
+            </div>
           </form>
         </Panel>
 
@@ -3060,12 +3143,22 @@ function ExchangesView({
               rule.direction === "other_parent_to_me"
                 ? `${otherParentLabel} to ${userRoleLabel}`
                 : `${userRoleLabel} to ${otherParentLabel}`,
-              <DeleteButton
-                key={rule.id}
-                label="Delete"
-                ariaLabel={`Delete exchange rule ${rule.ruleName}`}
-                onClick={() => deleteExchangeRule(rule.id)}
-              />,
+              <div key={rule.id} className="flex flex-wrap gap-2">
+                <EditButton
+                  ariaLabel={`Edit exchange rule ${rule.ruleName}`}
+                  onClick={() => {
+                    setEditingRuleId(rule.id);
+                    window.requestAnimationFrame(() =>
+                      document.getElementById("exchange-rule-form")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                    );
+                  }}
+                />
+                <DeleteButton
+                  label="Delete"
+                  ariaLabel={`Delete exchange rule ${rule.ruleName}`}
+                  onClick={() => deleteExchangeRule(rule.id)}
+                />
+              </div>,
             ])}
           />
         </Panel>
@@ -3150,8 +3243,10 @@ function NotesView({
   flash: (message: string) => void;
 }) {
   const [filter, setFilter] = useState("all");
+  const [editingNoteId, setEditingNoteId] = useState("");
+  const editingNote = notes.find((note) => note.id === editingNoteId) || null;
 
-  function addNote(event: FormEvent<HTMLFormElement>) {
+  function saveNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const parsed = dateNoteSchema.safeParse({
@@ -3165,37 +3260,49 @@ function NotesView({
     });
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the note form.");
 
+    const now = nowIso();
+    const noteId = editingNote?.id || createId("note");
     updateDataset((current) =>
       withAudit(
         {
           ...current,
-          dateNotes: [
-            {
-              id: createId("note"),
-              userId,
-              caseId,
-              createdAt: nowIso(),
-              updatedAt: nowIso(),
-              ...emptyToUndefined(parsed.data),
-            },
-            ...current.dateNotes,
-          ],
+          dateNotes: editingNote
+            ? current.dateNotes.map((note) =>
+                note.id === editingNote.id && note.userId === userId && note.caseId === caseId
+                  ? { ...note, ...emptyToUndefined(parsed.data), updatedAt: now }
+                  : note
+              )
+            : [
+                {
+                  id: noteId,
+                  userId,
+                  caseId,
+                  createdAt: now,
+                  updatedAt: now,
+                  ...emptyToUndefined(parsed.data),
+                },
+                ...current.dateNotes,
+              ],
         },
         {
           userId,
           caseId,
-          action: "created",
+          action: editingNote ? "updated" : "created",
           entityType: "dateNote",
-          entityId: "new-note",
-          metadataSummary: "Date note created without note body in audit metadata.",
+          entityId: noteId,
+          metadataSummary: editingNote
+            ? "Date note updated without note body in audit metadata."
+            : "Date note created without note body in audit metadata.",
         }
       )
     );
+    setEditingNoteId("");
     event.currentTarget.reset();
-      flash("Date based note saved.");
+    flash(editingNote ? "Date based note updated." : "Date based note saved.");
   }
 
   function deleteNote(noteId: string) {
+    if (editingNoteId === noteId) setEditingNoteId("");
     updateDataset((current) =>
       withAudit(
         {
@@ -3222,18 +3329,23 @@ function NotesView({
   return (
     <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
       <div className="space-y-4">
-        <Panel title="Add date based note" action="Factual wording">
-          <form onSubmit={addNote} className="grid gap-3">
+        <Panel title={editingNote ? "Edit date based note" : "Add date based note"} action="Factual wording">
+          <form
+            id="date-note-form"
+            key={editingNote?.id || "new-date-note"}
+            onSubmit={saveNote}
+            className="grid gap-3"
+          >
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Date">
-                <input name="noteDate" type="date" className="input" defaultValue="2026-06-10" />
+                <input name="noteDate" type="date" className="input" defaultValue={editingNote?.noteDate || "2026-06-10"} />
               </Field>
               <Field label="Time">
-                <input name="noteTime" type="time" className="input" />
+                <input name="noteTime" type="time" className="input" defaultValue={editingNote?.noteTime || ""} />
               </Field>
             </div>
             <Field label="Category">
-              <select name="category" className="input" defaultValue="exchange">
+              <select name="category" className="input" defaultValue={editingNote?.category || "exchange"}>
                 {[
                   "exchange",
                   "communication",
@@ -3255,21 +3367,28 @@ function NotesView({
               </select>
             </Field>
             <Field label="Title">
-              <input name="title" className="input" placeholder="Short factual title" />
+              <input name="title" className="input" defaultValue={editingNote?.title || ""} placeholder="Short factual title" />
             </Field>
             <Field label="What happened?">
-              <textarea name="body" className="input min-h-28" />
+              <textarea name="body" className="input min-h-28" defaultValue={editingNote?.body || ""} />
             </Field>
             <Field label="Tags">
-              <input name="tags" className="input" placeholder="school, exchange" />
+              <input name="tags" className="input" defaultValue={editingNote?.tags.join(", ") || ""} placeholder="school, exchange" />
             </Field>
             <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input name="includeInReports" type="checkbox" defaultChecked />
+              <input name="includeInReports" type="checkbox" defaultChecked={editingNote?.includeInReports ?? true} />
               Include this note in selected reports
             </label>
-            <button className="btn-primary" type="submit">
-              Save note
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn-primary" type="submit">
+                {editingNote ? "Update note" : "Save note"}
+              </button>
+              {editingNote && (
+                <button type="button" className="btn-secondary" onClick={() => setEditingNoteId("")}>
+                  Cancel editing
+                </button>
+              )}
+            </div>
           </form>
         </Panel>
 
@@ -3303,6 +3422,15 @@ function NotesView({
                 </div>
                 <div className="flex items-center gap-2">
                   <StatusPill label={note.includeInReports ? "report included" : "not selected"} />
+                  <EditButton
+                    ariaLabel={`Edit note ${note.title}`}
+                    onClick={() => {
+                      setEditingNoteId(note.id);
+                      window.requestAnimationFrame(() =>
+                        document.getElementById("date-note-form")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      );
+                    }}
+                  />
                   <DeleteButton
                     label="Delete"
                     ariaLabel={`Delete note ${note.title}`}
@@ -3573,6 +3701,7 @@ function ImportView({
   const [parsing, setParsing] = useState(false);
   const [assistBusy, setAssistBusy] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [quickIssueSaving, setQuickIssueSaving] = useState(false);
   const [documentSaving, setDocumentSaving] = useState(false);
   const [setupSchedulePreset, setSetupSchedulePreset] =
     useState<ParentingSchedulePresetId>("three_four_four_three_flip");
@@ -3591,6 +3720,70 @@ function ImportView({
 
     setDrafts((current) => [...nextDrafts, ...current]);
     flash(`${nextDrafts.length} draft record${nextDrafts.length === 1 ? "" : "s"} queued.`);
+  }
+
+  async function saveQuickIssue(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const body = text(formData, "body");
+    const requestedTitle = text(formData, "title");
+    const derivedTitle = body.trim().split(/\s+/).slice(0, 12).join(" ").slice(0, 120);
+    const parsed = dateNoteSchema.safeParse({
+      noteDate: text(formData, "noteDate"),
+      noteTime: text(formData, "noteTime"),
+      category: text(formData, "category"),
+      title: requestedTitle || (derivedTitle.length >= 2 ? derivedTitle : "Issue noted"),
+      body,
+      tags: Array.from(new Set(["quick issue", ...parseTags(text(formData, "tags"))])).slice(0, 12),
+      includeInReports: formData.get("includeInReports") === "on",
+    });
+    if (!parsed.success) {
+      flash(parsed.error.issues[0]?.message || "Add at least a short description of the issue.");
+      return;
+    }
+
+    const now = nowIso();
+    const noteId = createId("note");
+    setQuickIssueSaving(true);
+    try {
+      await updateDataset((current) =>
+        withAudit(
+          {
+            ...current,
+            dateNotes: [
+              {
+                id: noteId,
+                userId,
+                caseId,
+                createdAt: now,
+                updatedAt: now,
+                ...emptyToUndefined(parsed.data),
+              },
+              ...current.dateNotes,
+            ],
+          },
+          {
+            userId,
+            caseId,
+            action: "created",
+            entityType: "dateNote",
+            entityId: noteId,
+            metadataSummary: "Quick issue saved without issue details in audit metadata.",
+          }
+        )
+      );
+      form.reset();
+      flash(
+        parsed.data.includeInReports
+          ? "Issue saved to Notes and included in reports for attorney review."
+          : "Issue saved to Notes."
+      );
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Issue save failed.");
+    } finally {
+      setQuickIssueSaving(false);
+    }
   }
 
   async function reviewMessageArchive(event: FormEvent<HTMLFormElement>) {
@@ -4145,6 +4338,64 @@ function ImportView({
   return (
     <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
       <div className="space-y-4">
+        <Panel title="Quick issue" action="Save now, add detail later">
+          <div className="mb-3 rounded-md border border-teal-200 bg-teal-50 p-3 text-xs leading-5 text-teal-950">
+            Record an issue before you forget it. Only the issue description is required. It saves directly to Notes, where you can edit or delete it later.
+          </div>
+          <form data-testid="quick-issue-form" onSubmit={saveQuickIssue} className="grid gap-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Issue date">
+                <input name="noteDate" type="date" className="input" defaultValue={setupToday} />
+              </Field>
+              <Field label="Time (optional)">
+                <input name="noteTime" type="time" className="input" />
+              </Field>
+            </div>
+            <Field label="Issue type">
+              <select name="category" className="input" defaultValue="other">
+                {[
+                  "exchange",
+                  "communication",
+                  "school",
+                  "medical",
+                  "expense",
+                  "child_support",
+                  "safety",
+                  "schedule_change",
+                  "child_item",
+                  "attorney",
+                  "court",
+                  "other",
+                ].map((category) => (
+                  <option key={category} value={category}>
+                    {labelNoteCategory(category as NoteCategory)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Short title (optional)">
+              <input name="title" className="input" placeholder="A title will be created from the issue if left blank" />
+            </Field>
+            <Field label="What happened or needs attention?">
+              <textarea
+                name="body"
+                className="input min-h-28"
+                placeholder="Add as much or as little as you know right now."
+              />
+            </Field>
+            <Field label="Tags (optional)">
+              <input name="tags" className="input" placeholder="missed call, schedule, follow up" />
+            </Field>
+            <label className="flex items-start gap-2 rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700">
+              <input name="includeInReports" type="checkbox" defaultChecked />
+              <span>Include this issue in reports prepared for attorney review.</span>
+            </label>
+            <button className="btn-primary" type="submit" disabled={quickIssueSaving}>
+              {quickIssueSaving ? "Saving issue..." : "Save issue"}
+            </button>
+          </form>
+        </Panel>
+
         <Panel title="Message archive" action="CSV, TXT, HTML">
           <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
             AI review sends this import text to the configured server side model and returns editable drafts only.
@@ -4164,7 +4415,10 @@ function ImportView({
           </form>
         </Panel>
 
-        <Panel title="Paste notes" action="Dated entries">
+        <Panel title="Import dated notes" action="Review multiple entries">
+          <p className="mb-3 text-xs leading-5 text-slate-500">
+            Use this for a batch of existing notes. For one new concern, use Quick issue above.
+          </p>
           <form onSubmit={reviewPastedNotes} className="grid gap-3">
             <Field label="Source label">
               <input name="sourceLabel" className="input" defaultValue="Pasted notes" />
@@ -4607,6 +4861,7 @@ function EvidenceView({
 }) {
   const [uploading, setUploading] = useState(false);
   const [busyEvidenceId, setBusyEvidenceId] = useState("");
+  const [editingEvidenceId, setEditingEvidenceId] = useState("");
 
   async function uploadEvidenceFile(file: File, evidenceId: string) {
     const body = new FormData();
@@ -4838,7 +5093,43 @@ function EvidenceView({
     flash(`File marked ${evidenceReviewStatusLabels[reviewStatus].toLowerCase()}.`);
   }
 
+  function updateEvidenceMetadata(event: FormEvent<HTMLFormElement>, item: EvidenceItem) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const now = nowIso();
+    updateDataset((current) =>
+      withAudit(
+        {
+          ...current,
+          evidenceItems: current.evidenceItems.map((record) =>
+            record.id === item.id && record.userId === userId && record.caseId === caseId
+              ? {
+                  ...record,
+                  evidenceDate: text(formData, "evidenceDate") || undefined,
+                  description: text(formData, "description") || undefined,
+                  tags: parseTags(text(formData, "tags")),
+                  includeInReports: formData.get("includeInReports") === "on",
+                  updatedAt: now,
+                }
+              : record
+          ),
+        },
+        {
+          userId,
+          caseId,
+          action: "updated",
+          entityType: "evidenceItem",
+          entityId: item.id,
+          metadataSummary: "File metadata updated without file contents in audit metadata.",
+        }
+      )
+    );
+    setEditingEvidenceId("");
+    flash("File information updated.");
+  }
+
   async function deleteEvidence(item: EvidenceItem) {
+    if (editingEvidenceId === item.id) setEditingEvidenceId("");
     if (recordsStorageMode === "supabase" && item.storagePath) {
       setBusyEvidenceId(item.id);
       try {
@@ -4991,6 +5282,10 @@ function EvidenceView({
                       >
                         Print sheet
                       </button>
+                      <EditButton
+                        ariaLabel={`Edit file information ${item.originalFileName}`}
+                        onClick={() => setEditingEvidenceId(item.id)}
+                      />
                       <DeleteButton
                         label="Delete"
                         ariaLabel={`Delete file ${item.originalFileName}`}
@@ -5005,6 +5300,36 @@ function EvidenceView({
                     <StatusPill label={item.storagePath ? "private file" : "metadata only"} />
                     <StatusPill label={item.includeInReports ? "report included" : "not selected"} />
                   </div>
+                  {item.description && editingEvidenceId !== item.id ? (
+                    <p className="text-sm leading-6 text-slate-600">{item.description}</p>
+                  ) : null}
+                  {editingEvidenceId === item.id ? (
+                    <form
+                      key={`${item.id}-${item.updatedAt}`}
+                      onSubmit={(event) => updateEvidenceMetadata(event, item)}
+                      className="grid gap-3 rounded-md border border-teal-200 bg-teal-50/40 p-3"
+                    >
+                      <Field label="Record date">
+                        <input name="evidenceDate" type="date" className="input" defaultValue={item.evidenceDate || ""} />
+                      </Field>
+                      <Field label="Description">
+                        <textarea name="description" className="input min-h-20" defaultValue={item.description || ""} />
+                      </Field>
+                      <Field label="Tags">
+                        <input name="tags" className="input" defaultValue={item.tags.join(", ")} />
+                      </Field>
+                      <label className="flex items-center gap-2 text-sm text-slate-700">
+                        <input name="includeInReports" type="checkbox" defaultChecked={item.includeInReports} />
+                        Include in file index for selected reports
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="submit" className="btn-primary">Update file information</button>
+                        <button type="button" className="btn-secondary" onClick={() => setEditingEvidenceId("")}>
+                          Cancel editing
+                        </button>
+                      </div>
+                    </form>
+                  ) : null}
                   {item.reviewedAt || item.submittedAt ? (
                     <p className="text-xs text-slate-500">
                       {item.reviewedAt ? `Reviewed ${item.reviewedAt.slice(0, 10)}. ` : ""}
@@ -5045,9 +5370,13 @@ function ChildSupportView({
   onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
+  const [editingOrderId, setEditingOrderId] = useState("");
+  const [editingPaymentId, setEditingPaymentId] = useState("");
   const firstOrder = orders[0];
+  const editingOrder = orders.find((order) => order.id === editingOrderId) || null;
+  const editingPayment = payments.find((payment) => payment.id === editingPaymentId) || null;
 
-  function addOrder(event: FormEvent<HTMLFormElement>) {
+  function saveOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const parsed = childSupportOrderSchema.safeParse({
@@ -5057,6 +5386,7 @@ function ChildSupportView({
       paymentFrequency: text(formData, "paymentFrequency"),
       dueDayOrSchedule: text(formData, "dueDayOrSchedule"),
       effectiveStartDate: text(formData, "effectiveStartDate"),
+      effectiveEndDate: text(formData, "effectiveEndDate"),
       payerLabel: text(formData, "payerLabel"),
       recipientLabel: text(formData, "recipientLabel"),
       paymentMethodExpected: text(formData, "paymentMethodExpected"),
@@ -5065,37 +5395,48 @@ function ChildSupportView({
     });
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the support order form.");
 
+    const now = nowIso();
+    const orderId = editingOrder?.id || createId("support-order");
     updateDataset((current) =>
       withAudit(
         {
           ...current,
-          childSupportOrders: [
-            {
-              id: createId("support-order"),
-              caseId,
-              userId,
-              createdAt: nowIso(),
-              updatedAt: nowIso(),
-              ...emptyToUndefined(parsed.data),
-            },
-            ...current.childSupportOrders,
-          ],
+          childSupportOrders: editingOrder
+            ? current.childSupportOrders.map((order) =>
+                order.id === editingOrder.id && order.userId === userId && order.caseId === caseId
+                  ? { ...order, ...emptyToUndefined(parsed.data), updatedAt: now }
+                  : order
+              )
+            : [
+                {
+                  id: orderId,
+                  caseId,
+                  userId,
+                  createdAt: now,
+                  updatedAt: now,
+                  ...emptyToUndefined(parsed.data),
+                },
+                ...current.childSupportOrders,
+              ],
         },
         {
           userId,
           caseId,
-          action: "created",
+          action: editingOrder ? "updated" : "created",
           entityType: "childSupportOrder",
-          entityId: "new-support-order",
-          metadataSummary: "Child support order created without agency details in audit metadata.",
+          entityId: orderId,
+          metadataSummary: editingOrder
+            ? "Child support order updated without agency details in audit metadata."
+            : "Child support order created without agency details in audit metadata.",
         }
       )
     );
+    setEditingOrderId("");
     event.currentTarget.reset();
-    flash("Child support order saved.");
+    flash(editingOrder ? "Child support order updated." : "Child support order saved. It appears below.");
   }
 
-  function addPayment(event: FormEvent<HTMLFormElement>) {
+  function savePayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const parsed = childSupportPaymentSchema.safeParse({
@@ -5111,34 +5452,45 @@ function ChildSupportView({
     });
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the payment form.");
 
+    const now = nowIso();
+    const paymentId = editingPayment?.id || createId("support-payment");
     updateDataset((current) =>
       withAudit(
         {
           ...current,
-          childSupportPayments: [
-            {
-              id: createId("support-payment"),
-              caseId,
-              userId,
-              createdAt: nowIso(),
-              updatedAt: nowIso(),
-              ...emptyToUndefined(parsed.data),
-            },
-            ...current.childSupportPayments,
-          ],
+          childSupportPayments: editingPayment
+            ? current.childSupportPayments.map((payment) =>
+                payment.id === editingPayment.id && payment.userId === userId && payment.caseId === caseId
+                  ? { ...payment, ...emptyToUndefined(parsed.data), updatedAt: now }
+                  : payment
+              )
+            : [
+                {
+                  id: paymentId,
+                  caseId,
+                  userId,
+                  createdAt: now,
+                  updatedAt: now,
+                  ...emptyToUndefined(parsed.data),
+                },
+                ...current.childSupportPayments,
+              ],
         },
         {
           userId,
           caseId,
-          action: "created",
+          action: editingPayment ? "updated" : "created",
           entityType: "childSupportPayment",
-          entityId: "new-support-payment",
-          metadataSummary: "Payment record created without reference number in audit metadata.",
+          entityId: paymentId,
+          metadataSummary: editingPayment
+            ? "Payment record updated without reference number in audit metadata."
+            : "Payment record created without reference number in audit metadata.",
         }
       )
     );
+    setEditingPaymentId("");
     event.currentTarget.reset();
-    flash("Payment record saved.");
+    flash(editingPayment ? "Payment record updated." : "Payment record saved. It appears below.");
   }
 
   function deleteSupportOrder(orderId: string) {
@@ -5147,6 +5499,7 @@ function ChildSupportView({
       return;
     }
 
+    if (editingOrderId === orderId) setEditingOrderId("");
     updateDataset((current) =>
       withAudit(
         {
@@ -5169,6 +5522,7 @@ function ChildSupportView({
   }
 
   function deleteSupportPayment(paymentId: string) {
+    if (editingPaymentId === paymentId) setEditingPaymentId("");
     updateDataset((current) =>
       withAudit(
         {
@@ -5201,21 +5555,29 @@ function ChildSupportView({
 
       <section className="grid gap-4 xl:grid-cols-[420px_1fr]">
         <div className="space-y-4">
-          <Panel title="Child support order" action="Documentation only">
-            <form onSubmit={addOrder} className="grid gap-3">
+          <Panel
+            title={editingOrder ? "Edit child support order" : "Child support order"}
+            action={editingOrder ? "Editing saved record" : "Documentation only"}
+          >
+            <form
+              id="child-support-order-form"
+              key={editingOrder?.id || "new-support-order"}
+              onSubmit={saveOrder}
+              className="grid gap-3"
+            >
               <Field label="Order nickname">
-                <input name="orderNickname" className="input" defaultValue="Current support order" />
+                <input name="orderNickname" className="input" defaultValue={editingOrder?.orderNickname || "Current support order"} />
               </Field>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Ordered amount">
-                  <input name="orderedAmount" type="number" step="0.01" className="input" defaultValue="450" />
+                  <input name="orderedAmount" type="number" step="0.01" className="input" defaultValue={editingOrder?.orderedAmount ?? 450} />
                 </Field>
                 <Field label="Currency">
-                  <input name="currency" className="input" defaultValue="USD" />
+                  <input name="currency" className="input" defaultValue={editingOrder?.currency || "USD"} />
                 </Field>
               </div>
               <Field label="Payment frequency">
-                <select name="paymentFrequency" className="input" defaultValue="monthly">
+                <select name="paymentFrequency" className="input" defaultValue={editingOrder?.paymentFrequency || "monthly"}>
                   <option value="weekly">weekly</option>
                   <option value="biweekly">biweekly</option>
                   <option value="monthly">monthly</option>
@@ -5224,38 +5586,64 @@ function ChildSupportView({
                 </select>
               </Field>
               <Field label="Due day or schedule">
-                <input name="dueDayOrSchedule" className="input" defaultValue="1st day of each month" />
+                <input name="dueDayOrSchedule" className="input" defaultValue={editingOrder?.dueDayOrSchedule || "1st day of each month"} />
               </Field>
               <Field label="Effective start">
-                <input name="effectiveStartDate" type="date" className="input" defaultValue="2026-06-01" />
+                <input name="effectiveStartDate" type="date" className="input" defaultValue={editingOrder?.effectiveStartDate || "2026-06-01"} />
+              </Field>
+              <Field label="Effective end">
+                <input name="effectiveEndDate" type="date" className="input" defaultValue={editingOrder?.effectiveEndDate || ""} />
               </Field>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Payer label">
-                  <input name="payerLabel" className="input" defaultValue="Other Parent" />
+                  <input name="payerLabel" className="input" defaultValue={editingOrder?.payerLabel || "Other Parent"} />
                 </Field>
                 <Field label="Recipient label">
-                  <input name="recipientLabel" className="input" defaultValue="Me" />
+                  <input name="recipientLabel" className="input" defaultValue={editingOrder?.recipientLabel || "Me"} />
                 </Field>
               </div>
               <Field label="Expected method">
-                <input name="paymentMethodExpected" className="input" placeholder="State agency, wage withholding" />
+                <input name="paymentMethodExpected" className="input" defaultValue={editingOrder?.paymentMethodExpected || ""} placeholder="State agency, wage withholding" />
               </Field>
               <Field label="Agency or case number">
-                <input name="agencyOrCaseNumber" className="input" placeholder="Treat as sensitive" />
+                <input name="agencyOrCaseNumber" className="input" defaultValue={editingOrder?.agencyOrCaseNumber || ""} placeholder="Treat as sensitive" />
               </Field>
               <Field label="Notes">
-                <textarea name="notes" className="input min-h-20" />
+                <textarea name="notes" className="input min-h-20" defaultValue={editingOrder?.notes || ""} />
               </Field>
-              <button className="btn-primary" type="submit">
-                Save support order
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-primary" type="submit">
+                  {editingOrder ? "Update support order" : "Save support order"}
+                </button>
+                {editingOrder && (
+                  <button type="button" className="btn-secondary" onClick={() => setEditingOrderId("")}>
+                    Cancel editing
+                  </button>
+                )}
+              </div>
             </form>
           </Panel>
 
-          <Panel title="Log payment record" action="No payment processing">
-            <form onSubmit={addPayment} className="grid gap-3">
+          <SupportOrdersPanel
+            className="xl:hidden"
+            testId="mobile-support-orders"
+            orders={orders}
+            onEdit={(orderId) => setEditingOrderId(orderId)}
+            onDelete={deleteSupportOrder}
+          />
+
+          <Panel
+            title={editingPayment ? "Edit payment record" : "Log payment record"}
+            action={editingPayment ? "Editing saved record" : "No payment processing"}
+          >
+            <form
+              id="child-support-payment-form"
+              key={editingPayment?.id || `new-support-payment-${firstOrder?.id || "none"}`}
+              onSubmit={savePayment}
+              className="grid gap-3"
+            >
               <Field label="Order">
-                <select name="childSupportOrderId" className="input" defaultValue={firstOrder?.id}>
+                <select name="childSupportOrderId" className="input" defaultValue={editingPayment?.childSupportOrderId || firstOrder?.id}>
                   {orders.map((order) => (
                     <option key={order.id} value={order.id}>
                       {order.orderNickname}
@@ -5265,20 +5653,20 @@ function ChildSupportView({
               </Field>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Due date">
-                  <input name="dueDate" type="date" className="input" defaultValue="2026-06-01" />
+                  <input name="dueDate" type="date" className="input" defaultValue={editingPayment?.dueDate || "2026-06-01"} />
                 </Field>
                 <Field label="Payment date">
-                  <input name="paymentDate" type="date" className="input" />
+                  <input name="paymentDate" type="date" className="input" defaultValue={editingPayment?.paymentDate || ""} />
                 </Field>
                 <Field label="Amount due">
-                  <input name="amountDue" type="number" step="0.01" className="input" defaultValue={firstOrder?.orderedAmount || 0} />
+                  <input name="amountDue" type="number" step="0.01" className="input" defaultValue={editingPayment?.amountDue ?? firstOrder?.orderedAmount ?? 0} />
                 </Field>
                 <Field label="Amount paid">
-                  <input name="amountPaid" type="number" step="0.01" className="input" defaultValue="0" />
+                  <input name="amountPaid" type="number" step="0.01" className="input" defaultValue={editingPayment?.amountPaid ?? 0} />
                 </Field>
               </div>
               <Field label="Status">
-                <select name="paymentStatus" className="input" defaultValue="unpaid">
+                <select name="paymentStatus" className="input" defaultValue={editingPayment?.paymentStatus || "unpaid"}>
                   {paymentStatuses.map((status) => (
                     <option key={status} value={status}>
                       {labelPaymentStatus(status)}
@@ -5287,7 +5675,7 @@ function ChildSupportView({
                 </select>
               </Field>
               <Field label="Payment method">
-                <select name="paymentMethod" className="input" defaultValue="unknown">
+                <select name="paymentMethod" className="input" defaultValue={editingPayment?.paymentMethod || "unknown"}>
                   {[
                     "state_agency",
                     "wage_withholding",
@@ -5306,63 +5694,152 @@ function ChildSupportView({
                 </select>
               </Field>
               <Field label="Reference number">
-                <input name="referenceNumber" className="input" placeholder="Do not enter full bank/card numbers" />
+                <input name="referenceNumber" className="input" defaultValue={editingPayment?.referenceNumber || ""} placeholder="Do not enter full bank/card numbers" />
               </Field>
               <Field label="Notes">
-                <textarea name="notes" className="input min-h-20" />
+                <textarea name="notes" className="input min-h-20" defaultValue={editingPayment?.notes || ""} />
               </Field>
-              <button className="btn-primary" type="submit">
-                Save payment record
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-primary" type="submit" disabled={orders.length === 0}>
+                  {editingPayment ? "Update payment record" : "Save payment record"}
+                </button>
+                {editingPayment && (
+                  <button type="button" className="btn-secondary" onClick={() => setEditingPaymentId("")}>
+                    Cancel editing
+                  </button>
+                )}
+              </div>
             </form>
           </Panel>
+
+          <SupportPaymentsPanel
+            className="xl:hidden"
+            testId="mobile-support-payments"
+            payments={payments}
+            onEdit={(paymentId) => setEditingPaymentId(paymentId)}
+            onDelete={deleteSupportPayment}
+          />
         </div>
 
         <div className="space-y-4">
           <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
 
-          <Panel title="Support orders" action={`${orders.length} saved`}>
-            <Table
-              headers={["Order", "Amount", "Frequency", "Payer", "Recipient", "Action"]}
-              rows={orders.map((order) => [
-                order.orderNickname,
-                formatMoney(order.orderedAmount, order.currency),
-                order.paymentFrequency.replaceAll("_", " "),
-                order.payerLabel,
-                order.recipientLabel,
-                <DeleteButton
-                  key={order.id}
-                  label="Delete"
-                  ariaLabel={`Delete support order ${order.orderNickname}`}
-                  onClick={() => deleteSupportOrder(order.id)}
-                />,
-              ])}
-            />
-          </Panel>
+          <SupportOrdersPanel
+            className="hidden xl:block"
+            orders={orders}
+            onEdit={(orderId) => setEditingOrderId(orderId)}
+            onDelete={deleteSupportOrder}
+          />
 
           <Panel title="Payment history by month" action="Due vs paid">
             <SupportTrendLine rows={supportRows} />
           </Panel>
-          <Panel title="Payment records" action={`${payments.length} records`}>
-            <Table
-              headers={["Due date", "Due", "Paid", "Payment date", "Status", "Action"]}
-              rows={payments.map((payment) => [
-                payment.dueDate,
-                formatMoney(payment.amountDue),
-                formatMoney(payment.amountPaid),
-                payment.paymentDate || "",
-                <StatusPill key={payment.id} label={labelPaymentStatus(payment.paymentStatus)} />,
-                <DeleteButton
-                  key={payment.id}
-                  label="Delete"
-                  ariaLabel={`Delete payment record ${payment.dueDate}`}
-                  onClick={() => deleteSupportPayment(payment.id)}
-                />,
-              ])}
-            />
-          </Panel>
+          <SupportPaymentsPanel
+            className="hidden xl:block"
+            payments={payments}
+            onEdit={(paymentId) => setEditingPaymentId(paymentId)}
+            onDelete={deleteSupportPayment}
+          />
         </div>
       </section>
+    </div>
+  );
+}
+
+function SupportOrdersPanel({
+  orders,
+  onEdit,
+  onDelete,
+  className = "",
+  testId,
+}: {
+  orders: RecordsDataset["childSupportOrders"];
+  onEdit: (orderId: string) => void;
+  onDelete: (orderId: string) => void;
+  className?: string;
+  testId?: string;
+}) {
+  function editOrder(orderId: string) {
+    onEdit(orderId);
+    window.requestAnimationFrame(() =>
+      document.getElementById("child-support-order-form")?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
+  }
+
+  return (
+    <div className={className} data-testid={testId}>
+    <Panel title="Support orders" action={`${orders.length} saved`}>
+      <Table
+        headers={["Order", "Amount", "Frequency", "Payer", "Recipient", "Actions"]}
+        rows={orders.map((order) => [
+          order.orderNickname,
+          formatMoney(order.orderedAmount, order.currency),
+          order.paymentFrequency.replaceAll("_", " "),
+          order.payerLabel,
+          order.recipientLabel,
+          <div key={order.id} className="flex flex-wrap gap-2">
+            <EditButton
+              ariaLabel={`Edit support order ${order.orderNickname}`}
+              onClick={() => editOrder(order.id)}
+            />
+            <DeleteButton
+              label="Delete"
+              ariaLabel={`Delete support order ${order.orderNickname}`}
+              onClick={() => onDelete(order.id)}
+            />
+          </div>,
+        ])}
+      />
+    </Panel>
+    </div>
+  );
+}
+
+function SupportPaymentsPanel({
+  payments,
+  onEdit,
+  onDelete,
+  className = "",
+  testId,
+}: {
+  payments: RecordsDataset["childSupportPayments"];
+  onEdit: (paymentId: string) => void;
+  onDelete: (paymentId: string) => void;
+  className?: string;
+  testId?: string;
+}) {
+  function editPayment(paymentId: string) {
+    onEdit(paymentId);
+    window.requestAnimationFrame(() =>
+      document.getElementById("child-support-payment-form")?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
+  }
+
+  return (
+    <div className={className} data-testid={testId}>
+    <Panel title="Payment records" action={`${payments.length} records`}>
+      <Table
+        headers={["Due date", "Due", "Paid", "Payment date", "Status", "Actions"]}
+        rows={payments.map((payment) => [
+          payment.dueDate,
+          formatMoney(payment.amountDue),
+          formatMoney(payment.amountPaid),
+          payment.paymentDate || "",
+          <StatusPill key={payment.id} label={labelPaymentStatus(payment.paymentStatus)} />,
+          <div key={payment.id} className="flex flex-wrap gap-2">
+            <EditButton
+              ariaLabel={`Edit payment record ${payment.dueDate} for ${formatMoney(payment.amountDue)}`}
+              onClick={() => editPayment(payment.id)}
+            />
+            <DeleteButton
+              label="Delete"
+              ariaLabel={`Delete payment record ${payment.dueDate} for ${formatMoney(payment.amountDue)}`}
+              onClick={() => onDelete(payment.id)}
+            />
+          </div>,
+        ])}
+      />
+    </Panel>
     </div>
   );
 }
@@ -5386,7 +5863,10 @@ function ExpensesView({
   onExportSection: (packet: SectionExportPacket, format: SectionExportFormat) => void;
   flash: (message: string) => void;
 }) {
-  function addExpense(event: FormEvent<HTMLFormElement>) {
+  const [editingExpenseId, setEditingExpenseId] = useState("");
+  const editingExpense = expenses.find((expense) => expense.id === editingExpenseId) || null;
+
+  function saveExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const parsed = expenseItemSchema.safeParse({
@@ -5405,37 +5885,49 @@ function ExpensesView({
     });
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the expense form.");
 
+    const now = nowIso();
+    const expenseId = editingExpense?.id || createId("expense");
     updateDataset((current) =>
       withAudit(
         {
           ...current,
-          expenseItems: [
-            {
-              id: createId("expense"),
-              userId,
-              caseId,
-              createdAt: nowIso(),
-              updatedAt: nowIso(),
-              ...emptyToUndefined(parsed.data),
-            },
-            ...current.expenseItems,
-          ],
+          expenseItems: editingExpense
+            ? current.expenseItems.map((expense) =>
+                expense.id === editingExpense.id && expense.userId === userId && expense.caseId === caseId
+                  ? { ...expense, ...emptyToUndefined(parsed.data), updatedAt: now }
+                  : expense
+              )
+            : [
+                {
+                  id: expenseId,
+                  userId,
+                  caseId,
+                  createdAt: now,
+                  updatedAt: now,
+                  ...emptyToUndefined(parsed.data),
+                },
+                ...current.expenseItems,
+              ],
         },
         {
           userId,
           caseId,
-          action: "created",
+          action: editingExpense ? "updated" : "created",
           entityType: "expenseItem",
-          entityId: "new-expense",
-          metadataSummary: "Expense item created without receipt contents in audit metadata.",
+          entityId: expenseId,
+          metadataSummary: editingExpense
+            ? "Expense item updated without receipt contents in audit metadata."
+            : "Expense item created without receipt contents in audit metadata.",
         }
       )
     );
+    setEditingExpenseId("");
     event.currentTarget.reset();
-    flash("Expense record saved.");
+    flash(editingExpense ? "Expense record updated." : "Expense record saved.");
   }
 
   function deleteExpense(expenseId: string) {
+    if (editingExpenseId === expenseId) setEditingExpenseId("");
     updateDataset((current) =>
       withAudit(
         {
@@ -5467,13 +5959,18 @@ function ExpensesView({
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[420px_1fr]">
-        <Panel title="Add expense record" action="Custody related expense">
-          <form onSubmit={addExpense} className="grid gap-3">
+        <Panel title={editingExpense ? "Edit expense record" : "Add expense record"} action="Custody related expense">
+          <form
+            id="expense-record-form"
+            key={editingExpense?.id || "new-expense"}
+            onSubmit={saveExpense}
+            className="grid gap-3"
+          >
             <Field label="Expense date">
-              <input name="expenseDate" type="date" className="input" defaultValue="2026-06-05" />
+              <input name="expenseDate" type="date" className="input" defaultValue={editingExpense?.expenseDate || "2026-06-05"} />
             </Field>
             <Field label="Category">
-              <select name="category" className="input" defaultValue="school">
+              <select name="category" className="input" defaultValue={editingExpense?.category || "school"}>
                 {["medical", "school", "childcare", "extracurricular", "transportation", "clothing", "supplies", "other"].map((category) => (
                   <option key={category} value={category}>
                     {category}
@@ -5482,33 +5979,36 @@ function ExpensesView({
               </select>
             </Field>
             <Field label="Description">
-              <input name="description" className="input" />
+              <input name="description" className="input" defaultValue={editingExpense?.description || ""} />
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Amount">
-                <input name="amount" type="number" step="0.01" className="input" />
+                <input name="amount" type="number" step="0.01" className="input" defaultValue={editingExpense?.amount ?? ""} />
               </Field>
               <Field label="Currency">
-                <input name="currency" className="input" defaultValue="USD" />
+                <input name="currency" className="input" defaultValue={editingExpense?.currency || "USD"} />
               </Field>
             </div>
             <Field label="Paid by label">
-              <input name="paidByLabel" className="input" defaultValue="Me" />
+              <input name="paidByLabel" className="input" defaultValue={editingExpense?.paidByLabel || "Me"} />
             </Field>
             <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input name="reimbursementRequested" type="checkbox" defaultChecked />
+              <input name="reimbursementRequested" type="checkbox" defaultChecked={editingExpense?.reimbursementRequested ?? true} />
               Reimbursement requested
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Due date">
-                <input name="reimbursementDueDate" type="date" className="input" />
+                <input name="reimbursementDueDate" type="date" className="input" defaultValue={editingExpense?.reimbursementDueDate || ""} />
+              </Field>
+              <Field label="Reimbursement date">
+                <input name="reimbursementDate" type="date" className="input" defaultValue={editingExpense?.reimbursementDate || ""} />
               </Field>
               <Field label="Amount reimbursed">
-                <input name="amountReimbursed" type="number" step="0.01" className="input" defaultValue="0" />
+                <input name="amountReimbursed" type="number" step="0.01" className="input" defaultValue={editingExpense?.amountReimbursed ?? 0} />
               </Field>
             </div>
             <Field label="Reimbursement status">
-              <select name="reimbursementStatus" className="input" defaultValue="requested">
+              <select name="reimbursementStatus" className="input" defaultValue={editingExpense?.reimbursementStatus || "requested"}>
                 {[
                   "not_requested",
                   "requested",
@@ -5525,11 +6025,18 @@ function ExpensesView({
               </select>
             </Field>
             <Field label="Notes">
-              <textarea name="notes" className="input min-h-20" />
+              <textarea name="notes" className="input min-h-20" defaultValue={editingExpense?.notes || ""} />
             </Field>
-            <button className="btn-primary" type="submit">
-              Save expense
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn-primary" type="submit">
+                {editingExpense ? "Update expense" : "Save expense"}
+              </button>
+              {editingExpense && (
+                <button type="button" className="btn-secondary" onClick={() => setEditingExpenseId("")}>
+                  Cancel editing
+                </button>
+              )}
+            </div>
           </form>
         </Panel>
 
@@ -5548,12 +6055,22 @@ function ExpensesView({
                 expense.description,
                 formatMoney(expense.amount),
                 expense.reimbursementStatus.replaceAll("_", " "),
-                <DeleteButton
-                  key={expense.id}
-                  label="Delete"
-                  ariaLabel={`Delete expense ${expense.description}`}
-                  onClick={() => deleteExpense(expense.id)}
-                />,
+                <div key={expense.id} className="flex flex-wrap gap-2">
+                  <EditButton
+                    ariaLabel={`Edit expense ${expense.description}`}
+                    onClick={() => {
+                      setEditingExpenseId(expense.id);
+                      window.requestAnimationFrame(() =>
+                        document.getElementById("expense-record-form")?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      );
+                    }}
+                  />
+                  <DeleteButton
+                    label="Delete"
+                    ariaLabel={`Delete expense ${expense.description}`}
+                    onClick={() => deleteExpense(expense.id)}
+                  />
+                </div>,
               ])}
             />
           </Panel>
@@ -7118,6 +7635,27 @@ function StatusPill({ label }: { label: string }) {
     <span className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-600">
       {label}
     </span>
+  );
+}
+
+function EditButton({
+  label = "Edit",
+  ariaLabel,
+  onClick,
+}: {
+  label?: string;
+  ariaLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onClick={onClick}
+      className="inline-flex min-h-8 items-center justify-center rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:border-teal-500 hover:bg-teal-50 focus:outline-none focus:ring-2 focus:ring-teal-100"
+    >
+      {label}
+    </button>
   );
 }
 
