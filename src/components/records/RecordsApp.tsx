@@ -364,9 +364,11 @@ export default function RecordsApp() {
   const toastTimeoutRef = useRef<number | null>(null);
 
   const userId = session?.userId || demoUserId;
-  const selected = useSelectedRecords(dataset, userId, selectedCaseId);
-  const selectedCase = selected.matter || selected.matters[0];
+  const selectedCase =
+    dataset.matters.find((matter) => matter.userId === userId && matter.id === selectedCaseId) ||
+    dataset.matters.find((matter) => matter.userId === userId);
   const effectiveCaseId = selectedCase?.id || selectedCaseId;
+  const selected = useSelectedRecords(dataset, userId, effectiveCaseId);
   const selectedProfile = dataset.users.find((user) => user.userId === userId);
   const caseTimezone = selectedCase?.timezone || selectedProfile?.timezone || defaultRecordsTimezone;
 
@@ -382,6 +384,12 @@ export default function RecordsApp() {
     setCalendarMonthKey(currentMonthKey(new Date(), nextTimezone));
     setSelectedDay(formatLocalDate(new Date(), nextTimezone));
   }, [getCaseTimezone]);
+
+  useEffect(() => {
+    if (selectedCase && selectedCaseId !== selectedCase.id) {
+      setSelectedCaseId(selectedCase.id);
+    }
+  }, [selectedCase, selectedCaseId]);
 
   const openView = useCallback((view: ActiveView) => {
     setActiveView(view);
@@ -657,7 +665,7 @@ export default function RecordsApp() {
           <WorkspaceHeader
             activeView={activeView}
             matters={selected.matters}
-            selectedCaseId={selectedCaseId}
+            selectedCaseId={effectiveCaseId}
             onSelectCase={selectCase}
             range={range}
             setRange={setRange}
@@ -1882,7 +1890,7 @@ function CalendarView({
     setIsPainting(false);
   }
 
-  function saveCustodyDay(event: FormEvent<HTMLFormElement>) {
+  async function saveCustodyDay(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const parsed = custodyDayAssignmentSchema.safeParse({
@@ -1899,49 +1907,53 @@ function CalendarView({
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the custody day form.");
 
     const date = parsed.data.date;
-    updateDataset((current) => {
-      const existing = current.custodyDayAssignments.find(
-        (item) => item.userId === userId && item.caseId === caseId && item.date === date
-      );
-      const nextData = emptyToUndefined(parsed.data);
-      const nextAssignment: CustodyDayAssignment = {
-        id: existing?.id || createId("custody-day"),
-        caseId,
-        userId,
-        createdAt: existing?.createdAt || nowIso(),
-        updatedAt: nowIso(),
-        date: nextData.date,
-        caregiverLabel: nextData.caregiverLabel,
-        color: nextData.color,
-        startsAt: nextData.startsAt,
-        endsAt: nextData.endsAt,
-        exchangeTime: nextData.exchangeTime,
-        exchangeDirection: nextData.exchangeDirection || undefined,
-        exchangeLocation: nextData.exchangeLocation,
-        notes: nextData.notes,
-      };
-
-      return withAudit(
-        {
-          ...current,
-          custodyDayAssignments: existing
-            ? current.custodyDayAssignments.map((item) =>
-                item.id === existing.id ? nextAssignment : item
-              )
-            : [nextAssignment, ...current.custodyDayAssignments],
-        },
-        {
-          userId,
+    try {
+      await updateDataset((current) => {
+        const existing = current.custodyDayAssignments.find(
+          (item) => item.userId === userId && item.caseId === caseId && item.date === date
+        );
+        const nextData = emptyToUndefined(parsed.data);
+        const nextAssignment: CustodyDayAssignment = {
+          id: existing?.id || createId("custody-day"),
           caseId,
-          action: existing ? "updated" : "created",
-          entityType: "custodyDayAssignment",
-          entityId: nextAssignment.id,
-          metadataSummary: "Custody day color assignment saved without child names.",
-        }
-      );
-    });
-    setSelectedDay(date);
-    flash("Custody day color saved.");
+          userId,
+          createdAt: existing?.createdAt || nowIso(),
+          updatedAt: nowIso(),
+          date: nextData.date,
+          caregiverLabel: nextData.caregiverLabel,
+          color: nextData.color,
+          startsAt: nextData.startsAt,
+          endsAt: nextData.endsAt,
+          exchangeTime: nextData.exchangeTime,
+          exchangeDirection: nextData.exchangeDirection || undefined,
+          exchangeLocation: nextData.exchangeLocation,
+          notes: nextData.notes,
+        };
+
+        return withAudit(
+          {
+            ...current,
+            custodyDayAssignments: existing
+              ? current.custodyDayAssignments.map((item) =>
+                  item.id === existing.id ? nextAssignment : item
+                )
+              : [nextAssignment, ...current.custodyDayAssignments],
+          },
+          {
+            userId,
+            caseId,
+            action: existing ? "updated" : "created",
+            entityType: "custodyDayAssignment",
+            entityId: nextAssignment.id,
+            metadataSummary: "Custody day color assignment saved without child names.",
+          }
+        );
+      });
+      setSelectedDay(date);
+      flash("Custody day color saved successfully.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Calendar day save failed.");
+    }
   }
 
   function clearCustodyDay() {
@@ -2073,8 +2085,17 @@ function CalendarView({
                 />
               </div>
             </div>
-            <div className="mb-4 grid gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 2xl:grid-cols-[minmax(360px,1fr)_auto] 2xl:items-end">
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
+            <details
+              data-testid="calendar-color-tools"
+              className="group mb-4 overflow-hidden rounded-md border border-slate-200 bg-slate-50"
+            >
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-slate-700 marker:content-none">
+                <span>Custody color tools</span>
+                <span className="text-xs font-medium text-slate-500 group-open:hidden">Optional</span>
+                <span className="hidden text-xs font-medium text-slate-500 group-open:inline">Hide tools</span>
+              </summary>
+              <div className="grid gap-3 border-t border-slate-200 p-3 2xl:grid-cols-[minmax(360px,1fr)_auto] 2xl:items-end">
+                <div className="grid gap-3 grid-cols-[minmax(0,1fr)_88px] sm:grid-cols-[minmax(0,1fr)_160px]">
                 <Field label="Caregiver label">
                   <input
                     className="input"
@@ -2092,8 +2113,8 @@ function CalendarView({
                     className="h-10 w-full cursor-pointer rounded-md border border-slate-300 bg-white p-1"
                   />
                 </Field>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   aria-pressed={multiDayPaintEnabled}
@@ -2140,11 +2161,12 @@ function CalendarView({
                     {paintDraftDates.size} day{paintDraftDates.size === 1 ? "" : "s"}
                   </span>
                 )}
+                </div>
+                <p className="text-xs leading-5 text-slate-500 2xl:col-span-2">
+                  Tap a day to view or edit it. Turn on multi-day paint only when you want to drag across several days.
+                </p>
               </div>
-              <p className="text-xs leading-5 text-slate-500 2xl:col-span-2">
-                Tap a day to view or edit it. Turn on multi-day paint only when you want to drag across several days.
-              </p>
-            </div>
+            </details>
             <div className="mb-4 flex flex-wrap gap-2 text-xs font-semibold text-slate-600">
               {Array.from(
                 new Map(custodyDayAssignments.map((item) => [item.caregiverLabel, item]))
@@ -2172,6 +2194,10 @@ function CalendarView({
                 </span>
                 Scheduled exchange time
               </span>
+              <span className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-600">
+                <span className="h-4 w-4 rounded-sm border border-slate-200 bg-slate-100" />
+                Weekend
+              </span>
             </div>
             <div
               data-testid="calendar-scroll"
@@ -2181,8 +2207,14 @@ function CalendarView({
             >
               <div className="w-full min-w-0">
                 <div className="grid grid-cols-7 gap-px text-center text-[10px] font-semibold text-slate-500 sm:gap-2 sm:text-left sm:text-xs">
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                    <div key={day} className="min-w-0 px-0.5 py-1 sm:px-2">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => (
+                    <div
+                      key={day}
+                      data-calendar-weekend-header={index === 0 || index === 6 ? "true" : undefined}
+                      className={`min-w-0 rounded-sm px-0.5 py-1 sm:px-2 ${
+                        index === 0 || index === 6 ? "bg-slate-100/80 text-slate-600" : ""
+                      }`}
+                    >
                       <span className="sm:hidden">{day.slice(0, 1)}</span>
                       <span className="hidden sm:inline">{day}</span>
                     </div>
@@ -2209,6 +2241,7 @@ function CalendarView({
                       : undefined;
                     const isPaintDraft = day ? paintDraftDates.has(day) : false;
                     const isToday = day === today;
+                    const isWeekend = index % 7 === 0 || index % 7 === 6;
                     const visibleColor = isPaintDraft ? paintColor : assignment?.color;
                     const visibleLabel = isPaintDraft
                       ? paintCaregiverLabel.trim() || "Parent A"
@@ -2220,6 +2253,7 @@ function CalendarView({
                         disabled={!day}
                         data-calendar-day={day || undefined}
                         data-calendar-selected={day === selectedDay ? "true" : undefined}
+                        data-calendar-weekend={day && isWeekend ? "true" : undefined}
                         aria-label={day ? `Edit calendar day ${day}` : undefined}
                         onPointerDown={(event) => day && beginPaint(day, event)}
                         onPointerEnter={() => day && extendPaint(day)}
@@ -2231,18 +2265,28 @@ function CalendarView({
                           visibleColor
                             ? {
                                 backgroundColor: withAlpha(visibleColor, isPaintDraft ? 0.16 : 0.1),
-                                borderColor: visibleColor,
                               }
                             : undefined
                         }
                         className={`relative min-h-16 min-w-0 overflow-hidden select-none rounded-sm border p-1 text-left transition sm:min-h-28 sm:rounded-md sm:p-2 ${multiDayPaintEnabled ? "touch-none" : "touch-pan-y"} ${
                           day === selectedDay
-                            ? "ring-2 ring-teal-500 ring-offset-1"
-                            : "border-slate-200 bg-white hover:border-teal-300"
-                        } ${isToday ? "shadow-[inset_0_0_0_2px_rgba(15,118,110,0.35)]" : ""} ${day ? "cursor-crosshair" : ""} ${!day ? "bg-transparent hover:border-slate-200" : ""}`}
+                            ? "border-teal-700 ring-2 ring-inset ring-teal-600"
+                            : isWeekend
+                              ? "border-slate-200 bg-slate-50 hover:border-teal-300"
+                              : "border-slate-200 bg-white hover:border-teal-300"
+                        } ${isPaintDraft ? "ring-2 ring-inset ring-amber-500" : ""} ${
+                          day ? (multiDayPaintEnabled ? "cursor-crosshair" : "cursor-pointer") : ""
+                        } ${!day ? "bg-transparent hover:border-slate-200" : ""}`}
                       >
                         {day && (
                           <>
+                            {isWeekend && (
+                              <span
+                                aria-hidden="true"
+                                data-testid="calendar-weekend-shading"
+                                className="pointer-events-none absolute inset-0 z-0 bg-slate-100/35"
+                              />
+                            )}
                             {exchangeTimeMarkers.map(({ position, time }) => (
                               <span
                                 key={time}
@@ -2621,9 +2665,10 @@ function ExchangesView({
   const userRoleLabel = selected.matter?.userRoleLabel || "Me";
   const otherParentLabel = selected.matter?.otherParentLabel || "Other parent";
 
-  function saveRule(event: FormEvent<HTMLFormElement>) {
+  async function saveRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const parsed = exchangeRuleSchema.safeParse({
       ruleName: text(formData, "ruleName"),
       dayOfWeek: text(formData, "dayOfWeek"),
@@ -2638,8 +2683,9 @@ function ExchangesView({
 
     const now = nowIso();
     const ruleId = editingRule?.id || createId("rule");
-    updateDataset((current) =>
-      withAudit(
+    try {
+      await updateDataset((current) =>
+        withAudit(
         {
           ...current,
           exchangeRules: editingRule
@@ -2670,16 +2716,20 @@ function ExchangesView({
             ? "Exchange rule updated without court detail in audit metadata."
             : "Exchange rule created without court detail in audit metadata.",
         }
-      )
-    );
-    setEditingRuleId("");
-    event.currentTarget.reset();
-    flash(editingRule ? "Exchange rule updated." : "Exchange rule saved.");
+        )
+      );
+      setEditingRuleId("");
+      form.reset();
+      flash(editingRule ? "Exchange rule updated and saved." : "Exchange rule saved. It appears below.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Exchange rule save failed.");
+    }
   }
 
-  function addExchangeLog(event: FormEvent<HTMLFormElement>) {
+  async function addExchangeLog(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const actualDate = text(formData, "actualDate");
     const actualTime = text(formData, "actualTime");
     const parsed = exchangeLogSchema.safeParse({
@@ -2698,8 +2748,9 @@ function ExchangesView({
     });
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the exchange log form.");
 
-    updateDataset((current) =>
-      withAudit(
+    try {
+      await updateDataset((current) =>
+        withAudit(
         {
           ...current,
           exchangeLogs: [
@@ -2722,13 +2773,16 @@ function ExchangesView({
           entityId: "new-exchange",
           metadataSummary: "Exchange log created without note body in audit metadata.",
         }
-      )
-    );
-    event.currentTarget.reset();
-    flash("Exchange outcome logged.");
+        )
+      );
+      form.reset();
+      flash("Exchange outcome saved. It appears below.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Exchange outcome save failed.");
+    }
   }
 
-  function updateExchangeLog(event: FormEvent<HTMLFormElement>) {
+  async function updateExchangeLog(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editingExchange) return flash("Choose an exchange record to edit.");
 
@@ -2751,8 +2805,9 @@ function ExchangesView({
     });
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the exchange log form.");
 
-    updateDataset((current) =>
-      withAudit(
+    try {
+      await updateDataset((current) =>
+        withAudit(
         {
           ...current,
           exchangeLogs: current.exchangeLogs.map((log) =>
@@ -2773,9 +2828,12 @@ function ExchangesView({
           entityId: editingExchange.id,
           metadataSummary: "Exchange timing and responsibility details updated without note body in audit metadata.",
         }
-      )
-    );
-    flash("Exchange details updated.");
+        )
+      );
+      flash("Exchange details updated and saved.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Exchange update failed.");
+    }
   }
 
   function deleteExchangeRule(ruleId: string) {
@@ -2835,8 +2893,8 @@ function ExchangesView({
   const exchangeTimingRows = exchangeChartRows(selected.exchangeLogs, range);
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
-      <div className="space-y-4">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[420px_1fr]">
+      <div className="min-w-0 space-y-4">
         <Panel
           title={editingRule ? "Edit exchange expectation" : "Court ordered exchange expectation"}
           action={editingRule ? "Editing saved rule" : "Simple recurring rule"}
@@ -3126,7 +3184,7 @@ function ExchangesView({
         </Panel>
       </div>
 
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4">
         <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
 
         <Panel title="Exchange timing graph" action={`${range.from} to ${range.to}`}>
@@ -3176,7 +3234,7 @@ function ExchangesView({
             ])}
           />
         </Panel>
-        <Panel title="Logged exchanges" action={`${selected.exchangeLogs.length} records`}>
+        <Panel title="Logged exchanges" action={`${selected.exchangeLogs.length} total records`}>
           <Table
             headers={[
               "Date",
@@ -3189,10 +3247,6 @@ function ExchangesView({
               "Actions",
             ]}
             rows={selected.exchangeLogs
-              .filter((log) => {
-                const date = getIsoDateFromDateTime(log.orderedExchangeAt);
-                return date >= range.from && date <= range.to;
-              })
               .slice(0, 12)
               .map((log) => [
                 getIsoDateFromDateTime(log.orderedExchangeAt),
@@ -3244,11 +3298,14 @@ function NotesView({
 }) {
   const [filter, setFilter] = useState("all");
   const [editingNoteId, setEditingNoteId] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState("");
   const editingNote = notes.find((note) => note.id === editingNoteId) || null;
 
-  function saveNote(event: FormEvent<HTMLFormElement>) {
+  async function saveNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const parsed = dateNoteSchema.safeParse({
       noteDate: text(formData, "noteDate"),
       noteTime: text(formData, "noteTime"),
@@ -3262,73 +3319,87 @@ function NotesView({
 
     const now = nowIso();
     const noteId = editingNote?.id || createId("note");
-    updateDataset((current) =>
-      withAudit(
-        {
-          ...current,
-          dateNotes: editingNote
-            ? current.dateNotes.map((note) =>
-                note.id === editingNote.id && note.userId === userId && note.caseId === caseId
-                  ? { ...note, ...emptyToUndefined(parsed.data), updatedAt: now }
-                  : note
-              )
-            : [
-                {
-                  id: noteId,
-                  userId,
-                  caseId,
-                  createdAt: now,
-                  updatedAt: now,
-                  ...emptyToUndefined(parsed.data),
-                },
-                ...current.dateNotes,
-              ],
-        },
-        {
-          userId,
-          caseId,
-          action: editingNote ? "updated" : "created",
-          entityType: "dateNote",
-          entityId: noteId,
-          metadataSummary: editingNote
-            ? "Date note updated without note body in audit metadata."
-            : "Date note created without note body in audit metadata.",
-        }
-      )
-    );
-    setEditingNoteId("");
-    event.currentTarget.reset();
-    flash(editingNote ? "Date based note updated." : "Date based note saved.");
+    setNoteSaving(true);
+    try {
+      await updateDataset((current) =>
+        withAudit(
+          {
+            ...current,
+            dateNotes: editingNote
+              ? current.dateNotes.map((note) =>
+                  note.id === editingNote.id && note.userId === userId && note.caseId === caseId
+                    ? { ...note, ...emptyToUndefined(parsed.data), updatedAt: now }
+                    : note
+                )
+              : [
+                  {
+                    id: noteId,
+                    userId,
+                    caseId,
+                    createdAt: now,
+                    updatedAt: now,
+                    ...emptyToUndefined(parsed.data),
+                  },
+                  ...current.dateNotes,
+                ],
+          },
+          {
+            userId,
+            caseId,
+            action: editingNote ? "updated" : "created",
+            entityType: "dateNote",
+            entityId: noteId,
+            metadataSummary: editingNote
+              ? "Date note updated without note body in audit metadata."
+              : "Date note created without note body in audit metadata.",
+          }
+        )
+      );
+      setEditingNoteId("");
+      form.reset();
+      flash(editingNote ? "Date based note updated and saved." : "Date based note saved successfully.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Note save failed.");
+    } finally {
+      setNoteSaving(false);
+    }
   }
 
-  function deleteNote(noteId: string) {
-    if (editingNoteId === noteId) setEditingNoteId("");
-    updateDataset((current) =>
-      withAudit(
-        {
-          ...current,
-          dateNotes: current.dateNotes.filter(
-            (item) => !(item.id === noteId && item.userId === userId && item.caseId === caseId)
-          ),
-        },
-        {
-          userId,
-          caseId,
-          action: "deleted",
-          entityType: "dateNote",
-          entityId: noteId,
-          metadataSummary: "Date note deleted.",
-        }
-      )
-    );
-      flash("Date based note deleted.");
+  async function deleteNote(noteId: string) {
+    setDeletingNoteId(noteId);
+    try {
+      await updateDataset((current) =>
+        withAudit(
+          {
+            ...current,
+            dateNotes: current.dateNotes.filter(
+              (item) => !(item.id === noteId && item.userId === userId && item.caseId === caseId)
+            ),
+          },
+          {
+            userId,
+            caseId,
+            action: "deleted",
+            entityType: "dateNote",
+            entityId: noteId,
+            metadataSummary: "Date note deleted.",
+          }
+        )
+      );
+      if (editingNoteId === noteId) setEditingNoteId("");
+      flash("Date based note deleted successfully.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Note deletion failed.");
+    } finally {
+      setDeletingNoteId("");
+    }
   }
 
   const filteredNotes = filter === "all" ? notes : notes.filter((note) => note.category === filter);
 
   return (
     <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4">
         <Panel title={editingNote ? "Edit date based note" : "Add date based note"} action="Factual wording">
           <form
             id="date-note-form"
@@ -3380,8 +3451,8 @@ function NotesView({
               Include this note in selected reports
             </label>
             <div className="flex flex-wrap gap-2">
-              <button className="btn-primary" type="submit">
-                {editingNote ? "Update note" : "Save note"}
+              <button className="btn-primary" type="submit" disabled={noteSaving}>
+                {noteSaving ? "Saving…" : editingNote ? "Update note" : "Save note"}
               </button>
               {editingNote && (
                 <button type="button" className="btn-secondary" onClick={() => setEditingNoteId("")}>
@@ -3395,7 +3466,14 @@ function NotesView({
         <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
       </div>
 
-      <Panel title="Notes" action={`${filteredNotes.length} records`}>
+      <Panel
+        title="Notes"
+        action={
+          filter === "all"
+            ? `${notes.length} total records`
+            : `${filteredNotes.length} shown · ${notes.length} total`
+        }
+      >
         <div className="mb-4 flex flex-wrap gap-2">
           {["all", "exchange", "child_support", "school", "expense", "court"].map((category) => (
             <button
@@ -3432,9 +3510,9 @@ function NotesView({
                     }}
                   />
                   <DeleteButton
-                    label="Delete"
+                    label={deletingNoteId === note.id ? "Deleting…" : "Delete"}
                     ariaLabel={`Delete note ${note.title}`}
-                    onClick={() => deleteNote(note.id)}
+                    onClick={() => void deleteNote(note.id)}
                   />
                 </div>
               </div>
@@ -3948,9 +4026,10 @@ function ImportView({
     }
   }
 
-  function saveExchangeRule(event: FormEvent<HTMLFormElement>) {
+  async function saveExchangeRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const parsed = exchangeRuleSchema.safeParse({
       ruleName: text(formData, "ruleName"),
       dayOfWeek: text(formData, "dayOfWeek"),
@@ -3963,8 +4042,9 @@ function ImportView({
     });
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the exchange rule.");
 
-    updateDataset((current) =>
-      withAudit(
+    try {
+      await updateDataset((current) =>
+        withAudit(
         {
           ...current,
           exchangeRules: [
@@ -3987,13 +4067,16 @@ function ImportView({
           entityId: "imported-rule",
           metadataSummary: "Exchange rule created from import setup without court text in audit metadata.",
         }
-      )
-    );
-    event.currentTarget.reset();
-    flash("Exchange rule saved.");
+        )
+      );
+      form.reset();
+      flash("Exchange rule saved. It appears under Exchanges.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Exchange rule save failed.");
+    }
   }
 
-  function saveCustodyScheduleSetup(event: FormEvent<HTMLFormElement>) {
+  async function saveCustodyScheduleSetup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const presetId = text(formData, "schedulePreset") as ParentingSchedulePresetId;
@@ -4057,39 +4140,43 @@ function ImportView({
       caseId,
     });
 
-    updateDataset((current) => {
-      const existingDates = new Set(
-        current.custodyDayAssignments
-          .filter((item) => item.userId === userId && item.caseId === caseId)
-          .map((item) => item.date)
-      );
-      const assignmentsToSave = replaceExisting
-        ? generatedAssignments
-        : generatedAssignments.filter((item) => !existingDates.has(item.date));
-      const generatedDateSet = new Set(generatedAssignments.map((item) => item.date));
-      const retainedAssignments = current.custodyDayAssignments.filter((item) => {
-        if (item.userId !== userId || item.caseId !== caseId) return true;
-        if (!replaceExisting) return true;
-        return !generatedDateSet.has(item.date);
+    try {
+      await updateDataset((current) => {
+        const existingDates = new Set(
+          current.custodyDayAssignments
+            .filter((item) => item.userId === userId && item.caseId === caseId)
+            .map((item) => item.date)
+        );
+        const assignmentsToSave = replaceExisting
+          ? generatedAssignments
+          : generatedAssignments.filter((item) => !existingDates.has(item.date));
+        const generatedDateSet = new Set(generatedAssignments.map((item) => item.date));
+        const retainedAssignments = current.custodyDayAssignments.filter((item) => {
+          if (item.userId !== userId || item.caseId !== caseId) return true;
+          if (!replaceExisting) return true;
+          return !generatedDateSet.has(item.date);
+        });
+
+        return withAudit(
+          {
+            ...current,
+            custodyDayAssignments: [...assignmentsToSave, ...retainedAssignments],
+          },
+          {
+            userId,
+            caseId,
+            action: "created",
+            entityType: "custodyScheduleSetup",
+            entityId: createId("schedule-setup"),
+            metadataSummary: `${assignmentsToSave.length} custody calendar day assignments generated from ${preset.label}.`,
+          }
+        );
       });
 
-      return withAudit(
-        {
-          ...current,
-          custodyDayAssignments: [...assignmentsToSave, ...retainedAssignments],
-        },
-        {
-          userId,
-          caseId,
-          action: "created",
-          entityType: "custodyScheduleSetup",
-          entityId: createId("schedule-setup"),
-          metadataSummary: `${assignmentsToSave.length} custody calendar day assignments generated from ${preset.label}.`,
-        }
-      );
-    });
-
-    flash(`${generatedAssignments.length} custody calendar day${generatedAssignments.length === 1 ? "" : "s"} generated.`);
+      flash(`${generatedAssignments.length} custody calendar day${generatedAssignments.length === 1 ? "" : "s"} saved to Calendar.`);
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Custody schedule save failed.");
+    }
   }
 
   async function reviewCustodyCalendarRows(event: FormEvent<HTMLFormElement>) {
@@ -5376,9 +5463,10 @@ function ChildSupportView({
   const editingOrder = orders.find((order) => order.id === editingOrderId) || null;
   const editingPayment = payments.find((payment) => payment.id === editingPaymentId) || null;
 
-  function saveOrder(event: FormEvent<HTMLFormElement>) {
+  async function saveOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const parsed = childSupportOrderSchema.safeParse({
       orderNickname: text(formData, "orderNickname"),
       orderedAmount: text(formData, "orderedAmount"),
@@ -5397,8 +5485,9 @@ function ChildSupportView({
 
     const now = nowIso();
     const orderId = editingOrder?.id || createId("support-order");
-    updateDataset((current) =>
-      withAudit(
+    try {
+      await updateDataset((current) =>
+        withAudit(
         {
           ...current,
           childSupportOrders: editingOrder
@@ -5429,16 +5518,20 @@ function ChildSupportView({
             ? "Child support order updated without agency details in audit metadata."
             : "Child support order created without agency details in audit metadata.",
         }
-      )
-    );
-    setEditingOrderId("");
-    event.currentTarget.reset();
-    flash(editingOrder ? "Child support order updated." : "Child support order saved. It appears below.");
+        )
+      );
+      setEditingOrderId("");
+      form.reset();
+      flash(editingOrder ? "Child support order updated and saved." : "Child support order saved. It appears below.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Child support order save failed.");
+    }
   }
 
-  function savePayment(event: FormEvent<HTMLFormElement>) {
+  async function savePayment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const parsed = childSupportPaymentSchema.safeParse({
       childSupportOrderId: text(formData, "childSupportOrderId"),
       dueDate: text(formData, "dueDate"),
@@ -5454,8 +5547,9 @@ function ChildSupportView({
 
     const now = nowIso();
     const paymentId = editingPayment?.id || createId("support-payment");
-    updateDataset((current) =>
-      withAudit(
+    try {
+      await updateDataset((current) =>
+        withAudit(
         {
           ...current,
           childSupportPayments: editingPayment
@@ -5486,11 +5580,14 @@ function ChildSupportView({
             ? "Payment record updated without reference number in audit metadata."
             : "Payment record created without reference number in audit metadata.",
         }
-      )
-    );
-    setEditingPaymentId("");
-    event.currentTarget.reset();
-    flash(editingPayment ? "Payment record updated." : "Payment record saved. It appears below.");
+        )
+      );
+      setEditingPaymentId("");
+      form.reset();
+      flash(editingPayment ? "Payment record updated and saved." : "Payment record saved. It appears below.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Payment record save failed.");
+    }
   }
 
   function deleteSupportOrder(orderId: string) {
@@ -5553,8 +5650,8 @@ function ChildSupportView({
         <StatCard label="Payments marked unpaid" value={supportStats.unpaidCount} detail={formatMoney(supportStats.unpaidBalance)} tone="amber" />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[420px_1fr]">
-        <div className="space-y-4">
+      <section className="grid min-w-0 gap-4 xl:grid-cols-[420px_1fr]">
+        <div className="min-w-0 space-y-4">
           <Panel
             title={editingOrder ? "Edit child support order" : "Child support order"}
             action={editingOrder ? "Editing saved record" : "Documentation only"}
@@ -5721,7 +5818,7 @@ function ChildSupportView({
           />
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
 
           <SupportOrdersPanel
@@ -5866,9 +5963,10 @@ function ExpensesView({
   const [editingExpenseId, setEditingExpenseId] = useState("");
   const editingExpense = expenses.find((expense) => expense.id === editingExpenseId) || null;
 
-  function saveExpense(event: FormEvent<HTMLFormElement>) {
+  async function saveExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const parsed = expenseItemSchema.safeParse({
       expenseDate: text(formData, "expenseDate"),
       category: text(formData, "category"),
@@ -5887,8 +5985,9 @@ function ExpensesView({
 
     const now = nowIso();
     const expenseId = editingExpense?.id || createId("expense");
-    updateDataset((current) =>
-      withAudit(
+    try {
+      await updateDataset((current) =>
+        withAudit(
         {
           ...current,
           expenseItems: editingExpense
@@ -5919,11 +6018,14 @@ function ExpensesView({
             ? "Expense item updated without receipt contents in audit metadata."
             : "Expense item created without receipt contents in audit metadata.",
         }
-      )
-    );
-    setEditingExpenseId("");
-    event.currentTarget.reset();
-    flash(editingExpense ? "Expense record updated." : "Expense record saved.");
+        )
+      );
+      setEditingExpenseId("");
+      form.reset();
+      flash(editingExpense ? "Expense record updated and saved." : "Expense record saved. It appears below.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Expense record save failed.");
+    }
   }
 
   function deleteExpense(expenseId: string) {
@@ -6040,7 +6142,7 @@ function ExpensesView({
           </form>
         </Panel>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <SectionExportPanel packet={sectionExport} onExport={onExportSection} />
 
           <Panel title="Expenses by category" action={`${expenses.length} records`}>
@@ -6337,7 +6439,7 @@ function SettingsView({
   const profile = dataset.users.find((user) => user.userId === userId);
   const selectedMatter = selected.matter;
 
-  function updateProfile(event: FormEvent<HTMLFormElement>) {
+  async function updateProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const parsedTimezone = timezoneSchema.safeParse(
@@ -6345,25 +6447,30 @@ function SettingsView({
     );
     if (!parsedTimezone.success) return flash(parsedTimezone.error.issues[0]?.message || "Check the timezone.");
 
-    updateDataset((current) => ({
-      ...current,
-      users: current.users.map((user) =>
-        user.userId === userId
-          ? {
-              ...user,
-              displayName: text(formData, "displayName") || undefined,
-              timezone: parsedTimezone.data,
-              updatedAt: nowIso(),
-            }
-          : user
-      ),
-    }));
-    flash("Account settings updated.");
+    try {
+      await updateDataset((current) => ({
+        ...current,
+        users: current.users.map((user) =>
+          user.userId === userId
+            ? {
+                ...user,
+                displayName: text(formData, "displayName") || undefined,
+                timezone: parsedTimezone.data,
+                updatedAt: nowIso(),
+              }
+            : user
+        ),
+      }));
+      flash("Account settings updated and saved.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Account settings save failed.");
+    }
   }
 
-  function createMatter(event: FormEvent<HTMLFormElement>) {
+  async function createMatter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     const parsed = custodyMatterSchema.safeParse({
       caseName: text(formData, "caseName"),
       courtOrOrderNickname: text(formData, "courtOrOrderNickname"),
@@ -6380,8 +6487,9 @@ function SettingsView({
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the custody matter form.");
 
     const id = createId("case");
-    updateDataset((current) =>
-      withAudit(
+    try {
+      await updateDataset((current) =>
+        withAudit(
         {
           ...current,
           matters: [
@@ -6403,13 +6511,17 @@ function SettingsView({
           entityId: id,
           metadataSummary: "Custody matter created without court or child labels in audit metadata.",
         }
-      )
-    );
-    setSelectedCaseId(id);
-    flash("Custody matter created.");
+        )
+      );
+      setSelectedCaseId(id);
+      form.reset();
+      flash("Custody matter created, saved, and selected.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Custody matter creation failed.");
+    }
   }
 
-  function updateMatter(event: FormEvent<HTMLFormElement>) {
+  async function updateMatter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedMatter) return flash("Select a custody matter first.");
 
@@ -6430,8 +6542,9 @@ function SettingsView({
     });
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the selected case form.");
 
-    updateDataset((current) =>
-      withAudit(
+    try {
+      await updateDataset((current) =>
+        withAudit(
         {
           ...current,
           matters: current.matters.map((matter) =>
@@ -6452,9 +6565,12 @@ function SettingsView({
           entityId: selectedMatter.id,
           metadataSummary: "Custody matter settings updated without court or child labels in audit metadata.",
         }
-      )
-    );
-    flash("Selected case settings updated.");
+        )
+      );
+      flash("Selected case settings updated and saved.");
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Selected case settings save failed.");
+    }
   }
 
   function deleteCase() {
@@ -6498,13 +6614,13 @@ function SettingsView({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[420px_1fr]">
       <datalist id="records-timezone-options">
         {recordsTimezoneOptions.map((timezone) => (
           <option key={timezone} value={timezone} />
         ))}
       </datalist>
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4">
         <Panel title="Account settings" action="MFA ready structure">
           <form onSubmit={updateProfile} className="grid gap-3">
             <Field label="Display name">
@@ -6653,7 +6769,7 @@ function SettingsView({
         </Panel>
       </div>
 
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4">
         <Panel title="Storage status" action={recordsStorageMode === "supabase" ? "Private cloud" : "This browser"}>
           <div className="space-y-3 text-sm leading-6 text-slate-600">
             <div className="grid gap-2 sm:grid-cols-2">

@@ -76,7 +76,7 @@ test("records login and report workflow", async ({ page }) => {
   await page.getByLabel("Child will be with").fill("Parent C");
   await page.getByLabel("Exchange time").fill("17:00");
   await page.getByRole("button", { name: "Save color" }).click();
-  await expect(page.getByText("Custody day color saved.")).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("Custody day color saved successfully");
   const paintedDay = page.getByRole("button", { name: `Edit calendar day ${currentCalendar.today}` });
   await expect(paintedDay).toBeVisible();
   await expect(paintedDay.getByText("Parent C", { exact: true })).toBeVisible();
@@ -89,6 +89,7 @@ test("records login and report workflow", async ({ page }) => {
   await page.getByRole("button", { name: "Clear selected day" }).click();
   await expect(page.getByText("Custody day color cleared.")).toBeVisible();
   await expect(paintedDay.getByText("Parent C", { exact: true })).toHaveCount(0);
+  await page.getByTestId("calendar-color-tools").locator("summary").click();
   await page.getByLabel("Caregiver label").fill("Drag Parent");
   await page.getByRole("button", { name: "Multi-day paint: Off" }).click();
   await expect(page.getByRole("button", { name: "Multi-day paint: On" })).toHaveAttribute("aria-pressed", "true");
@@ -187,7 +188,7 @@ test("records login and report workflow", async ({ page }) => {
   await editExchangePanel.getByLabel("Scheduled time source").selectOption("written_agreement");
   await editExchangePanel.getByLabel("Who was late?").selectOption("not_applicable");
   await editExchangePanel.getByRole("button", { name: "Update exchange details" }).click();
-  await expect(page.getByText("Exchange details updated.")).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("Exchange details updated and saved");
 
   const loggedExchangePanel = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Logged exchanges" }),
@@ -300,8 +301,18 @@ test("mobile child support records are visible, editable, and deletable", async 
 
 test("mobile quick issue saves directly to editable report notes", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "l2f.records.session.v1",
+      JSON.stringify({
+        userId: "user-demo-parent-a",
+        caseId: "stale-session-case-id",
+        email: "demo@example.com",
+        authMode: "local",
+      })
+    );
+  });
   await page.goto("/records");
-  await page.getByRole("button", { name: "Enter records workspace" }).click();
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Import", exact: true }).click();
@@ -316,6 +327,10 @@ test("mobile quick issue saves directly to editable report notes", async ({ page
 
   await page.getByRole("button", { name: "Notes", exact: true }).click();
   await expect(page.getByText(issueText, { exact: true })).toHaveCount(2);
+  const notesPanel = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Notes", exact: true, level: 2 }),
+  });
+  await expect(notesPanel.getByText(/total records$/)).not.toHaveText("0 total records");
   await page.getByRole("button", { name: `Edit note ${issueText}` }).click();
   const noteForm = page.locator("#date-note-form");
   await noteForm.getByLabel("Title").fill("Updated attorney follow-up issue");
@@ -323,6 +338,150 @@ test("mobile quick issue saves directly to editable report notes", async ({ page
   await expect(page.getByText("Updated attorney follow-up issue", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Delete note Updated attorney follow-up issue" }).click();
   await expect(page.getByRole("status")).toContainText("Date based note deleted");
+});
+
+test("mobile create flows stay visible across every record tab and reload with a stale case session", async ({ page }) => {
+  test.setTimeout(60_000);
+  const currentCalendar = localDateParts();
+  const expectPhoneWidth = async () => {
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  };
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "l2f.records.session.v1",
+      JSON.stringify({
+        userId: "user-demo-parent-a",
+        caseId: "stale-session-case-id",
+        email: "demo@example.com",
+        authMode: "local",
+      })
+    );
+  });
+  await page.goto("/records");
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  const expenseName = "Persistence audit expense";
+  await page.getByRole("button", { name: "Expenses", exact: true }).click();
+  await expectPhoneWidth();
+  const expenseForm = page.locator("#expense-record-form");
+  await expenseForm.getByLabel("Description").fill(expenseName);
+  await expenseForm.getByLabel("Amount", { exact: true }).fill("42.75");
+  await expenseForm.getByRole("button", { name: "Save expense" }).click();
+  await expect(page.getByRole("status")).toContainText("Expense record saved. It appears below");
+  await expect(page.getByText(expenseName, { exact: true })).toBeVisible();
+
+  const noteTitle = "Persistence audit note";
+  const noteBody = "This note verifies that a newly created record remains visible after reload.";
+  await page.getByRole("button", { name: "Notes", exact: true }).click();
+  await expectPhoneWidth();
+  const noteForm = page.locator("#date-note-form");
+  await noteForm.getByLabel("Title").fill(noteTitle);
+  await noteForm.getByLabel("What happened?").fill(noteBody);
+  await noteForm.getByRole("button", { name: "Save note" }).click();
+  await expect(page.getByRole("status")).toContainText("Date based note saved successfully");
+  await expect(page.getByText(noteTitle, { exact: true })).toBeVisible();
+
+  const exchangeRuleName = "Persistence audit exchange rule";
+  await page.getByRole("button", { name: "Exchanges", exact: true }).click();
+  await expectPhoneWidth();
+  const exchangeRuleForm = page.locator("#exchange-rule-form");
+  await exchangeRuleForm.getByLabel("Rule name").fill(exchangeRuleName);
+  await exchangeRuleForm.getByRole("button", { name: "Save exchange rule" }).click();
+  await expect(page.getByRole("status")).toContainText("Exchange rule saved. It appears below");
+  await expect(page.getByText(exchangeRuleName, { exact: true })).toBeVisible();
+
+  const exchangeLogForm = page.locator("form").filter({
+    has: page.getByRole("button", { name: "Save exchange log" }),
+  });
+  await exchangeLogForm.getByLabel("Scheduled exchange date").fill("2026-08-14");
+  await exchangeLogForm.getByLabel("Actual date").fill("2026-08-14");
+  await exchangeLogForm.getByRole("button", { name: "Save exchange log" }).click();
+  await expect(page.getByRole("status")).toContainText("Exchange outcome saved. It appears below");
+  const loggedExchanges = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Logged exchanges", exact: true }),
+  });
+  await expect(loggedExchanges).toContainText("2026-08-14");
+
+  const fileName = "persistence-audit-file.txt";
+  await page.locator("nav").getByRole("button", { name: /^Files/ }).click();
+  await expectPhoneWidth();
+  await page.locator("input[name=file]").setInputFiles({
+    name: fileName,
+    mimeType: "text/plain",
+    buffer: Buffer.from("Synthetic persistence audit file"),
+  });
+  await page.locator("textarea[name=description]").fill("Persistence audit file description");
+  await page.getByRole("button", { name: "Save file record" }).click();
+  await expect(page.getByRole("status")).toContainText("File metadata saved with allow list validation");
+  await expect(page.getByText(fileName, { exact: true })).toBeVisible();
+
+  const supportOrderName = "Persistence audit support order";
+  await page.getByRole("button", { name: "Child Support", exact: true }).click();
+  await expectPhoneWidth();
+  const supportOrderForm = page.locator("#child-support-order-form");
+  await supportOrderForm.getByLabel("Order nickname").fill(supportOrderName);
+  await supportOrderForm.getByLabel("Ordered amount").fill("321");
+  await supportOrderForm.getByRole("button", { name: "Save support order" }).click();
+  await expect(page.getByRole("status")).toContainText("Child support order saved. It appears below");
+  await expect(page.getByTestId("mobile-support-orders")).toContainText(supportOrderName);
+
+  const supportPaymentForm = page.locator("#child-support-payment-form");
+  await supportPaymentForm.locator('select[name="childSupportOrderId"]').selectOption({ label: supportOrderName });
+  await supportPaymentForm.getByLabel("Due date").fill("2026-08-15");
+  await supportPaymentForm.getByLabel("Amount due").fill("321");
+  await supportPaymentForm.getByLabel("Amount paid").fill("123");
+  await supportPaymentForm.getByLabel("Status").selectOption("partial");
+  await supportPaymentForm.getByRole("button", { name: "Save payment record" }).click();
+  await expect(page.getByRole("status")).toContainText("Payment record saved. It appears below");
+  await expect(page.getByTestId("mobile-support-payments")).toContainText("$123.00");
+
+  const caregiverName = "Persistence audit caregiver";
+  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await expectPhoneWidth();
+  await page.getByLabel("Child will be with").fill(caregiverName);
+  await page.getByRole("button", { name: "Save color" }).click();
+  await expect(page.getByRole("status")).toContainText("Custody day color saved successfully");
+  await expect(
+    page.getByRole("button", { name: `Edit calendar day ${currentCalendar.today}` }).getByText(caregiverName)
+  ).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Expenses", exact: true }).click();
+  await expectPhoneWidth();
+  await expect(page.getByText(expenseName, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Notes", exact: true }).click();
+  await expectPhoneWidth();
+  await expect(page.getByText(noteTitle, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Exchanges", exact: true }).click();
+  await expectPhoneWidth();
+  await expect(page.getByText(exchangeRuleName, { exact: true })).toBeVisible();
+  await expect(loggedExchanges).toContainText("2026-08-14");
+  await page.locator("nav").getByRole("button", { name: /^Files/ }).click();
+  await expectPhoneWidth();
+  await expect(page.getByText(fileName, { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Child Support", exact: true }).click();
+  await expectPhoneWidth();
+  await expect(page.getByTestId("mobile-support-orders")).toContainText(supportOrderName);
+  await expect(page.getByTestId("mobile-support-payments")).toContainText("$123.00");
+  await page.getByRole("button", { name: "Calendar", exact: true }).click();
+  await expectPhoneWidth();
+  await expect(
+    page.getByRole("button", { name: `Edit calendar day ${currentCalendar.today}` }).getByText(caregiverName)
+  ).toBeVisible();
+
+  const matterName = "Persistence audit matter";
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expectPhoneWidth();
+  const createMatterPanel = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Create custody matter", exact: true }),
+  });
+  await createMatterPanel.getByLabel("Case name").fill(matterName);
+  await createMatterPanel.getByRole("button", { name: "Create matter" }).click();
+  await expect(page.getByRole("status")).toContainText("Custody matter created, saved, and selected");
+  await expect(page.getByTestId("workspace-header")).toContainText(matterName);
 });
 
 test("saved information records expose working edit and delete controls", async ({ page }) => {
@@ -515,6 +674,8 @@ test("mobile calendar, policy menu, and timeline labels remain usable", async ({
   const calendarMetrics = await calendarScroll.evaluate((element) => {
     const day = element.querySelector<HTMLElement>("[data-calendar-day]");
     const selectedDay = element.querySelector<HTMLElement>('[data-calendar-selected="true"]');
+    const weekendCells = element.querySelectorAll<HTMLElement>('[data-calendar-weekend="true"]');
+    const weekendShading = element.querySelectorAll<HTMLElement>('[data-testid="calendar-weekend-shading"]');
     const scrollerRect = element.getBoundingClientRect();
     const selectedRect = selectedDay?.getBoundingClientRect();
     return {
@@ -527,6 +688,10 @@ test("mobile calendar, policy menu, and timeline labels remain usable", async ({
           selectedRect.left >= scrollerRect.left &&
           selectedRect.right <= scrollerRect.right
       ),
+      selectedUsesInsetHighlight: selectedDay?.classList.contains("ring-inset") || false,
+      selectedUsesOffsetHighlight: selectedDay?.classList.contains("ring-offset-1") || false,
+      weekendCellCount: weekendCells.length,
+      weekendShadingCount: weekendShading.length,
     };
   });
   expect(calendarMetrics.scrollWidth).toBeLessThanOrEqual(calendarMetrics.clientWidth + 1);
@@ -534,6 +699,16 @@ test("mobile calendar, policy menu, and timeline labels remain usable", async ({
   expect(calendarMetrics.dayWidth).toBeLessThanOrEqual(50);
   expect(calendarMetrics.touchAction).toBe("pan-y");
   expect(calendarMetrics.selectedDayVisible).toBe(true);
+  expect(calendarMetrics.selectedUsesInsetHighlight).toBe(true);
+  expect(calendarMetrics.selectedUsesOffsetHighlight).toBe(false);
+  expect(calendarMetrics.weekendCellCount).toBeGreaterThanOrEqual(8);
+  expect(calendarMetrics.weekendShadingCount).toBe(calendarMetrics.weekendCellCount);
+  await expect(page.locator('[data-calendar-weekend-header="true"]')).toHaveCount(2);
+  await expect(page.getByText("Weekend", { exact: true })).toBeVisible();
+  const colorTools = page.getByTestId("calendar-color-tools");
+  await expect(colorTools).not.toHaveAttribute("open", "");
+  await colorTools.locator("summary").click();
+  await expect(colorTools).toHaveAttribute("open", "");
   await expect(page.getByRole("button", { name: "Multi-day paint: Off" })).toHaveAttribute("aria-pressed", "false");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 
