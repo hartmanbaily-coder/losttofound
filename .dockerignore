@@ -3,6 +3,7 @@
 .next
 .codex
 coverage
+deploy
 node_modules
 playwright-report
 test-results
