@@ -188,6 +188,23 @@ function tableToCsv(table: SectionExportTable) {
   ].join("\n");
 }
 
+function tablesToCsv(tables: SectionExportTable[], emptyTitle: string) {
+  if (tables.length === 1) return tableToCsv(tables[0]);
+  if (!tables.some((table) => table.rows.length > 0)) {
+    return rowsToCsv([{ table: emptyTitle, status: "No records in the selected date range" }]);
+  }
+
+  return tables
+    .flatMap((table) => [
+      [table.title],
+      table.headers,
+      ...table.rows,
+      [],
+    ])
+    .map((row) => row.map(escapeCsvCell).join(","))
+    .join("\n");
+}
+
 function ownedCaseRecords<T extends { userId: string; caseId: string }>(
   records: T[],
   userId: string,
@@ -370,6 +387,67 @@ function timelineIssueRows(events: CalendarEvent[]) {
   })));
 }
 
+function buildIssueTable(title: string, events: CalendarEvent[]): SectionExportTable {
+  return {
+    title,
+    headers: ["Date", "Time", "Issue", "Source", "Title", "Detail", "Summary", "Notes", "Tags"],
+    rows: timelineIssueRows(events).map((row) => [
+      row.date,
+      row.time || "",
+      row.issue,
+      row.source,
+      row.title,
+      row.detail,
+      row.summary,
+      row.notes,
+      row.tags,
+    ]),
+  };
+}
+
+function buildExchangeLogTable(
+  exchangeLogs: ExchangeLog[],
+  userRoleLabel: string,
+  otherParentLabel: string
+): SectionExportTable {
+  return {
+    title: "Logged exchange timing",
+    headers: [
+      "Date",
+      "Scheduled time",
+      "Actual time",
+      "Scheduled source",
+      "Direction",
+      "Arriving / drop-off party",
+      "Late party",
+      "Minutes late/early",
+      "Status",
+      "Location",
+      "Reason",
+      "Notes",
+      "Tags",
+    ],
+    rows: toTableRows(exchangeLogs, (log) => {
+      const timing = calculateExchangeTiming(log);
+      return [
+        getIsoDateFromDateTime(log.orderedExchangeAt),
+        log.orderedExchangeAt.slice(11, 16),
+        log.actualExchangeAt?.slice(11, 16) || "",
+        labelExchangeScheduledTimeSource(log.scheduledTimeSource),
+        labelExchangeDirectionWithParties(log.direction, userRoleLabel, otherParentLabel),
+        labelExchangeParty(getExchangeArrivingParty(log), userRoleLabel, otherParentLabel),
+        labelExchangeParty(getExchangeLateParty(log), userRoleLabel, otherParentLabel),
+        timing.minutesEarlyOrLate === null ? "" : String(timing.minutesEarlyOrLate),
+        labelExchangeStatus(log.status),
+        log.location || "",
+        log.reasonGiven || "",
+        log.notes || "",
+        log.tags.join("; "),
+      ];
+    }),
+  };
+}
+
 function filingCorrelationRows(filingEvents: CalendarEvent[], noFaceTimeEvents: CalendarEvent[]) {
   return sortByDateTime(filingEvents.map((event) => {
     const sameDay = noFaceTimeEvents.filter((item) => dateDiffDays(event.date, item.date) === 0).length;
@@ -399,20 +477,7 @@ function toTableRows<T>(records: T[], mapper: (record: T) => string[]) {
 }
 
 export function sectionExportToCsv(packet: SectionExportPacket) {
-  if (packet.tables.length === 1) return tableToCsv(packet.tables[0]);
-  if (!packet.tables.some((table) => table.rows.length > 0)) {
-    return rowsToCsv([{ table: packet.title, status: "No records in the selected date range" }]);
-  }
-
-  return packet.tables
-    .flatMap((table) => [
-      [table.title],
-      table.headers,
-      ...table.rows,
-      [],
-    ])
-    .map((row) => row.map(escapeCsvCell).join(","))
-    .join("\n");
+  return tablesToCsv(packet.tables, packet.title);
 }
 
 export function buildSectionExportPacket(
@@ -963,6 +1028,7 @@ export function buildReportRows(
   if (reportType === "filing_facetime_correlation") return correlationRows;
   if (reportType === "child_support_payment") return childSupportRows;
   if (reportType === "expense_reimbursement") return expenseRows;
+  if (reportType === "combined_attorney_summary") return timelineRows;
 
   return [
     ...custodyScheduleRows.map((row) => ({ section: "custody_schedule", ...row })),
@@ -986,6 +1052,9 @@ export function buildReportPreview(
   const exchangeLogs = dataset.exchangeLogs
     .filter((item) => item.caseId === caseId && item.userId === userId)
     .filter((item) => isWithinDateRange(getIsoDateFromDateTime(item.orderedExchangeAt), range));
+  const custodyAssignments = dataset.custodyDayAssignments
+    .filter((item) => item.caseId === caseId && item.userId === userId)
+    .filter((item) => isWithinDateRange(item.date, range));
   const evidence = dataset.evidenceItems.filter((item) => item.caseId === caseId && item.userId === userId);
   const events = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent);
   const noFaceTimeEvents = events.filter(isNoFaceTimeTimelineEvent);
@@ -1058,38 +1127,7 @@ export function buildReportPreview(
   };
 
   if (reportType === "exchange_compliance") {
-    const exchangeTable: SectionExportTable = {
-      title: "Logged exchange timing",
-      headers: [
-        "Date",
-        "Scheduled time",
-        "Actual time",
-        "Scheduled source",
-        "Direction",
-        "Arriving / drop-off party",
-        "Late party",
-        "Minutes late/early",
-        "Status",
-        "Reason",
-        "Notes",
-      ],
-      rows: toTableRows(exchangeLogs, (log) => {
-        const timing = calculateExchangeTiming(log);
-        return [
-          getIsoDateFromDateTime(log.orderedExchangeAt),
-          log.orderedExchangeAt.slice(11, 16),
-          log.actualExchangeAt?.slice(11, 16) || "",
-          labelExchangeScheduledTimeSource(log.scheduledTimeSource),
-          labelExchangeDirectionWithParties(log.direction, userRoleLabel, otherParentLabel),
-          labelExchangeParty(getExchangeArrivingParty(log), userRoleLabel, otherParentLabel),
-          labelExchangeParty(getExchangeLateParty(log), userRoleLabel, otherParentLabel),
-          timing.minutesEarlyOrLate === null ? "" : String(timing.minutesEarlyOrLate),
-          labelExchangeStatus(log.status),
-          log.reasonGiven || "",
-          log.notes || "",
-        ];
-      }),
-    };
+    const exchangeTable = buildExchangeLogTable(exchangeLogs, userRoleLabel, otherParentLabel);
 
     return {
       ...base,
@@ -1261,21 +1299,7 @@ export function buildReportPreview(
   }
 
   if (reportType === "incident_timeline") {
-    const table: SectionExportTable = {
-      title: "Issue timeline rows",
-      headers: ["Date", "Time", "Issue", "Source", "Title", "Detail", "Summary", "Notes", "Tags"],
-      rows: timelineIssueRows(issueEvents).map((row) => [
-        row.date,
-        row.time || "",
-        row.issue,
-        row.source,
-        row.title,
-        row.detail,
-        row.summary,
-        row.notes,
-        row.tags,
-      ]),
-    };
+    const table = buildIssueTable("Issue timeline rows", issueEvents);
 
     return {
       ...base,
@@ -1314,30 +1338,169 @@ export function buildReportPreview(
     };
   }
 
-  const issueTable: SectionExportTable = {
-    title: "Combined issue rows",
-    headers: ["Date", "Time", "Issue", "Source", "Title", "Detail", "Summary", "Notes", "Tags"],
-    rows: timelineIssueRows(issueEvents).map((row) => [
-      row.date,
-      row.time || "",
-      row.issue,
-      row.source,
-      row.title,
-      row.detail,
-      row.summary,
-      row.notes,
-      row.tags,
+  if (reportType === "child_support_payment") {
+    const payments = dataset.childSupportPayments
+      .filter((payment) => payment.userId === userId && payment.caseId === caseId)
+      .filter((payment) => isWithinDateRange(payment.dueDate, range));
+    const supportStats = calculateChildSupportStats(payments, range);
+    const trendRows = childSupportChartRows(payments, range);
+    const table: SectionExportTable = {
+      title: "Child support payment records",
+      headers: ["Due date", "Amount due", "Amount paid", "Payment date", "Status", "Method", "Notes"],
+      rows: toTableRows(payments, (payment) => [
+        payment.dueDate,
+        formatMoney(payment.amountDue),
+        formatMoney(payment.amountPaid),
+        payment.paymentDate || "",
+        labelPaymentStatus(payment.paymentStatus),
+        payment.paymentMethod.replaceAll("_", " "),
+        payment.notes || "",
+      ]),
+    };
+
+    return {
+      ...base,
+      title: reportTypeLabels.child_support_payment,
+      focus: "Child support payment history",
+      summaries: [
+        buildNeutralChildSupportSummary(range, supportStats),
+        `${payments.length} payment record${payments.length === 1 ? "" : "s"} are included from ${range.from} to ${range.to}.`,
+        "This report contains payment records only; support order details are available in the Child Support section export.",
+      ],
+      metrics: [
+        { label: "Total due", value: formatMoney(supportStats.totalDue), detail: "Selected range" },
+        { label: "Total paid", value: formatMoney(supportStats.totalPaid), detail: "User entered records" },
+        { label: "Unpaid balance", value: formatMoney(supportStats.unpaidBalance), detail: `${supportStats.unpaidCount} unpaid` },
+        { label: "Average days late", value: supportStats.averageDaysLate, detail: "Paid late records" },
+      ],
+      charts: [
+        {
+          kind: "line",
+          title: "Monthly due, paid, and unpaid balance",
+          unit: "USD",
+          seriesLabels: ["Amount due", "Amount paid", "Unpaid balance"],
+          rows: trendRows.map((row) => ({
+            label: row.month,
+            value: row.amountDue,
+            secondaryValue: row.amountPaid,
+            tertiaryValue: row.unpaidBalance,
+          })),
+          emptyLabel: "No child support payment records in this range.",
+        },
+        {
+          kind: "bar",
+          orientation: "horizontal",
+          title: "Payment status mix",
+          unit: "payments",
+          rows: countBy(payments, (payment) => labelPaymentStatus(payment.paymentStatus)),
+          emptyLabel: "No child support payment records in this range.",
+        },
+      ],
+      tables: [table],
+    };
+  }
+
+  if (reportType === "expense_reimbursement") {
+    const expenses = dataset.expenseItems
+      .filter((expense) => expense.userId === userId && expense.caseId === caseId)
+      .filter((expense) => isWithinDateRange(expense.expenseDate, range));
+    const expenseStats = calculateExpenseStats(expenses, range);
+    const table: SectionExportTable = {
+      title: "Expense and reimbursement records",
+      headers: [
+        "Date",
+        "Category",
+        "Description",
+        "Amount",
+        "Paid by",
+        "Reimbursement requested",
+        "Status",
+        "Amount reimbursed",
+        "Notes",
+      ],
+      rows: toTableRows(expenses, (expense) => [
+        expense.expenseDate,
+        expense.category,
+        expense.description,
+        formatMoney(expense.amount, expense.currency),
+        expense.paidByLabel,
+        expense.reimbursementRequested ? "Yes" : "No",
+        expense.reimbursementStatus.replaceAll("_", " "),
+        formatMoney(expense.amountReimbursed || 0, expense.currency),
+        expense.notes || "",
+      ]),
+    };
+
+    return {
+      ...base,
+      title: reportTypeLabels.expense_reimbursement,
+      focus: "Expense and reimbursement history",
+      summaries: [
+        `Based on records entered in this app, expenses in this range total ${formatMoney(expenseStats.totalExpenses)}.`,
+        `${expenses.length} expense record${expenses.length === 1 ? "" : "s"} are included, with ${formatMoney(expenseStats.unpaidReimbursement)} in unpaid reimbursement based on user entered records.`,
+      ],
+      metrics: [
+        { label: "Total expenses", value: formatMoney(expenseStats.totalExpenses), detail: "Selected range" },
+        { label: "Requested", value: formatMoney(expenseStats.reimbursementRequested), detail: "Reimbursement requested" },
+        { label: "Received", value: formatMoney(expenseStats.reimbursementReceived), detail: "Marked reimbursed" },
+        { label: "Unpaid", value: formatMoney(expenseStats.unpaidReimbursement), detail: "User entered records" },
+      ],
+      charts: [
+        {
+          kind: "bar",
+          orientation: "horizontal",
+          title: "Expenses by category",
+          unit: "USD",
+          rows: expenseStats.byCategory.map((row) => ({ label: row.category, value: row.amount })),
+          emptyLabel: "No expense records in this range.",
+        },
+        {
+          kind: "bar",
+          orientation: "horizontal",
+          title: "Reimbursement status mix",
+          unit: "expenses",
+          rows: countBy(expenses, (expense) => expense.reimbursementStatus.replaceAll("_", " ")),
+          emptyLabel: "No expense records in this range.",
+        },
+      ],
+      tables: [table],
+    };
+  }
+
+  const issueTable = buildIssueTable("Combined issue rows", issueEvents);
+  const isCourtPacket = reportType === "combined_court_packet";
+  const custodyScheduleTable: SectionExportTable = {
+    title: "Custody schedule context",
+    headers: ["Date", "Caregiver", "Start", "End", "Exchange", "Direction", "Location", "Notes"],
+    rows: toTableRows(custodyAssignments, (assignment) => [
+      assignment.date,
+      assignment.caregiverLabel,
+      assignment.startsAt || "",
+      assignment.endsAt || "",
+      assignment.exchangeTime || "",
+      assignment.exchangeDirection?.replaceAll("_", " ") || "",
+      assignment.exchangeLocation || "",
+      assignment.notes || "",
     ]),
   };
+  const combinedTables = isCourtPacket
+    ? [
+        custodyScheduleTable,
+        buildExchangeLogTable(exchangeLogs, userRoleLabel, otherParentLabel),
+        issueTable,
+      ]
+    : [issueTable];
 
   return {
     ...base,
     title: reportTypeLabels[reportType],
-    focus: reportType === "combined_court_packet" ? "Combined court issue packet" : "Attorney issue review",
+    focus: isCourtPacket ? "Combined court issue packet" : "Attorney issue review",
     summaries: [
       `${issueEvents.length} issue record${issueEvents.length === 1 ? "" : "s"} are included from ${range.from} to ${range.to}.`,
       `${lateExchangeEvents.length} late exchange record${lateExchangeEvents.length === 1 ? "" : "s"}, ${noFaceTimeEvents.length} no FaceTime record${noFaceTimeEvents.length === 1 ? "" : "s"}, and ${filingEvents.length} court/attorney filing note${filingEvents.length === 1 ? "" : "s"} are detected.`,
-      "The combined packet prioritizes custody timeline issues and does not include child support or expense sections.",
+      isCourtPacket
+        ? "The court packet includes custody schedule context, logged exchange details, and issue timeline rows. It does not include child support or expense sections."
+        : "The attorney summary contains issue timeline rows only. It excludes routine custody schedule, child support, and expense records.",
     ],
     metrics: [
       { label: "Issue records", value: issueEvents.length, detail: `${range.from} to ${range.to}` },
@@ -1371,12 +1534,12 @@ export function buildReportPreview(
         emptyLabel: "No late-party data in this range.",
       },
     ],
-    tables: [issueTable],
+    tables: combinedTables,
   };
 }
 
 export function reportPreviewToCsv(preview: ReportPreview) {
+  if (preview.tables.length > 0) return tablesToCsv(preview.tables, preview.title);
   if (preview.rows.length > 0) return rowsToCsv(preview.rows);
-  if (preview.tables[0]) return tableToCsv(preview.tables[0]);
   return rowsToCsv([{ report: preview.title, status: "No records in the selected date range" }]);
 }

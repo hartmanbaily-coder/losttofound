@@ -218,14 +218,14 @@ describe("privacy and safety helpers", () => {
 
     expect(containsForbiddenGeneratedTerm(summaryText)).toBe(false);
     expect(containsForbiddenGeneratedTerm(exchangeSummary)).toBe(false);
-    expect(summaryText).toContain("custody timeline issues");
-    expect(summaryText).toContain("does not include child support or expense sections");
+    expect(summaryText).toContain("issue timeline rows only");
+    expect(summaryText).toContain("child support, and expense records");
   });
 
-  it("includes custody schedule rows in combined report exports", () => {
+  it("exports the combined court packet as clean, labeled sections", () => {
     const dataset = createRecordsSeed();
     const preview = buildReportPreview(dataset, demoUserId, demoCaseId, range, "combined_court_packet");
-    const csv = rowsToCsv(preview.rows);
+    const csv = reportPreviewToCsv(preview);
 
     expect(preview.rows).toContainEqual(
       expect.objectContaining({
@@ -233,8 +233,17 @@ describe("privacy and safety helpers", () => {
         caregiver_label: "Parent A",
       })
     );
-    expect(csv.split("\n")[0]).toContain("caregiver_label");
-    expect(csv.split("\n")[0]).toContain("scheduled_exchange_time");
+    expect(preview.tables.map((table) => table.title)).toEqual([
+      "Custody schedule context",
+      "Logged exchange timing",
+      "Combined issue rows",
+    ]);
+    expect(csv.split("\n")[0]).toBe("Custody schedule context");
+    expect(csv).toContain("Date,Caregiver,Start,End,Exchange,Direction,Location,Notes");
+    expect(csv).toContain("Date,Scheduled time,Actual time,Scheduled source");
+    expect(csv).toContain("Date,Time,Issue,Source,Title,Detail,Summary,Notes,Tags");
+    expect(csv).not.toContain("caregiver_label");
+    expect(csv).not.toContain("scheduled_exchange_time");
   });
 
   it("neutralizes spreadsheet formulas in CSV exports", () => {
@@ -297,6 +306,66 @@ describe("privacy and safety helpers", () => {
       expect(preview.title).toBe(reportTypeLabels[reportType]);
       expect(preview.metrics.length).toBeGreaterThan(0);
       expect(reportPreviewToCsv(preview)).not.toContain("chart_data");
+    }
+  });
+
+  it("matches every single-table report CSV to its report-specific schema and row count", () => {
+    const dataset = createRecordsSeed();
+    const reportSchemas: Array<[ReportType, string[]]> = [
+      [
+        "exchange_compliance",
+        [
+          "Date",
+          "Scheduled time",
+          "Actual time",
+          "Scheduled source",
+          "Direction",
+          "Arriving / drop-off party",
+          "Late party",
+          "Minutes late/early",
+          "Status",
+          "Location",
+          "Reason",
+          "Notes",
+          "Tags",
+        ],
+      ],
+      ["facetime_cancellations", ["Date", "Time", "Issue", "Title", "Detail", "Summary", "Notes", "Tags"]],
+      ["incident_timeline", ["Date", "Time", "Issue", "Source", "Title", "Detail", "Summary", "Notes", "Tags"]],
+      [
+        "filing_facetime_correlation",
+        ["Date", "Time", "Filing note", "Same day", "Within 7 days", "Within 14 days", "Note text"],
+      ],
+      [
+        "child_support_payment",
+        ["Due date", "Amount due", "Amount paid", "Payment date", "Status", "Method", "Notes"],
+      ],
+      [
+        "expense_reimbursement",
+        [
+          "Date",
+          "Category",
+          "Description",
+          "Amount",
+          "Paid by",
+          "Reimbursement requested",
+          "Status",
+          "Amount reimbursed",
+          "Notes",
+        ],
+      ],
+      ["combined_attorney_summary", ["Date", "Time", "Issue", "Source", "Title", "Detail", "Summary", "Notes", "Tags"]],
+    ];
+
+    for (const [reportType, expectedHeaders] of reportSchemas) {
+      const preview = buildReportPreview(dataset, demoUserId, demoCaseId, range, reportType);
+      const csv = reportPreviewToCsv(preview);
+
+      expect(preview.tables).toHaveLength(1);
+      expect(preview.tables[0].headers).toEqual(expectedHeaders);
+      expect(preview.tables[0].rows).toHaveLength(preview.rows.length);
+      expect(csv.split("\n")[0]).toBe(expectedHeaders.join(","));
+      expect(csv).not.toContain("section,custody_schedule");
     }
   });
 
@@ -398,7 +467,7 @@ describe("privacy and safety helpers", () => {
       "No FaceTime records after filing notes"
     );
     expect(correlationPreview.summaries.join(" ")).toContain("timing overlap only");
-    expect(csv.split("\n")[0]).toContain("date");
+    expect(csv.split("\n")[0]).toContain("Date");
     expect(csv).toContain("No FaceTime conducted");
     expect(csv).not.toContain("chart_data");
   });
@@ -409,9 +478,9 @@ describe("privacy and safety helpers", () => {
     const csv = reportPreviewToCsv(preview);
     const headers = csv.split("\n")[0];
 
-    expect(headers).toContain("scheduled_time_source");
-    expect(headers).toContain("arriving_or_drop_off_party");
-    expect(headers).toContain("late_party");
+    expect(headers).toContain("Scheduled source");
+    expect(headers).toContain("Arriving / drop-off party");
+    expect(headers).toContain("Late party");
     expect(csv).toContain("Court order");
     expect(csv).toContain("Parent B");
     expect(csv).not.toContain("metric");
