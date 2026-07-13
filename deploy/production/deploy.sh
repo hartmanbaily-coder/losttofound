@@ -56,6 +56,7 @@ cd "${app_root}"
 docker compose --env-file "${env_file}" -f "${compose_file}" config --quiet
 docker compose --env-file "${env_file}" -f "${compose_file}" build --pull losttofound
 docker compose --env-file "${env_file}" -f "${compose_file}" up -d --remove-orphans
+docker compose --env-file "${env_file}" -f "${compose_file}" up -d --force-recreate caddy
 
 if ! "${script_dir}/smoke-test.sh"; then
   echo "Deployment validation failed." >&2
@@ -65,6 +66,7 @@ if ! "${script_dir}/smoke-test.sh"; then
     export LOSTTOFOUND_IMAGE_TAG="${previous_image#losttofound:}"
     echo "Rolling back to ${previous_image}." >&2
     docker compose --env-file "${env_file}" -f "${compose_file}" up -d --no-build --remove-orphans
+    docker compose --env-file "${env_file}" -f "${compose_file}" up -d --force-recreate caddy
     "${script_dir}/smoke-test.sh" || true
   fi
   exit 1
