@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import {
-  attachRefreshedRecordsSession,
+  clearRecordsSessionCookies,
   getRecordsAuthContext,
   isSupabaseRecordsMode,
+  recordsAccessCookieName,
 } from "@/lib/records/authServer";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
@@ -89,13 +90,53 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const accessToken =
+    context.refreshedSession?.access_token ||
+    request.cookies.get(recordsAccessCookieName)?.value;
+
+  try {
+    if (!accessToken) {
+      throw new Error("Authenticated deletion request did not include an access token.");
+    }
+
+    const { error: signOutError } = await context.supabase.auth.admin.signOut(
+      accessToken,
+      "global"
+    );
+    if (signOutError) throw signOutError;
+  } catch {
+    await recordSecurityEvent({
+      type: "account_deletion_session_revocation_failed",
+      severity: "high",
+      request,
+      userId: context.userId,
+      status: 503,
+      detail:
+        "Deletion request was recorded, but server-side refresh-session revocation could not be confirmed.",
+    });
+
+    const response = NextResponse.json(
+      {
+        error:
+          "Your deletion request was recorded, but session revocation could not be confirmed. Contact support and do not sign in again unless support asks you to.",
+        requestId,
+        requestedAt,
+        clearLocalSession: true,
+      },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
+    clearRecordsSessionCookies(response);
+    return response;
+  }
+
   await recordSecurityEvent({
     type: "account_deletion_requested",
     severity: "warning",
     request,
     userId: context.userId,
     status: 202,
-    detail: "Authenticated user initiated complete account deletion.",
+    detail:
+      "Authenticated user initiated complete account deletion and server-side refresh sessions were revoked.",
   });
 
   const response = NextResponse.json(
@@ -103,11 +144,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ok: true,
       requestId,
       requestedAt,
+      clearLocalSession: true,
       message:
-        "Account deletion request received. Support will verify and process complete account deletion subject to legal, security, and backup-retention requirements.",
+        "Account deletion request received and active refresh sessions revoked. Support will verify and process complete account deletion subject to legal, security, and backup-retention requirements.",
     },
     { status: 202, headers: { "Cache-Control": "no-store" } }
   );
 
-  return attachRefreshedRecordsSession(request, response, context);
+  clearRecordsSessionCookies(response);
+  return response;
 }

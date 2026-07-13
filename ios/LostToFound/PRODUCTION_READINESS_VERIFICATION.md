@@ -29,9 +29,10 @@ Use a synthetic production test account. Record the build number, device model, 
 1. Sign in and open **Support > Account and Data > Request account deletion**.
 2. Confirm the deletion page recognizes the signed-in account inside the app.
 3. Submit the deletion request with a synthetic account.
-4. Complete the approved backend deletion process, including authentication-session revocation.
-5. Force quit and relaunch the app.
-6. Confirm the deleted account cannot access records and its previous credentials cannot create a valid session.
+4. Confirm the app signs out immediately and the backend reports that refresh sessions were revoked.
+5. Complete the approved backend deletion process, including permanent account removal or legally required retention handling.
+6. Force quit and relaunch the app.
+7. Confirm the deleted account cannot access records and its previous credentials cannot create a valid session.
 
 The current public control creates an authenticated deletion request; it does not itself prove that the operational deletion process has finished. Do not mark this case passed until the backend account deletion and session revocation are complete.
 

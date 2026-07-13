@@ -6,14 +6,14 @@ import { POST } from "@/app/api/records/account/deletion-request/route";
 const getRecordsAuthContext = vi.hoisted(() => vi.fn());
 const recordSecurityEvent = vi.hoisted(() => vi.fn());
 const insertAuditLog = vi.hoisted(() => vi.fn());
+const revokeSessions = vi.hoisted(() => vi.fn());
+const clearRecordsSessionCookies = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/records/authServer", () => ({
-  attachRefreshedRecordsSession: (
-    _request: NextRequest,
-    response: NextResponse,
-  ) => response,
+  clearRecordsSessionCookies,
   getRecordsAuthContext,
   isSupabaseRecordsMode: () => true,
+  recordsAccessCookieName: "l2f-records-access",
 }));
 
 vi.mock("@/lib/security/securityEvents", () => ({
@@ -23,7 +23,10 @@ vi.mock("@/lib/security/securityEvents", () => ({
 function makeRequest(body: unknown) {
   return new NextRequest("https://losttofound.org/api/records/account/deletion-request", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: "l2f-records-access=test-access-token",
+    },
     body: JSON.stringify(body),
   });
 }
@@ -33,8 +36,14 @@ describe("records account deletion request route", () => {
     vi.clearAllMocks();
     resetRateLimitStore();
     insertAuditLog.mockResolvedValue({ error: null });
+    revokeSessions.mockResolvedValue({ error: null });
     getRecordsAuthContext.mockResolvedValue({
       supabase: {
+        auth: {
+          admin: {
+            signOut: revokeSessions,
+          },
+        },
         from: (table: string) => {
           expect(table).toBe("records_audit_logs");
           return { insert: insertAuditLog };
@@ -75,6 +84,32 @@ describe("records account deletion request route", () => {
         userId: "11111111-1111-4111-8111-111111111111",
       })
     );
+    expect(revokeSessions).toHaveBeenCalledWith("test-access-token", "global");
+    expect(clearRecordsSessionCookies).toHaveBeenCalledWith(response);
+    expect(body.clearLocalSession).toBe(true);
+  });
+
+  it("clears the local session and reports an error if server revocation cannot be confirmed", async () => {
+    revokeSessions.mockResolvedValue({ error: new Error("revocation unavailable") });
+
+    const response = await POST(makeRequest({ confirm: true }));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body).toMatchObject({
+      clearLocalSession: true,
+      error: expect.stringContaining("session revocation could not be confirmed"),
+      requestId: expect.any(String),
+    });
+    expect(insertAuditLog).toHaveBeenCalledOnce();
+    expect(clearRecordsSessionCookies).toHaveBeenCalledWith(response);
+    expect(recordSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: "high",
+        status: 503,
+        type: "account_deletion_session_revocation_failed",
+      })
+    );
   });
 
   it("requires explicit confirmation before recording a request", async () => {
@@ -86,6 +121,8 @@ describe("records account deletion request route", () => {
     });
     expect(insertAuditLog).not.toHaveBeenCalled();
     expect(recordSecurityEvent).not.toHaveBeenCalled();
+    expect(revokeSessions).not.toHaveBeenCalled();
+    expect(clearRecordsSessionCookies).not.toHaveBeenCalled();
   });
 
   it("requires an authenticated records session", async () => {
@@ -100,5 +137,7 @@ describe("records account deletion request route", () => {
       error: "Sign in before accessing records.",
     });
     expect(insertAuditLog).not.toHaveBeenCalled();
+    expect(revokeSessions).not.toHaveBeenCalled();
+    expect(clearRecordsSessionCookies).not.toHaveBeenCalled();
   });
 });

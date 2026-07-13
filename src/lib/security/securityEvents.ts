@@ -25,6 +25,7 @@ export type SecurityEventType =
   | "auth_mfa_policy_denied"
   | "account_deletion_requested"
   | "account_deletion_request_failed"
+  | "account_deletion_session_revocation_failed"
   | "evidence_upload_scanner_blocked"
   | "evidence_upload_scanner_failed"
   | "evidence_storage_failed"

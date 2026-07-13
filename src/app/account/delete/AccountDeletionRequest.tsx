@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { notifyNativeSessionInvalidated } from "@/lib/records/clientStore";
 import { accountDeletionMailto } from "@/lib/site";
 
 type SessionStatus = "checking" | "authenticated" | "unauthenticated" | "unavailable";
@@ -66,7 +67,12 @@ export function AccountDeletionRequest() {
         message?: string;
         requestId?: string;
         requestedAt?: string;
+        clearLocalSession?: boolean;
       };
+
+      if (body.clearLocalSession === true || (response.ok && body.requestId)) {
+        notifyNativeSessionInvalidated();
+      }
 
       if (!response.ok || !body.requestId) {
         setRequestState({
