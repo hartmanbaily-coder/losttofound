@@ -89,6 +89,8 @@ struct AppRootView: View {
         .task {
             guard !hasCheckedForSession else { return }
 
+            SensitiveExportStore.shared.purge()
+
             let cookieStore = WKWebsiteDataStore.default().httpCookieStore
             let hasSession = await SecureSessionCookieStore.shared.hasRestorableSession(cookieStore)
             hasCheckedForSession = true
@@ -99,10 +101,17 @@ struct AppRootView: View {
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background {
+                SensitiveExportStore.shared.purge()
+            }
+
             guard isUnlocked, newPhase != .active else { return }
 
             Task { @MainActor in
                 let cookieStore = WKWebsiteDataStore.default().httpCookieStore
+                if newPhase == .background {
+                    await SecureSessionCookieStore.shared.synchronize(cookieStore)
+                }
                 let hasSession = await SecureSessionCookieStore.shared.hasRestorableSession(cookieStore)
                 guard scenePhase != .active, hasSession else { return }
                 isUnlocked = false

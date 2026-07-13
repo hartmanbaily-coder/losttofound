@@ -13,9 +13,22 @@
 		0A1000010000000000000004 /* WorkspaceWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000010000000000000004 /* WorkspaceWebView.swift */; };
 		0A1000010000000000000005 /* NativePolicyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000010000000000000005 /* NativePolicyView.swift */; };
 		0A1000010000000000000006 /* SecureSessionCookieStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000010000000000000006 /* SecureSessionCookieStore.swift */; };
+		0A1000010000000000000007 /* NativeSecurityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000010000000000000007 /* NativeSecurityPolicy.swift */; };
+		0A1000010000000000000008 /* SensitiveExportStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2000010000000000000008 /* SensitiveExportStore.swift */; };
 		0A1000020000000000000001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0A2000020000000000000001 /* Assets.xcassets */; };
 		0A1000020000000000000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 0A2000020000000000000002 /* PrivacyInfo.xcprivacy */; };
+		0B1000010000000000000001 /* NativeSecurityPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B2000010000000000000001 /* NativeSecurityPolicyTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0B7000010000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 0A6000010000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0A5000010000000000000001;
+			remoteInfo = LostToFound;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		0A2000010000000000000001 /* LostToFoundApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LostToFoundApp.swift; sourceTree = "<group>"; };
@@ -24,14 +37,25 @@
 		0A2000010000000000000004 /* WorkspaceWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceWebView.swift; sourceTree = "<group>"; };
 		0A2000010000000000000005 /* NativePolicyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePolicyView.swift; sourceTree = "<group>"; };
 		0A2000010000000000000006 /* SecureSessionCookieStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureSessionCookieStore.swift; sourceTree = "<group>"; };
+		0A2000010000000000000007 /* NativeSecurityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSecurityPolicy.swift; sourceTree = "<group>"; };
+		0A2000010000000000000008 /* SensitiveExportStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitiveExportStore.swift; sourceTree = "<group>"; };
 		0A2000020000000000000001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		0A2000020000000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		0A2000020000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		0A2000030000000000000001 /* LostToFound.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LostToFound.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0B2000010000000000000001 /* NativeSecurityPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSecurityPolicyTests.swift; sourceTree = "<group>"; };
+		0B2000030000000000000001 /* LostToFoundTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LostToFoundTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		0A3000010000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0B3000010000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -45,6 +69,7 @@
 			isa = PBXGroup;
 			children = (
 				0A4000010000000000000002 /* LostToFound */,
+				0B4000010000000000000001 /* LostToFoundTests */,
 				0A4000010000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -58,6 +83,8 @@
 				0A2000010000000000000004 /* WorkspaceWebView.swift */,
 				0A2000010000000000000005 /* NativePolicyView.swift */,
 				0A2000010000000000000006 /* SecureSessionCookieStore.swift */,
+				0A2000010000000000000007 /* NativeSecurityPolicy.swift */,
+				0A2000010000000000000008 /* SensitiveExportStore.swift */,
 				0A2000020000000000000001 /* Assets.xcassets */,
 				0A2000020000000000000003 /* Info.plist */,
 				0A2000020000000000000002 /* PrivacyInfo.xcprivacy */,
@@ -69,8 +96,17 @@
 			isa = PBXGroup;
 			children = (
 				0A2000030000000000000001 /* LostToFound.app */,
+				0B2000030000000000000001 /* LostToFoundTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		0B4000010000000000000001 /* LostToFoundTests */ = {
+			isa = PBXGroup;
+			children = (
+				0B2000010000000000000001 /* NativeSecurityPolicyTests.swift */,
+			);
+			path = LostToFoundTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -93,6 +129,24 @@
 			productReference = 0A2000030000000000000001 /* LostToFound.app */;
 			productType = "com.apple.product-type.application";
 		};
+		0B5000010000000000000001 /* LostToFoundTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0B9000020000000000000001 /* Build configuration list for PBXNativeTarget "LostToFoundTests" */;
+			buildPhases = (
+				0B3000020000000000000001 /* Sources */,
+				0B3000010000000000000001 /* Frameworks */,
+				0B3000030000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0B7000020000000000000001 /* PBXTargetDependency */,
+			);
+			name = LostToFoundTests;
+			productName = LostToFoundTests;
+			productReference = 0B2000030000000000000001 /* LostToFoundTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -105,6 +159,10 @@
 				TargetAttributes = {
 					0A5000010000000000000001 = {
 						CreatedOnToolsVersion = 26.6;
+					};
+					0B5000010000000000000001 = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = 0A5000010000000000000001;
 					};
 				};
 			};
@@ -122,6 +180,7 @@
 			projectRoot = "";
 			targets = (
 				0A5000010000000000000001 /* LostToFound */,
+				0B5000010000000000000001 /* LostToFoundTests */,
 			);
 		};
 /* End PBXProject section */
@@ -133,6 +192,13 @@
 			files = (
 				0A1000020000000000000001 /* Assets.xcassets in Resources */,
 				0A1000020000000000000002 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0B3000030000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -149,10 +215,28 @@
 				0A1000010000000000000004 /* WorkspaceWebView.swift in Sources */,
 				0A1000010000000000000005 /* NativePolicyView.swift in Sources */,
 				0A1000010000000000000006 /* SecureSessionCookieStore.swift in Sources */,
+				0A1000010000000000000007 /* NativeSecurityPolicy.swift in Sources */,
+				0A1000010000000000000008 /* SensitiveExportStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		0B3000020000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0B1000010000000000000001 /* NativeSecurityPolicyTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0B7000020000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0A5000010000000000000001 /* LostToFound */;
+			targetProxy = 0B7000010000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		0A8000010000000000000001 /* Debug */ = {
@@ -316,6 +400,60 @@
 			};
 			name = Release;
 		};
+		0B8000020000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HQG9VJ8JK2;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.lendori.losttofound.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LostToFound.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/LostToFound";
+				TEST_TARGET_NAME = LostToFound;
+			};
+			name = Debug;
+		};
+		0B8000020000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HQG9VJ8JK2;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.lendori.losttofound.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LostToFound.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/LostToFound";
+				TEST_TARGET_NAME = LostToFound;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -333,6 +471,15 @@
 			buildConfigurations = (
 				0A8000020000000000000001 /* Debug */,
 				0A8000020000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0B9000020000000000000001 /* Build configuration list for PBXNativeTarget "LostToFoundTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0B8000020000000000000001 /* Debug */,
+				0B8000020000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

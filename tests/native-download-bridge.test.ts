@@ -1,11 +1,33 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { downloadBlobFile, downloadTextFile, shareHtmlAsPdf } from "@/lib/records/clientStore";
+import {
+  downloadBlobFile,
+  downloadTextFile,
+  notifyNativeSessionInvalidated,
+  shareHtmlAsPdf,
+} from "@/lib/records/clientStore";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("native text export bridge", () => {
+  it("tells the iOS shell to clear its local WebKit and Keychain session", () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal("window", {
+      webkit: {
+        messageHandlers: {
+          lostToFoundSession: { postMessage },
+        },
+      },
+    });
+
+    notifyNativeSessionInvalidated();
+
+    expect(postMessage).toHaveBeenCalledWith({
+      action: "clearLocalSession",
+    });
+  });
+
   it("sends CSV exports to the Lost to Found iOS bridge", () => {
     const postMessage = vi.fn();
     vi.stubGlobal("window", {

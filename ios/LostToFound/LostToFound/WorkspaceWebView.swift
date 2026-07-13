@@ -87,11 +87,35 @@ final class WebViewModel {
 struct WorkspaceScreen: View {
     private let workspaceURL = URL(string: "https://losttofound.org/records")!
 
+    var body: some View {
+        SecureWebScreen(
+            url: workspaceURL,
+            title: "Records",
+            showsWorkspaceControls: true
+        )
+    }
+}
+
+struct AccountDeletionScreen: View {
+    var body: some View {
+        SecureWebScreen(
+            url: AppBrand.accountDeletionRequestURL,
+            title: "Account Deletion",
+            showsWorkspaceControls: false
+        )
+    }
+}
+
+private struct SecureWebScreen: View {
+    let url: URL
+    let title: String
+    let showsWorkspaceControls: Bool
+
     @State private var model = WebViewModel()
 
     var body: some View {
         ZStack {
-            WorkspaceWebView(url: workspaceURL, model: model)
+            WorkspaceWebView(url: url, model: model)
 
             if let loadErrorMessage = model.loadErrorMessage {
                 ContentUnavailableView {
@@ -109,7 +133,7 @@ struct WorkspaceScreen: View {
                 .background(Color(uiColor: .systemBackground))
             }
         }
-            .navigationTitle("Records")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItemGroup(placement: .bottomBar) {
@@ -139,8 +163,10 @@ struct WorkspaceScreen: View {
                         }
                     }
 
-                    ShareLink(item: workspaceURL) {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                    if showsWorkspaceControls {
+                        ShareLink(item: url) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
                     }
                 }
             }
@@ -150,8 +176,6 @@ struct WorkspaceScreen: View {
 struct WorkspaceWebView: UIViewRepresentable {
     let url: URL
     let model: WebViewModel
-
-    private let nativeDownloadHandlerName = "lostToFoundDownload"
 
     func makeCoordinator() -> Coordinator {
         Coordinator(model: model)
@@ -167,7 +191,11 @@ struct WorkspaceWebView: UIViewRepresentable {
         configuration.applicationNameForUserAgent = "LostToFound-iOS/0.1"
         configuration.userContentController.add(
             WeakScriptMessageHandler(delegate: context.coordinator),
-            name: nativeDownloadHandlerName
+            name: Coordinator.nativeDownloadHandlerName
+        )
+        configuration.userContentController.add(
+            WeakScriptMessageHandler(delegate: context.coordinator),
+            name: Coordinator.nativeSessionHandlerName
         )
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -195,10 +223,10 @@ struct WorkspaceWebView: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
-        private let allowedHosts = Set(["losttofound.org", "www.losttofound.org"])
+        static let nativeDownloadHandlerName = "lostToFoundDownload"
+        static let nativeSessionHandlerName = "lostToFoundSession"
+
         private let allowedTextExportContentTypes = Set(["text/csv", "application/json"])
-        private let maximumTextExportBytes = 10 * 1024 * 1024
-        private let maximumBinaryExportBytes = 25 * 1024 * 1024
         private let model: WebViewModel
 
         init(model: WebViewModel) {
@@ -206,13 +234,31 @@ struct WorkspaceWebView: UIViewRepresentable {
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.frameInfo.isMainFrame,
+                  let host = message.webView?.url?.host,
+                  SessionCookiePolicy.allowedHosts.contains(host)
+            else {
+                return
+            }
+
+            if message.name == Self.nativeSessionHandlerName {
+                let payload = message.body as? [String: Any]
+                guard payload?["action"] as? String == "clearLocalSession",
+                      let cookieStore = message.webView?.configuration.websiteDataStore.httpCookieStore
+                else {
+                    return
+                }
+
+                Task { @MainActor in
+                    await SecureSessionCookieStore.shared.clearLocalSession(cookieStore)
+                }
+                return
+            }
+
             let payload = message.body as? [String: Any]
             let renderAsPDF = payload?["renderAsPDF"] as? Bool ?? false
             let base64Encoded = payload?["base64Encoded"] as? Bool ?? false
-            guard message.name == "lostToFoundDownload",
-                  message.frameInfo.isMainFrame,
-                  let host = message.webView?.url?.host,
-                  allowedHosts.contains(host),
+            guard message.name == Self.nativeDownloadHandlerName,
                   let payload,
                   let requestedFileName = payload["fileName"] as? String,
                   let body = payload["body"] as? String,
@@ -220,8 +266,7 @@ struct WorkspaceWebView: UIViewRepresentable {
                   renderAsPDF ? contentType == "text/html" : base64Encoded || allowedTextExportContentTypes.contains(contentType),
                   let data = exportData(
                     body: body,
-                    base64Encoded: base64Encoded,
-                    renderAsPDF: renderAsPDF
+                    base64Encoded: base64Encoded
                   ),
                   let fileURL = writeTextExport(
                     data: data,
@@ -235,20 +280,8 @@ struct WorkspaceWebView: UIViewRepresentable {
             presentShareSheet(for: fileURL)
         }
 
-        private func exportData(body: String, base64Encoded: Bool, renderAsPDF: Bool) -> Data? {
-            if base64Encoded {
-                let maximumBase64Bytes = (maximumBinaryExportBytes * 4 / 3) + 8
-                guard body.utf8.count <= maximumBase64Bytes,
-                      let data = Data(base64Encoded: body),
-                      data.count <= maximumBinaryExportBytes
-                else {
-                    return nil
-                }
-                return data
-            }
-
-            guard body.utf8.count <= maximumTextExportBytes else { return nil }
-            return body.data(using: .utf8)
+        private func exportData(body: String, base64Encoded: Bool) -> Data? {
+            ExportSecurityPolicy.exportData(body: body, base64Encoded: base64Encoded)
         }
 
         func webView(
@@ -259,25 +292,17 @@ struct WorkspaceWebView: UIViewRepresentable {
                 return .cancel
             }
 
-            if targetURL.scheme == "mailto" {
-                await MainActor.run {
-                    UIApplication.shared.open(targetURL)
-                }
-                return .cancel
-            }
-
-            if targetURL.scheme == "https", let host = targetURL.host, allowedHosts.contains(host) {
+            switch WorkspaceNavigationPolicy.decision(for: targetURL) {
+            case .allowInWorkspace:
                 return .allow
-            }
-
-            if targetURL.scheme == "https" || targetURL.scheme == "http" {
+            case .openExternally:
                 await MainActor.run {
                     UIApplication.shared.open(targetURL)
                 }
                 return .cancel
+            case .cancel:
+                return .cancel
             }
-
-            return .cancel
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -304,36 +329,27 @@ struct WorkspaceWebView: UIViewRepresentable {
         }
 
         private func writeTextExport(data: Data, requestedFileName: String, renderAsPDF: Bool) -> URL? {
-            let allowedCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
-            let sanitizedFileName = requestedFileName.unicodeScalars
-                .map { allowedCharacters.contains($0) ? String($0) : "-" }
-                .joined()
-                .prefix(160)
-            guard !sanitizedFileName.isEmpty else { return nil }
+            guard let outputFileName = ExportSecurityPolicy.outputFileName(
+                requestedFileName: requestedFileName,
+                renderAsPDF: renderAsPDF
+            ) else {
+                return nil
+            }
 
-            let output: (fileName: String, data: Data)
+            let outputData: Data
             if renderAsPDF {
                 guard let html = String(data: data, encoding: .utf8),
                       let pdf = renderPDF(html: html)
                 else {
                     return nil
                 }
-                let baseName = URL(fileURLWithPath: String(sanitizedFileName))
-                    .deletingPathExtension()
-                    .lastPathComponent
-                output = (fileName: "\(baseName).pdf", data: pdf)
+                outputData = pdf
             } else {
-                output = (fileName: String(sanitizedFileName), data: data)
+                outputData = data
             }
 
-            let directory = FileManager.default.temporaryDirectory
-                .appendingPathComponent("LostToFoundExports", isDirectory: true)
-            let fileURL = directory.appendingPathComponent(output.fileName, isDirectory: false)
-
             do {
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                try output.data.write(to: fileURL, options: .atomic)
-                return fileURL
+                return try SensitiveExportStore.shared.write(outputData, fileName: outputFileName)
             } catch {
                 return nil
             }
@@ -366,13 +382,14 @@ struct WorkspaceWebView: UIViewRepresentable {
                 .first(where: { $0.activationState == .foregroundActive }),
                   let rootViewController = windowScene.windows.first(where: \.isKeyWindow)?.rootViewController
             else {
+                SensitiveExportStore.shared.remove(fileURL)
                 return
             }
 
             let presenter = visibleViewController(from: rootViewController)
             let shareSheet = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
             shareSheet.completionWithItemsHandler = { _, _, _, _ in
-                try? FileManager.default.removeItem(at: fileURL)
+                SensitiveExportStore.shared.remove(fileURL)
             }
 
             if let popover = shareSheet.popoverPresentationController {

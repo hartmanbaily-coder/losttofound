@@ -114,7 +114,11 @@ async function fetchRemoteSessionState() {
     mfaRequired?: boolean;
   };
 
-  return parseRecordsSessionResponse(response.status, body);
+  const state = parseRecordsSessionResponse(response.status, body);
+  if (state.status === "signed_out") {
+    notifyNativeSessionInvalidated();
+  }
+  return state;
 }
 
 async function readRemoteSessionState() {
@@ -500,15 +504,20 @@ export async function verifyRecordsMfaEnrollment(input: { factorId: string; code
 
 export async function signOutRecordsSession() {
   if (recordsStorageMode !== "supabase") {
+    notifyNativeSessionInvalidated();
     clearSession();
     return;
   }
 
-  await fetch("/api/records/auth/logout", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-  });
+  try {
+    await fetch("/api/records/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+    });
+  } finally {
+    notifyNativeSessionInvalidated();
+  }
 }
 
 export function readFailedLoginState() {
@@ -565,11 +574,16 @@ type NativeDownloadHandler = {
   }) => void;
 };
 
+type NativeSessionHandler = {
+  postMessage: (message: { action: "clearLocalSession" }) => void;
+};
+
 declare global {
   interface Window {
     webkit?: {
       messageHandlers?: {
         lostToFoundDownload?: NativeDownloadHandler;
+        lostToFoundSession?: NativeSessionHandler;
       };
     };
   }
@@ -578,6 +592,13 @@ declare global {
 function nativeDownloadHandler() {
   if (typeof window === "undefined") return undefined;
   return window.webkit?.messageHandlers?.lostToFoundDownload;
+}
+
+export function notifyNativeSessionInvalidated() {
+  if (typeof window === "undefined") return;
+  window.webkit?.messageHandlers?.lostToFoundSession?.postMessage({
+    action: "clearLocalSession",
+  });
 }
 
 export function downloadTextFile(fileName: string, body: string, contentType: string) {

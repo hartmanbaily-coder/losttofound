@@ -103,7 +103,9 @@ struct SupportView: View {
             }
 
             Section("Account and Data") {
-                Link(destination: AppBrand.accountDeletionRequestURL) {
+                NavigationLink {
+                    AccountDeletionScreen()
+                } label: {
                     Label("Request account deletion", systemImage: "person.crop.circle.badge.xmark")
                 }
 
@@ -111,7 +113,7 @@ struct SupportView: View {
                     Label("Privacy and deletion policy", systemImage: "doc.text.magnifyingglass")
                 }
 
-                Text("Support can help with account deletion, data export, correction, privacy questions, and recovery. Do not include sensitive case details unless support asks for them.")
+                Text("The deletion request opens inside the app so your signed-in records session can be verified. Support can also help with data export, correction, privacy questions, and recovery. Do not include sensitive case details unless support asks for them.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

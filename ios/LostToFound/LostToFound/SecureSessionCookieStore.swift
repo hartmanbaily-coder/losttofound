@@ -51,13 +51,6 @@ final class SecureSessionCookieStore: NSObject, WKHTTPCookieStoreObserver {
         }
     }
 
-    private let allowedHosts = Set(["losttofound.org", "www.losttofound.org"])
-    private let refreshCookieName = "__Host-l2f-records-refresh"
-    private let sessionCookieNames = Set([
-        "__Host-l2f-records-access",
-        "__Host-l2f-records-refresh",
-        "__Host-l2f-records-case",
-    ])
     private let keychainAccount = "records-session-cookies-v1"
     private let keychainService = "io.lendori.losttofound"
 
@@ -69,11 +62,11 @@ final class SecureSessionCookieStore: NSObject, WKHTTPCookieStoreObserver {
     }
 
     func hasRestorableSession(_ cookieStore: WKHTTPCookieStore) async -> Bool {
-        if hasRefreshCookie(await cookies(in: cookieStore)) {
+        if SessionCookiePolicy.hasRefreshCookie(await cookies(in: cookieStore)) {
             return true
         }
 
-        let hasBackup = hasRefreshCookie(load().compactMap(\.cookie))
+        let hasBackup = SessionCookiePolicy.hasRefreshCookie(load().compactMap(\.cookie))
         if !hasBackup {
             deleteBackup()
         }
@@ -86,11 +79,11 @@ final class SecureSessionCookieStore: NSObject, WKHTTPCookieStoreObserver {
         }
 
         let currentCookies = await cookies(in: cookieStore)
-        if hasRefreshCookie(currentCookies) {
+        if SessionCookiePolicy.hasRefreshCookie(currentCookies) {
             save(currentCookies)
         } else {
             let restoredCookies = load().compactMap(\.cookie)
-            if hasRefreshCookie(restoredCookies) {
+            if SessionCookiePolicy.hasRefreshCookie(restoredCookies) {
                 isRestoring = true
                 for cookie in restoredCookies {
                     await set(cookie, in: cookieStore)
@@ -105,6 +98,20 @@ final class SecureSessionCookieStore: NSObject, WKHTTPCookieStoreObserver {
             cookieStore.add(self)
             observedStore = cookieStore
         }
+    }
+
+    func synchronize(_ cookieStore: WKHTTPCookieStore) async {
+        save(await cookies(in: cookieStore))
+    }
+
+    func clearLocalSession(_ cookieStore: WKHTTPCookieStore) async {
+        deleteBackup()
+
+        for cookie in SessionCookiePolicy.managedCookies(await cookies(in: cookieStore)) {
+            await delete(cookie, from: cookieStore)
+        }
+
+        deleteBackup()
     }
 
     func cookiesDidChange(in cookieStore: WKHTTPCookieStore) {
@@ -132,22 +139,17 @@ final class SecureSessionCookieStore: NSObject, WKHTTPCookieStoreObserver {
         }
     }
 
-    private func relevantCookies(_ cookies: [HTTPCookie]) -> [HTTPCookie] {
-        let now = Date()
-        return cookies.filter { cookie in
-            let host = cookie.domain.trimmingCharacters(in: CharacterSet(charactersIn: "."))
-            let unexpired = cookie.expiresDate.map { $0 > now } ?? true
-            return allowedHosts.contains(host) && sessionCookieNames.contains(cookie.name) && unexpired
+    private func delete(_ cookie: HTTPCookie, from cookieStore: WKHTTPCookieStore) async {
+        await withCheckedContinuation { continuation in
+            cookieStore.delete(cookie) {
+                continuation.resume()
+            }
         }
     }
 
-    private func hasRefreshCookie(_ cookies: [HTTPCookie]) -> Bool {
-        relevantCookies(cookies).contains { $0.name == refreshCookieName && !$0.value.isEmpty }
-    }
-
     private func save(_ cookies: [HTTPCookie]) {
-        let relevant = relevantCookies(cookies)
-        guard hasRefreshCookie(relevant) else {
+        let relevant = SessionCookiePolicy.relevantCookies(cookies)
+        guard SessionCookiePolicy.hasRefreshCookie(relevant) else {
             deleteBackup()
             return
         }

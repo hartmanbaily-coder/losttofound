@@ -34,3 +34,5 @@ Before App Review, create a dedicated synthetic review account and make sure the
 ## Native Value
 
 Apple may reject a plain web wrapper under minimum-functionality review. This project is intentionally not just a website shortcut: it adds native app structure, device-level privacy lock, native policy/support surfaces, app icons, and App Store-ready metadata. Future native features that would strengthen review include native document import, local deadline reminders, push notifications, and native PDF/share workflows.
+
+Complete the real-device session, deletion, revocation, and export checks in `PRODUCTION_READINESS_VERIFICATION.md` before a public App Store release.

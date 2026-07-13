@@ -1,0 +1,58 @@
+# Native iOS Production Readiness Verification
+
+The native code now mitigates the locally fixable findings from the production-readiness review:
+
+- Export files use complete iOS file protection.
+- The `LostToFoundExports` temporary directory is purged at app launch and when the app enters the background.
+- Export files are removed when sharing finishes or when the share sheet cannot be presented.
+- A web logout or rejected server session tells the native shell to clear its WebKit session cookies and Keychain cookie backup immediately.
+- The app synchronizes WebKit cookie state before background locking.
+- The account-deletion request opens inside the app's shared, app-bound WebKit session instead of switching to a separate browser cookie context.
+- Native unit tests cover cookie allow-listing and expiration, export limits and filename sanitization, navigation isolation, and export-file cleanup.
+
+These safeguards reduce stale-session and temporary-file risk. They do not replace backend revocation or real-device verification.
+
+## Required real-device TestFlight checks
+
+Use a synthetic production test account. Record the build number, device model, iOS version, test time, and result for every case.
+
+### Logout
+
+1. Sign in and confirm the Records workspace loads.
+2. Sign out from the Records workspace.
+3. Force quit the app.
+4. Relaunch and unlock it.
+5. Confirm the sign-in screen appears and records cannot be opened.
+
+### Account deletion
+
+1. Sign in and open **Support > Account and Data > Request account deletion**.
+2. Confirm the deletion page recognizes the signed-in account inside the app.
+3. Submit the deletion request with a synthetic account.
+4. Complete the approved backend deletion process, including authentication-session revocation.
+5. Force quit and relaunch the app.
+6. Confirm the deleted account cannot access records and its previous credentials cannot create a valid session.
+
+The current public control creates an authenticated deletion request; it does not itself prove that the operational deletion process has finished. Do not mark this case passed until the backend account deletion and session revocation are complete.
+
+### Remote invalidation
+
+Run each case while the iPhone app still has a saved session, then force quit and relaunch:
+
+- Change the account password from another device.
+- Revoke the session server-side.
+- Let the refresh token expire.
+
+Expected result: the app shows sign-in and no Keychain-backed cookie restores records access.
+
+### Export cleanup
+
+1. Export a CSV, JSON, PDF, and representative evidence file.
+2. Complete and cancel the share sheet in separate attempts.
+3. Start another export, background the app, then relaunch it.
+4. Confirm each export can be shared normally and no previous export is offered or reused after relaunch.
+
+## Release decision
+
+- **TestFlight:** proceed after the automated build and tests pass.
+- **Public App Store release:** proceed only after every real-device session/deletion check above passes and App Store Connect privacy answers are reconciled with the live backend and vendors.
