@@ -9,8 +9,8 @@
 	encode zstd gzip
 
 	@health path /caddy-health
-	respond @health 200 {
-		body "ok"
+	handle @health {
+		respond "ok" 200
 	}
 
 	header {
