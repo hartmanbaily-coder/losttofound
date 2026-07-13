@@ -110,7 +110,7 @@ Use this deploy path for LostToFound changes:
 5. Verify production after deploy:
    - `https://losttofound.org/records` serves the expected bundle/UI.
    - A fake login to `POST https://losttofound.org/api/records/auth/login` returns a handled `400` or `401` JSON response, not a blank `500`.
-   - `https://losttofound.org/api/records/readiness` returns `ready`.
+   - `https://losttofound.org/api/records/readiness` returns a structured `ready` or `not_ready` result with no unexpected infrastructure blocker. Policy and dashboard attestations remain visible and must not be marked complete without evidence.
 
 Production deployment is intentionally not triggered by GitHub Actions. This keeps the production SSH key and host environment out of GitHub and removes the cross-repository `LISTHAUS_DEPLOY_TOKEN`. Run `npm run check:production` with the real host environment before accepting real records.
 

@@ -23,10 +23,43 @@ for attempt in $(seq 1 30); do
   sleep 5
 done
 
-readiness_status="$(curl --fail --silent --show-error \
-  http://127.0.0.1:8080/api/records/readiness | jq -r '.status // ""')"
-if [[ ${readiness_status} != "ready" ]]; then
-  echo "Readiness API returned status '${readiness_status}'." >&2
+readiness_file="$(mktemp)"
+trap 'rm -f "${readiness_file}"' EXIT
+readiness_http="$(curl --silent --show-error --output "${readiness_file}" \
+  --write-out '%{http_code}' http://127.0.0.1:8080/api/records/readiness)"
+if [[ ${readiness_http} != "200" && ${readiness_http} != "503" ]]; then
+  echo "Readiness API returned unexpected HTTP ${readiness_http}." >&2
+  exit 1
+fi
+
+readiness_status="$(jq -r '.status // ""' "${readiness_file}")"
+if [[ ${readiness_status} != "ready" && ${readiness_status} != "not_ready" ]]; then
+  echo "Readiness API returned unknown status '${readiness_status}'." >&2
+  exit 1
+fi
+
+mapfile -t readiness_blockers < <(jq -r '.blockers[]?.id' "${readiness_file}")
+for blocker in "${readiness_blockers[@]}"; do
+  case "${blocker}" in
+    supabase-custom-smtp | \
+      supabase-auth-redirects | \
+      supabase-leaked-passwords | \
+      supabase-auth-hardening-verified | \
+      security-monitoring | \
+      backup-restore-tested | \
+      data-retention-policy | \
+      incident-response-plan | \
+      legal-review)
+      ;;
+    *)
+      echo "Readiness API reported unexpected blocker '${blocker}'." >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ ${readiness_status} == "not_ready" && ${#readiness_blockers[@]} -eq 0 ]]; then
+  echo "Readiness API returned not_ready without an explanatory blocker." >&2
   exit 1
 fi
 
