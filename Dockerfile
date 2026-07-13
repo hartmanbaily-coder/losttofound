@@ -41,6 +41,8 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/verify-malware-scanner.mjs ./scripts/verify-malware-scanner.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/verify-security-headers.mjs ./scripts/verify-security-headers.mjs
 
 USER nextjs
 

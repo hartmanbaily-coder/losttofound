@@ -99,26 +99,22 @@ Before production deploy, use `.env.production.example` as the source checklist 
 - `VENDOR_SECURITY_REVIEW_APPROVED`
 - `SECURITY_CONTACT_EMAIL`
 
-Production for `losttofound.org` is served by the `losttofound` container inside the separate `hartmanbaily-coder/listhaus` Docker Compose/Caddy stack. The LostToFound validation workflow dispatches the Listhaus production deploy after validation passes on `main`.
-
-Required automation secret:
-
-- `LISTHAUS_DEPLOY_TOKEN` in `hartmanbaily-coder/losttofound`. Prefer a fine-grained PAT or GitHub App token scoped only to `hartmanbaily-coder/listhaus` with `Actions: Read and write`; it does not need Contents write for workflow dispatch. A classic PAT must use GitHub's broader `repo` scope.
+Production for `losttofound.org` runs on a dedicated Ubuntu host under the non-root `losttofound` account. Its rootless Docker daemon owns only the LostToFound, ClamAV, and Caddy containers. The Listhaus repository, host, secrets, Compose project, and deployment workflow are not part of this deployment boundary.
 
 Use this deploy path for LostToFound changes:
 
 1. Commit and push the LostToFound change to `hartmanbaily-coder/losttofound` `main`.
-2. The `Validate LostToFound` workflow runs lint, typecheck, unit tests, secret scan, production env template validation, dependency audit, and build.
-3. After validation passes, the workflow dispatches `hartmanbaily-coder/listhaus` workflow `deploy.yml` with the exact validated LostToFound commit SHA.
-4. The Listhaus deploy workflow checks out that SHA, writes `/opt/listhaus/losttofound/.env.production`, rebuilds the `losttofound` container, restarts the shared Caddy/Compose stack, verifies the malware scanner, and runs live HTTP smoke checks.
-5. Verify production after deploy if manual confirmation is needed:
+2. Confirm that the `Validate LostToFound` workflow passes lint, typecheck, unit tests, secret scanning, production env template validation, dependency audit, and build.
+3. From a trusted administrator Mac with the pinned SSH host key at `~/.ssh/losttofound_known_hosts`, run `deploy/production/deploy-from-mac.sh <host> <validated-commit-sha>`.
+4. The remote deploy builds a release-tagged image, starts the isolated stack, verifies readiness, verifies clean/EICAR malware scanning, verifies security headers, and rolls back to the prior image if validation fails.
+5. Verify production after deploy:
    - `https://losttofound.org/records` serves the expected bundle/UI.
    - A fake login to `POST https://losttofound.org/api/records/auth/login` returns a handled `400` or `401` JSON response, not a blank `500`.
-   - `https://losttofound.org/api/records/readiness` reflects the expected readiness blockers.
+   - `https://losttofound.org/api/records/readiness` returns `ready`.
 
-The Listhaus workflow can still be run manually with `workflow_dispatch`. Use the optional `losttofound_sha` input to deploy a specific validated LostToFound commit; leaving it blank deploys `origin/main`.
+Production deployment is intentionally not triggered by GitHub Actions. This keeps the production SSH key and host environment out of GitHub and removes the cross-repository `LISTHAUS_DEPLOY_TOKEN`. Run `npm run check:production` with the real host environment before accepting real records.
 
-Because the deploy workflow restarts the shared Listhaus Compose stack, get explicit approval before pushing to `main` or manually triggering deploy when the request is not clearly a production deploy request. Run `npm run check:production` in the deployment environment, with real host secrets loaded, before accepting real records.
+The dedicated host is bootstrapped once with `deploy/production/bootstrap-host.sh`. The host must use key-only SSH, disabled root login, UFW, fail2ban, unattended security updates, rootless Docker, and `/srv/losttofound/config/app.env` owned by `losttofound:losttofound` with mode `0600`. The config directory is separate from the rsynced application tree and is never stored in GitHub.
 
 When Supabase is intentionally saved for last, run `npm run check:pre-supabase` first. That mode still checks host, secret strength, edge controls, monitoring, malware scanning, privacy/legal approvals, and other non-Supabase gates, while deferring the final Supabase Auth, storage, restore, and isolation checks.
 

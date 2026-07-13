@@ -1,0 +1,38 @@
+{
+	admin localhost:2019
+	servers {
+		protocols h1 h2 h3
+	}
+}
+
+(losttofound_proxy) {
+	encode zstd gzip
+
+	@health path /caddy-health
+	respond @health 200 {
+		body "ok"
+	}
+
+	header {
+		-Server
+		-X-Powered-By
+	}
+
+	handle {
+		reverse_proxy losttofound:3000 {
+			header_up Host {host}
+			header_up X-Forwarded-Host {host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}
+
+losttofound.org, www.losttofound.org {
+	import losttofound_proxy
+}
+
+http://:8080 {
+	import losttofound_proxy
+}
