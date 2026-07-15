@@ -93,4 +93,12 @@ grep -q 'OnUnitInactiveSec=1min' \
   "${tmp_dir}/home/.config/systemd/user/losttofound-health-watchdog.timer"
 grep -q -- '--user enable --now losttofound-health-watchdog.timer' "${systemctl_log}"
 
+compose_source="${script_dir}/compose.yml"
+grep -q 'CLAMD_CONF_ConcurrentDatabaseReload: "no"' "${compose_source}"
+grep -q 'CLAMD_CONF_MaxThreads: "2"' "${compose_source}"
+grep -q 'CLAMD_CONF_MaxQueue: "4"' "${compose_source}"
+grep -q 'mem_limit: ${CLAMAV_MEMORY_LIMIT:-2560m}' "${compose_source}"
+grep -q 'mem_limit: ${LOSTTOFOUND_MEMORY_LIMIT:-768m}' "${compose_source}"
+grep -q 'mem_limit: ${CADDY_MEMORY_LIMIT:-128m}' "${compose_source}"
+
 echo "Scanner health recovery tests passed."

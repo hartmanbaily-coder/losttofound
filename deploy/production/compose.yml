@@ -12,7 +12,12 @@ services:
     restart: unless-stopped
     environment:
       CLAMAV_NO_MILTERD: "true"
+      # Avoid holding the old and new signature engines in memory together.
+      # New scans wait for the reload to finish and continue to fail closed.
+      CLAMD_CONF_ConcurrentDatabaseReload: "no"
       CLAMD_CONF_MaxFileSize: "25M"
+      CLAMD_CONF_MaxQueue: "4"
+      CLAMD_CONF_MaxThreads: "2"
       CLAMD_CONF_StreamMaxLength: "25M"
       FRESHCLAM_CHECKS: "12"
     expose:
@@ -25,8 +30,8 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 256
-    mem_limit: 4096m
-    cpus: 2.0
+    mem_limit: ${CLAMAV_MEMORY_LIMIT:-2560m}
+    cpus: ${CLAMAV_CPU_LIMIT:-1.5}
     healthcheck:
       test: ["CMD-SHELL", "clamdcheck.sh"]
       interval: 20s
@@ -71,7 +76,7 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 256
-    mem_limit: 1024m
+    mem_limit: ${LOSTTOFOUND_MEMORY_LIMIT:-768m}
     cpus: 2.0
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/records || exit 1"]
@@ -108,7 +113,7 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 128
-    mem_limit: 256m
+    mem_limit: ${CADDY_MEMORY_LIMIT:-128m}
     cpus: 0.5
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/caddy-health || exit 1"]

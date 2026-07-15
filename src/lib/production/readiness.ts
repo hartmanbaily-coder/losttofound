@@ -207,6 +207,13 @@ export function evaluateProductionReadiness(
 
   const checks = [
     check(
+      "customer-resource-profile",
+      "Customer-capacity host profile is enabled",
+      env.PRE_CUSTOMER_RESOURCE_PROFILE === "false",
+      "blocker",
+      "Keep PRE_CUSTOMER_RESOURCE_PROFILE=true for owner testing on the 4 GiB host. After upgrading to at least 8 GiB and completing a forced ClamAV reload test, set it explicitly to false before accepting customer records."
+    ),
+    check(
       "app-url",
       "Production app URL is HTTPS",
       isHttpsUrl(env.NEXT_PUBLIC_APP_URL),
