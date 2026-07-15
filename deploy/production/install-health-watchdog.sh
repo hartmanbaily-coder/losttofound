@@ -7,6 +7,7 @@ if [[ ${EUID} -eq 0 ]]; then
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+app_root="$(cd "${script_dir}/../.." && pwd)"
 unit_dir="${HOME}/.config/systemd/user"
 systemctl_bin="${SYSTEMCTL_BIN:-systemctl}"
 
@@ -20,7 +21,7 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=${script_dir}/../..
+WorkingDirectory=${app_root}
 ExecStart=${script_dir}/recover-unhealthy.sh
 NoNewPrivileges=true
 PrivateTmp=true

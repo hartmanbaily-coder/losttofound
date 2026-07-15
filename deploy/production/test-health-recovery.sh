@@ -87,6 +87,12 @@ SYSTEMCTL_STUB_LOG="${systemctl_log}" \
   "${script_dir}/install-health-watchdog.sh"
 grep -q 'ExecStart=.*/recover-unhealthy.sh' \
   "${tmp_dir}/home/.config/systemd/user/losttofound-health-watchdog.service"
+grep -Fq "WorkingDirectory=$(cd "${script_dir}/../.." && pwd)" \
+  "${tmp_dir}/home/.config/systemd/user/losttofound-health-watchdog.service"
+if grep -Fq '/../..' "${tmp_dir}/home/.config/systemd/user/losttofound-health-watchdog.service"; then
+  echo "Watchdog service contains a non-normalized working directory." >&2
+  exit 1
+fi
 grep -q 'NoNewPrivileges=true' \
   "${tmp_dir}/home/.config/systemd/user/losttofound-health-watchdog.service"
 grep -q 'OnUnitInactiveSec=1min' \
