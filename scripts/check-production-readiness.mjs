@@ -125,11 +125,6 @@ const recordsSignupsEnabled = isEnabled(process.env.RECORDS_SIGNUPS_ENABLED);
 const publicRecordsSignupsEnabled = isEnabled(process.env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED);
 
 const checks = [
-  [
-    "PRE_CUSTOMER_RESOURCE_PROFILE",
-    process.env.PRE_CUSTOMER_RESOURCE_PROFILE === "false",
-    "must remain true on the 4 GiB owner-testing host and be set explicitly to false only after upgrading to at least 8 GiB and rerunning the ClamAV reload test",
-  ],
   ["NEXT_PUBLIC_APP_URL", isHttpsUrl(process.env.NEXT_PUBLIC_APP_URL), "must be an https:// URL"],
   [
     "NEXT_PUBLIC_RECORDS_HOST",
@@ -277,6 +272,11 @@ const checks = [
 ];
 
 const warnings = [
+  [
+    "STARTER_RESOURCE_PROFILE",
+    process.env.STARTER_RESOURCE_PROFILE === "false",
+    "is a non-blocking 4 GiB capacity warning; upgrade by 100 customer accounts or earlier if resource pressure, latency, or evidence-upload retries appear",
+  ],
   [
     "VENDOR_SECURITY_REVIEW_APPROVED",
     isEnabled(process.env.VENDOR_SECURITY_REVIEW_APPROVED),

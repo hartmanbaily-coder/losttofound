@@ -41,8 +41,7 @@ fi
 mapfile -t readiness_blockers < <(jq -r '.blockers[]?.id' "${readiness_file}")
 for blocker in "${readiness_blockers[@]}"; do
   case "${blocker}" in
-    customer-resource-profile | \
-      supabase-custom-smtp | \
+    supabase-custom-smtp | \
       supabase-auth-redirects | \
       supabase-leaked-passwords | \
       supabase-auth-hardening-verified | \

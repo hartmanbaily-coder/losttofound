@@ -10,7 +10,7 @@ const requiredKeys = [
   "NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED",
   "RECORDS_STORAGE_MODE",
   "RECORDS_SIGNUPS_ENABLED",
-  "PRE_CUSTOMER_RESOURCE_PROFILE",
+  "STARTER_RESOURCE_PROFILE",
   "NEXT_PUBLIC_SUPABASE_URL",
   "EXPECTED_SUPABASE_PROJECT_REF",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
@@ -108,8 +108,8 @@ if (entries.get("EXPECTED_SUPABASE_PROJECT_REF") !== "cieuilbpnwuvnrxrlczj") {
   findings.push("EXPECTED_SUPABASE_PROJECT_REF must be cieuilbpnwuvnrxrlczj.");
 }
 
-if (entries.get("PRE_CUSTOMER_RESOURCE_PROFILE") !== "true") {
-  findings.push("PRE_CUSTOMER_RESOURCE_PROFILE must remain true in the pre-customer template.");
+if (entries.get("STARTER_RESOURCE_PROFILE") !== "true") {
+  findings.push("STARTER_RESOURCE_PROFILE must remain true in the 4 GiB starter template.");
 }
 
 if (/eyJ[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}/.test(body)) {
