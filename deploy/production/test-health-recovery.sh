@@ -95,6 +95,11 @@ if grep -Fq '/../..' "${tmp_dir}/home/.config/systemd/user/losttofound-health-wa
 fi
 grep -q 'NoNewPrivileges=true' \
   "${tmp_dir}/home/.config/systemd/user/losttofound-health-watchdog.service"
+if grep -Eq '^(PrivateTmp|ProtectSystem|ProtectHome)=' \
+  "${tmp_dir}/home/.config/systemd/user/losttofound-health-watchdog.service"; then
+  echo "Watchdog service contains a mount namespace that blocks rootless Docker." >&2
+  exit 1
+fi
 grep -q '^CPUQuota=25%$' \
   "${tmp_dir}/home/.config/systemd/user/losttofound-health-watchdog.service"
 grep -q 'OnUnitInactiveSec=1min' \
