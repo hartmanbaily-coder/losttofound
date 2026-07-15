@@ -56,6 +56,8 @@ services:
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
+      # Secure default: an explicit false is required after the capacity upgrade.
+      PRE_CUSTOMER_RESOURCE_PROFILE: ${PRE_CUSTOMER_RESOURCE_PROFILE:-true}
     env_file:
       - path: ${LOSTTOFOUND_ENV_FILE:-/srv/losttofound/config/app.env}
         required: true
