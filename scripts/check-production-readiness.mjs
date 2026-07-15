@@ -178,8 +178,9 @@ const checks = [
   ],
   [
     "SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED",
-    isEnabled(process.env.SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED),
-    "must be true",
+    isEnabled(process.env.SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED) ||
+      isEnabled(process.env.PWNED_PASSWORD_CHECK_ENABLED),
+    "or PWNED_PASSWORD_CHECK_ENABLED must be true",
   ],
   [
     "SUPABASE_PASSWORD_MIN_LENGTH",
