@@ -27,15 +27,11 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectKernelLogs=true
-ProtectControlGroups=true
 RestrictAddressFamilies=AF_UNIX
 RestrictRealtime=true
 LockPersonality=true
 MemoryMax=256M
-CPUQuota=25%%
+CPUQuota=25%
 UMask=0077
 EOF
 

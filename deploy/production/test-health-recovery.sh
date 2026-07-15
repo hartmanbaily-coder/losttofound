@@ -95,6 +95,8 @@ if grep -Fq '/../..' "${tmp_dir}/home/.config/systemd/user/losttofound-health-wa
 fi
 grep -q 'NoNewPrivileges=true' \
   "${tmp_dir}/home/.config/systemd/user/losttofound-health-watchdog.service"
+grep -q '^CPUQuota=25%$' \
+  "${tmp_dir}/home/.config/systemd/user/losttofound-health-watchdog.service"
 grep -q 'OnUnitInactiveSec=1min' \
   "${tmp_dir}/home/.config/systemd/user/losttofound-health-watchdog.timer"
 grep -q -- '--user enable --now losttofound-health-watchdog.timer' "${systemctl_log}"
