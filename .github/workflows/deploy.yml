@@ -38,6 +38,7 @@ jobs:
           npm run lint
           npm run typecheck
           npm run test:unit
+          npm run test:deploy
           npm run security:secrets
           npm run security:audit
           npm run verify:env-template

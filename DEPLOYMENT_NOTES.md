@@ -114,7 +114,7 @@ Use this deploy path for LostToFound changes:
 
 Production deployment is intentionally not triggered by GitHub Actions. This keeps the production SSH key and host environment out of GitHub and removes the cross-repository `LISTHAUS_DEPLOY_TOKEN`. Run `npm run check:production` with the real host environment before accepting real records.
 
-The dedicated host is bootstrapped once with `deploy/production/bootstrap-host.sh`. The host must use key-only SSH, disabled root login, UFW, fail2ban, unattended security updates, rootless Docker, and `/srv/losttofound/config/app.env` owned by `losttofound:losttofound` with mode `0600`. The config directory is separate from the rsynced application tree and is never stored in GitHub.
+The dedicated host is bootstrapped once with `deploy/production/bootstrap-host.sh`. The host must use key-only SSH, disabled root login, UFW, fail2ban, unattended security updates, rootless Docker, at least 8 GiB of RAM, and `/srv/losttofound/config/app.env` owned by `losttofound:losttofound` with mode `0600`. The config directory is separate from the rsynced application tree and is never stored in GitHub. ClamAV receives a 4 GiB limit so daily signature reloads do not kill `clamd`; the rootless `losttofound-health-watchdog.timer` restarts an unhealthy or missing scanner and reruns the clean/EICAR verification without exposing the Docker socket to another container.
 
 When Supabase is intentionally saved for last, run `npm run check:pre-supabase` first. That mode still checks host, secret strength, edge controls, monitoring, malware scanning, privacy/legal approvals, and other non-Supabase gates, while deferring the final Supabase Auth, storage, restore, and isolation checks.
 
