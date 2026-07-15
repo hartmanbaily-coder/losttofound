@@ -207,6 +207,13 @@ export function evaluateProductionReadiness(
 
   const checks = [
     check(
+      "customer-resource-profile",
+      "Starter-capacity host profile is enabled",
+      env.STARTER_RESOURCE_PROFILE === "false",
+      "warning",
+      "The 4 GiB starter profile may accept customers. Upgrade by 100 customer accounts, or sooner if monitoring shows sustained memory or CPU pressure, slower responses, or evidence-upload retries. After upgrading and retesting ClamAV, set STARTER_RESOURCE_PROFILE=false."
+    ),
+    check(
       "app-url",
       "Production app URL is HTTPS",
       isHttpsUrl(env.NEXT_PUBLIC_APP_URL),

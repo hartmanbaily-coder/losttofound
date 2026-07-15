@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit --project tsconfig.typecheck.json",
     "test": "vitest run",
     "test:unit": "vitest run",
+    "test:deploy": "bash deploy/production/test-health-recovery.sh",
     "test:e2e": "playwright test",
     "security:audit": "npm audit --omit=dev --audit-level=high",
     "security:secrets": "node scripts/check-secrets.mjs",

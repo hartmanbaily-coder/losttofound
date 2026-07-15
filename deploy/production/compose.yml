@@ -1,0 +1,137 @@
+name: losttofound
+
+x-logging: &default-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  clamav:
+    image: clamav/clamav-debian:1.5
+    restart: unless-stopped
+    environment:
+      CLAMAV_NO_MILTERD: "true"
+      # Avoid holding the old and new signature engines in memory together.
+      # New scans wait for the reload to finish and continue to fail closed.
+      CLAMD_CONF_ConcurrentDatabaseReload: "no"
+      CLAMD_CONF_MaxFileSize: "25M"
+      CLAMD_CONF_MaxQueue: "4"
+      CLAMD_CONF_MaxThreads: "2"
+      CLAMD_CONF_StreamMaxLength: "25M"
+      FRESHCLAM_CHECKS: "12"
+    expose:
+      - "3310"
+    networks:
+      - scanner
+      - updates
+    volumes:
+      - clamav_data:/var/lib/clamav
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: ${CLAMAV_MEMORY_LIMIT:-2560m}
+    cpus: ${CLAMAV_CPU_LIMIT:-1.5}
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh"]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    logging: *default-logging
+
+  losttofound:
+    image: losttofound:${LOSTTOFOUND_IMAGE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?NEXT_PUBLIC_APP_URL is required}
+        NEXT_PUBLIC_RECORDS_HOST: ${NEXT_PUBLIC_RECORDS_HOST:?NEXT_PUBLIC_RECORDS_HOST is required}
+        NEXT_PUBLIC_RECORDS_STORAGE_MODE: ${NEXT_PUBLIC_RECORDS_STORAGE_MODE:-supabase}
+        NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: ${NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED:-false}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?NEXT_PUBLIC_SUPABASE_URL is required}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?NEXT_PUBLIC_SUPABASE_ANON_KEY is required}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+      # Keep the starter-capacity warning visible until the host is upgraded.
+      STARTER_RESOURCE_PROFILE: ${STARTER_RESOURCE_PROFILE:-true}
+    env_file:
+      - path: ${LOSTTOFOUND_ENV_FILE:-/srv/losttofound/config/app.env}
+        required: true
+    depends_on:
+      clamav:
+        condition: service_healthy
+    expose:
+      - "3000"
+    networks:
+      - edge
+      - scanner
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+      - /app/.next/cache:size=128m,uid=1001,gid=1001,mode=0750
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: ${LOSTTOFOUND_MEMORY_LIMIT:-768m}
+    cpus: 2.0
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/records || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    depends_on:
+      losttofound:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+      - "127.0.0.1:8080:8080"
+    networks:
+      - edge
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: ${CADDY_MEMORY_LIMIT:-128m}
+    cpus: 0.5
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/caddy-health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *default-logging
+
+networks:
+  edge:
+  scanner:
+    internal: true
+  updates:
+
+volumes:
+  clamav_data:
+  caddy_data:
+  caddy_config:

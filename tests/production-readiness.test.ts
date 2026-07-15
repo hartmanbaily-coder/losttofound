@@ -6,6 +6,7 @@ import {
 } from "@/lib/production/readiness";
 
 const readyEnv = {
+  STARTER_RESOURCE_PROFILE: "false",
   NEXT_PUBLIC_APP_URL: "https://losttofound.org",
   NEXT_PUBLIC_RECORDS_HOST: "losttofound.org",
   RECORDS_STORAGE_MODE: "supabase",
@@ -72,6 +73,20 @@ describe("production readiness", () => {
 
     expect(report.ready).toBe(true);
     expect(report.blockers).toHaveLength(0);
+  });
+
+  it("warns without blocking while the 4 GiB starter profile is active", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        STARTER_RESOURCE_PROFILE: "true",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.ready).toBe(true);
+    expect(report.blockers.map((item) => item.id)).not.toContain("customer-resource-profile");
+    expect(report.warnings.map((item) => item.id)).toContain("customer-resource-profile");
   });
 
   it("allows non-Supabase safety gates to pass while Supabase final work is deferred", () => {

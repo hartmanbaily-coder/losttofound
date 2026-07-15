@@ -273,6 +273,11 @@ const checks = [
 
 const warnings = [
   [
+    "STARTER_RESOURCE_PROFILE",
+    process.env.STARTER_RESOURCE_PROFILE === "false",
+    "is a non-blocking 4 GiB capacity warning; upgrade by 100 customer accounts or earlier if resource pressure, latency, or evidence-upload retries appear",
+  ],
+  [
     "VENDOR_SECURITY_REVIEW_APPROVED",
     isEnabled(process.env.VENDOR_SECURITY_REVIEW_APPROVED),
     "should be true after reviewing Supabase, hosting, malware scanning, email, logging, and monitoring vendors",

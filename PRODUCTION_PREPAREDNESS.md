@@ -10,7 +10,7 @@ Lost to Found Records can run against either the local demo store or the Supabas
 - `npm run check:pre-supabase` runs the same readiness guard while intentionally deferring the final Supabase Auth, storage, restore, and isolation gates.
 - `scripts/verify-production-env-template.mjs` verifies `.env.production.example` stays complete, points at the intended production records host/project, and does not contain real secrets.
 - `scripts/verify-security-headers.mjs` verifies CSP, HSTS, frame blocking, referrer policy, content-type sniffing protection, and browser permissions policy.
-- `.github/workflows/deploy.yml` now runs lint, typecheck, unit tests, secret scanning, dependency audit, environment-template verification, and build. On `main`, or on manual dispatch with `deploy=true`, it dispatches the Listhaus production deploy workflow with the exact validated LostToFound commit SHA.
+- `.github/workflows/deploy.yml` runs lint, typecheck, unit tests, secret scanning, dependency audit, environment-template verification, and build without holding production host credentials or dispatching another repository.
 - `database/supabase/production_schema.sql` defines the first Supabase/Postgres schema with RLS, server-mediated table access, FK indexes, and private evidence bucket policies.
 - Supabase client helpers now fail when called without production config, not at module import time.
 - `src/app/api/records/auth/login/route.ts`, `session/route.ts`, and `logout/route.ts` add Supabase Auth through server-managed HttpOnly cookies.
@@ -24,7 +24,7 @@ Lost to Found Records can run against either the local demo store or the Supabas
 - `MONITORING_ALERTING_RUNBOOK.md` defines production security monitoring sources, alert thresholds, log privacy rules, and escalation paths.
 - `INCIDENT_RESPONSE_RUNBOOK.md` defines incident severity, containment, investigation, notification review, recovery, and post-incident review steps.
 - `DATA_RETENTION_DELETION_RUNBOOK.md` defines the production retention, export, deletion, backup-aging, and legal-hold model to finalize before launch.
-- `SUPABASE_AUTH_LAUNCH_CHECKLIST.md` defines the dashboard-only Supabase Auth settings, redirect URLs, and matching Listhaus repo variables required before Auth readiness can be marked complete.
+- `SUPABASE_AUTH_LAUNCH_CHECKLIST.md` defines the dashboard-only Supabase Auth settings, redirect URLs, and matching dedicated-host values required before Auth readiness can be marked complete.
 - `scripts/verify-two-user-isolation.mjs` runs an executable synthetic two-user isolation check against a deployed Supabase-mode app.
 - `scripts/verify-supabase-auth-public-settings.mjs` checks the public Supabase Auth settings endpoint for email auth, anonymous/phone auth drift, email autoconfirm, and direct-signup alignment with the app signup gate.
 - `scripts/verify-malware-scanner.mjs` verifies the production malware scanner with clean and EICAR test payloads.
@@ -45,7 +45,7 @@ Lost to Found Records can run against either the local demo store or the Supabas
 - `SUPABASE_LIVE_VERIFICATION.md` records the current live Supabase project verification state and open advisor findings.
 - `PRODUCTION_LAUNCH_REHEARSAL.md` records the latest go/no-go rehearsal, current Supabase evidence, and remaining live launch gates.
 - The production deployment now runs internal ClamAV scanning for evidence uploads and verified clean/EICAR behavior on 2026-06-28.
-- The Listhaus production deploy workflow now writes explicit LostToFound signup-mode env vars and accepts the remaining verified readiness controls through GitHub repository variables before writing `/opt/listhaus/losttofound/.env.production`.
+- The dedicated LostToFound host reads production settings from `/srv/losttofound/config/app.env` with mode `0600`; the config directory is outside the rsynced application tree, and production SSH credentials and environment secrets are intentionally not stored in GitHub or Listhaus.
 - `/privacy` and `/terms` now contain records-specific public drafts that must be reviewed before launch.
 - `src/lib/records/clientStore.ts` can run in `local` mode or `supabase` mode using `NEXT_PUBLIC_RECORDS_STORAGE_MODE`.
 - The Records Timeline view now merges custody calendar days, scheduled exchanges, logged exchanges, notes, evidence, support, and expenses into expandable court-packet-oriented rows with CSV export.
@@ -91,7 +91,7 @@ Verified:
 4. Keep malware-scanner verification current; `MALWARE_SCANNER_TESTED_AT` must stay within 30 days before accepting real evidence.
 5. Approve retention/deletion, backup aging, incident response, monitoring/alerting, legal review, and vendor review runbooks.
 6. Run `npm run check:pre-supabase` to confirm all non-Supabase launch gates are clear.
-7. Keep production secrets in the host using project `cieuilbpnwuvnrxrlczj`, and deploy through the existing server path for `losttofound.org`.
+7. Keep production secrets in `/srv/losttofound/config/app.env` on the dedicated host using project `cieuilbpnwuvnrxrlczj`, and deploy only through the rootless LostToFound stack.
 8. Set `EXPECTED_SUPABASE_PROJECT_REF=cieuilbpnwuvnrxrlczj` so production readiness fails if secrets point at the old staging project.
 9. Keep production invite-only until launch by setting `NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED=false` and `RECORDS_SIGNUPS_ENABLED=false`; also disable direct Supabase Auth signup while invite-only mode is active. Enable self-registration only after Supabase SMTP, abuse controls, direct-signup policy, and App Store review account handling are ready.
 10. Complete `SUPABASE_AUTH_LAUNCH_CHECKLIST.md`, including direct-signup policy, SMTP, redirect URLs, leaked-password protection, reset-token settings, password-change reauthentication, and session/device revocation in Supabase Auth.
@@ -99,7 +99,7 @@ Verified:
 12. Keep two-user RLS/storage verification current by dispatching `Verify Live Isolation`; the latest passing value is `TWO_USER_ISOLATION_TESTED_AT=2026-06-28`.
 13. Run a restore drill, save `ops/backup-restore-evidence.json`, and run `npm run verify:backup-restore`.
 14. Seed staging with synthetic data only and run end-to-end tests against staging.
-15. Set the matching Listhaus repository variables only after verification is complete: `LOSTTOFOUND_SUPABASE_CUSTOM_SMTP_ENABLED`, `LOSTTOFOUND_SUPABASE_AUTH_REDIRECTS_VERIFIED_AT`, `LOSTTOFOUND_SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED`, `LOSTTOFOUND_SUPABASE_AUTH_HARDENING_VERIFIED_AT`, `LOSTTOFOUND_SECURITY_MONITORING_ENABLED`, `LOSTTOFOUND_BACKUP_RESTORE_TESTED_AT`, `LOSTTOFOUND_DATA_RETENTION_POLICY_APPROVED`, `LOSTTOFOUND_INCIDENT_RESPONSE_PLAN_APPROVED`, `LOSTTOFOUND_LEGAL_REVIEW_APPROVED`, and `LOSTTOFOUND_VENDOR_SECURITY_REVIEW_APPROVED`.
+15. Set verified readiness values directly in the host environment file; do not duplicate them into Listhaus or GitHub repository secrets.
 16. Keep `losttofound.org` on the current records build only after `npm run verify:headers` passes; accept real records only after readiness API returns `ready` and `npm run check:live` passes.
 
 ## Verification Commands
