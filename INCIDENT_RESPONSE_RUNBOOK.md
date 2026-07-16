@@ -177,14 +177,18 @@ Complete within five business days:
 
 ## Critical Contacts
 
-Fill before production:
+Current operational contacts:
 
-- Incident commander:
-- Engineering lead:
-- Legal/privacy counsel:
-- Supabase owner:
-- Hosting/CDN owner:
-- DNS/domain owner:
-- Malware scanner vendor:
-- Monitoring vendor:
-- Security contact email:
+- Incident commander: Baily Hartman, reachable through `security@losttofound.org`
+- Engineering lead: Baily Hartman
+- Supabase owner: Baily Hartman
+- Hosting/CDN owner: Baily Hartman (Hetzner and Cloudflare)
+- DNS/domain owner: Baily Hartman (Cloudflare)
+- Malware scanner: self-hosted ClamAV on the dedicated LostToFound host
+- Monitoring sources: Hetzner/Docker platform logs, Cloudflare, and the scheduled GitHub `live-monitor` workflow
+- Security contact email: `security@losttofound.org`, routed through Cloudflare Email Routing to the verified operator mailbox
+
+Still required before legal approval:
+
+- Legal/privacy counsel: not yet recorded
+- Backup/restore escalation contact: not yet recorded

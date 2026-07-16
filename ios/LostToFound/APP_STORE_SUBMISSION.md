@@ -89,12 +89,13 @@ Current native build snapshot:
 
 - Product: `LostToFound.app`
 - Bundle ID: `io.lendori.losttofound`
-- Version/build: `0.1.0 (2)`
+- Version/build: `0.1.0 (12)` in the project; App Store uploads use Xcode-managed next-available build numbering
 - Deployment target: iOS 17.0
 - Records URL: `https://losttofound.org/records`
 - Account deletion URL: `https://losttofound.org/account/delete`
 - Web navigation allowlist: `losttofound.org`, `www.losttofound.org`
 - Scene privacy behavior: app returns to locked state when it leaves the active scene
+- Automated verification: 6 native security tests passed with 0 failures on 2026-07-16, and an unsigned Release archive completed with store validation enabled
 
 Do not submit to App Review until the production backend is ready for review access, including reviewed auth email delivery, auth redirect URLs, leaked-password protection, monitoring, backup/restore evidence, retention/deletion approval, and legal review.
 
