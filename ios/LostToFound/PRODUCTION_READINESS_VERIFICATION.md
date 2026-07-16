@@ -12,6 +12,21 @@ The native code now mitigates the locally fixable findings from the production-r
 
 These safeguards reduce stale-session and temporary-file risk. They do not replace backend revocation or real-device verification.
 
+## Automated verification status
+
+On 2026-07-16, Xcode 26.6 discovered and ran the shared `LostToFound` test plan on an iPhone 17 Pro simulator. All 6 `NativeSecurityPolicyTests` passed with 0 failures. The shared scheme now references `LostToFound.xctestplan`, so Product > Test and command-line test runs use the same test target instead of relying on Xcode's automatically generated test list.
+
+Re-run with an available iPhone simulator before each public release:
+
+```bash
+xcodebuild test \
+  -project ios/LostToFound/LostToFound.xcodeproj \
+  -scheme LostToFound \
+  -testPlan LostToFound \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  CODE_SIGNING_ALLOWED=NO
+```
+
 ## Required real-device TestFlight checks
 
 Use a synthetic production test account. Record the build number, device model, iOS version, test time, and result for every case.
