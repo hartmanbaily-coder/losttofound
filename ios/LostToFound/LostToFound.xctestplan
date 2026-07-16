@@ -1,0 +1,30 @@
+{
+  "configurations" : [
+    {
+      "id" : "977E9A0A-C37D-4689-B2F8-BDC9AE81D314",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "codeCoverage" : false,
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:LostToFound.xcodeproj",
+      "identifier" : "0A5000010000000000000001",
+      "name" : "LostToFound"
+    }
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:LostToFound.xcodeproj",
+        "identifier" : "0B5000010000000000000001",
+        "name" : "LostToFoundTests"
+      }
+    }
+  ],
+  "version" : 1
+}

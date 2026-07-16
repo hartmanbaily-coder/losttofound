@@ -45,6 +45,7 @@
 		0A2000030000000000000001 /* LostToFound.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LostToFound.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0B2000010000000000000001 /* NativeSecurityPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeSecurityPolicyTests.swift; sourceTree = "<group>"; };
 		0B2000030000000000000001 /* LostToFoundTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LostToFoundTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B791BF4E3005748200BCB2B9 /* LostToFound.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = LostToFound.xctestplan; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,6 +69,7 @@
 		0A4000010000000000000001 = {
 			isa = PBXGroup;
 			children = (
+				B791BF4E3005748200BCB2B9 /* LostToFound.xctestplan */,
 				0A4000010000000000000002 /* LostToFound */,
 				0B4000010000000000000001 /* LostToFoundTests */,
 				0A4000010000000000000003 /* Products */,
