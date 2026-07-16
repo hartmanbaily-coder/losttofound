@@ -23,6 +23,7 @@ const readyEnv = {
   SUPABASE_CUSTOM_SMTP_ENABLED: "true",
   SUPABASE_AUTH_REDIRECTS_VERIFIED_AT: "2026-06-10",
   SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED: "true",
+  PWNED_PASSWORD_CHECK_ENABLED: "false",
   SUPABASE_PASSWORD_MIN_LENGTH: "12",
   SUPABASE_PASSWORD_REAUTH_ENABLED: "true",
   SUPABASE_CURRENT_PASSWORD_REQUIRED: "true",
@@ -73,6 +74,19 @@ describe("production readiness", () => {
 
     expect(report.ready).toBe(true);
     expect(report.blockers).toHaveLength(0);
+  });
+
+  it("accepts the app-level leaked-password guard as a free-plan compensating control", () => {
+    const report = evaluateProductionReadiness(
+      {
+        ...readyEnv,
+        SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED: "false",
+        PWNED_PASSWORD_CHECK_ENABLED: "true",
+      },
+      "2026-06-15T00:00:00.000Z"
+    );
+
+    expect(report.blockers.map((item) => item.id)).not.toContain("supabase-leaked-passwords");
   });
 
   it("warns without blocking while the 4 GiB starter profile is active", () => {

@@ -70,6 +70,7 @@ Before production deploy, use `.env.production.example` as the source checklist 
 - `SUPABASE_CUSTOM_SMTP_ENABLED`
 - `SUPABASE_AUTH_REDIRECTS_VERIFIED_AT`
 - `SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED`
+- `PWNED_PASSWORD_CHECK_ENABLED` (required when the native Supabase leaked-password control is unavailable)
 - `SUPABASE_PASSWORD_MIN_LENGTH`
 - `SUPABASE_PASSWORD_REAUTH_ENABLED`
 - `SUPABASE_CURRENT_PASSWORD_REQUIRED`

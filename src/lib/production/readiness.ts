@@ -321,9 +321,10 @@ export function evaluateProductionReadiness(
     check(
       "supabase-leaked-passwords",
       "Leaked password protection is enabled",
-      isEnabled(env.SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED),
+      isEnabled(env.SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED) ||
+        isEnabled(env.PWNED_PASSWORD_CHECK_ENABLED),
       "blocker",
-      "Enable Supabase leaked password protection and set SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED=true."
+      "Enable Supabase leaked password protection or the app-level Have I Been Pwned range check."
     ),
     check(
       "supabase-password-minimum",

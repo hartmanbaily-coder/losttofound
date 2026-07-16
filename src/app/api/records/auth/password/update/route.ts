@@ -13,6 +13,10 @@ import {
   recordsPasswordMinimumLength,
 } from "@/lib/records/authServer";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
+import {
+  checkPwnedPassword,
+  isPwnedPasswordCheckEnabled,
+} from "@/lib/security/pwnedPasswords";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +72,35 @@ export async function POST(request: NextRequest) {
       detail: "Password update blocked before MFA verification.",
     });
     return mfaRequiredResponse();
+  }
+
+  if (isPwnedPasswordCheckEnabled()) {
+    const passwordSafety = await checkPwnedPassword(password);
+    if (passwordSafety.status === "compromised") {
+      await recordSecurityEvent({
+        type: "auth_password_update_compromised_password_blocked",
+        severity: "warning",
+        request,
+        status: 400,
+      });
+      return NextResponse.json(
+        { error: "Choose a different password that has not appeared in known data breaches." },
+        { status: 400, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+    if (passwordSafety.status === "unavailable") {
+      await recordSecurityEvent({
+        type: "auth_password_safety_check_unavailable",
+        severity: "high",
+        request,
+        status: 503,
+        detail: "Password update paused because the password safety check was unavailable.",
+      });
+      return NextResponse.json(
+        { error: "Password safety verification is temporarily unavailable. Try again shortly." },
+        { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "60" } }
+      );
+    }
   }
 
   const user = await authClient.auth.getUser();

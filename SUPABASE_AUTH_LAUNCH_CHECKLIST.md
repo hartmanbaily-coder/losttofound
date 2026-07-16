@@ -55,10 +55,10 @@ Open Supabase Dashboard for project `cieuilbpnwuvnrxrlczj`.
 4. Password security
    - Go to Authentication > Providers > Email.
    - Set minimum password length to at least `12`.
-   - Enable leaked-password protection.
+   - Enable Supabase leaked-password protection on Pro, or keep `PWNED_PASSWORD_CHECK_ENABLED=true` so signup and password changes use the free Have I Been Pwned k-anonymity range API as the compensating control on Free.
    - Require reauthentication/current password for sensitive password changes where available.
    - After verification, set:
-     - `LOSTTOFOUND_SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED=true`
+     - `LOSTTOFOUND_SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED=true` when the native Pro control is enabled; otherwise keep it false and require `PWNED_PASSWORD_CHECK_ENABLED=true`.
      - `LOSTTOFOUND_SUPABASE_AUTH_HARDENING_VERIFIED_AT=YYYY-MM-DD`
 
 5. Advisors
@@ -71,7 +71,7 @@ Open Supabase Dashboard for project `cieuilbpnwuvnrxrlczj`.
 - `npm run verify:supabase-auth` passes.
 - Synthetic signup or invite flow confirms through `/auth/confirm`.
 - Synthetic password reset lands on `/records?auth=recovery` and password update works.
-- Supabase leaked-password protection is enabled or the project plan limitation is explicitly resolved.
+- Supabase leaked-password protection is enabled, or the tested app-level HIBP range check is enabled as the Free-plan compensating control.
 - `SUPABASE_AUTH_HARDENING_VERIFIED_AT` is set only after dashboard settings and advisors are checked.
 
 ## Sources
