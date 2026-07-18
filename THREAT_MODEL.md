@@ -2,7 +2,7 @@
 
 ## Scope
 
-Lost to Found Records stores private family-court documentation records for adult users. The highest-risk assets are account access, evidence files, note bodies, payment records, child-related details, generated reports, backups, and staff access pathways.
+My Custody Case stores private family-court documentation records for adult users. The highest-risk assets are account access, evidence files, note bodies, payment records, child-related details, generated reports, backups, and staff access pathways.
 
 ## Threats and Controls
 

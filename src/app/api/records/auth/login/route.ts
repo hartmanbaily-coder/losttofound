@@ -167,7 +167,7 @@ async function mfaResponse(input: {
 
   const enrollment = await input.authClient.auth.mfa.enroll({
     factorType: "totp",
-    issuer: "Lost to Found Records",
+    issuer: "My Custody Case",
   });
 
   if (enrollment.error) {

@@ -2,7 +2,7 @@
 
 ## Security Model
 
-Lost to Found Records is designed for private parent-owned records scoped by authenticated `userId` and selected `caseId`.
+My Custody Case is designed for private parent-owned records scoped by authenticated `userId` and selected `caseId`.
 
 The current MVP can run in local demo mode or Supabase-backed mode. It must not be used for real sensitive records until the remaining production gates are complete. Production must enforce authorization server-side on every record read, write, export, and evidence access request.
 

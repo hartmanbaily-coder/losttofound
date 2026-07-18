@@ -23,7 +23,7 @@ struct AuthenticationGate: View {
                     .font(.headline)
                     .foregroundStyle(Color("AccentColor"))
 
-                Text("Organize custody notes, exchanges, files, and reports into a private records workspace you can use to understand patterns, work toward desired outcomes, and protect yourself with better documentation.")
+                Text("Privately organize custody events, parenting time, expenses, notes, and evidence, then create clear reports for personal review or your attorney.")
                     .font(.body)
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -96,7 +96,7 @@ struct AuthenticationGate: View {
         do {
             let success = try await context.evaluatePolicy(
                 .deviceOwnerAuthentication,
-                localizedReason: "Unlock Lost to Found on this device."
+                localizedReason: "Unlock My Custody Case on this device."
             )
             if success {
                 onUnlock()

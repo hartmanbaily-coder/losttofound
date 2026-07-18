@@ -38,8 +38,13 @@ test("records login and report workflow", async ({ page }) => {
 
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Lost to Found Case Organization" })).toBeVisible();
-  await page.getByRole("link", { name: "Open records workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Your custody case, organized." })).toBeVisible();
+  const openRecordsWorkspace = page.getByRole("link", { name: "Open records workspace" });
+  await expect(openRecordsWorkspace).toHaveAttribute("href", "/records");
+  await Promise.all([
+    page.waitForURL(/\/records$/),
+    openRecordsWorkspace.click(),
+  ]);
   const loginPassword = page.getByLabel("Password", { exact: true });
   await expect(loginPassword).toHaveAttribute("type", "password");
   await page.getByRole("button", { name: "Show password" }).click();
@@ -223,9 +228,9 @@ test("records login and report workflow", async ({ page }) => {
   const reportPath = await reportDownload.path();
   if (!reportPath) throw new Error("Exchange report CSV download did not produce a file.");
   const reportCsv = await readFile(reportPath, "utf8");
-  expect(reportCsv.split("\n")[0]).toContain("scheduled_time_source");
-  expect(reportCsv.split("\n")[0]).toContain("arriving_or_drop_off_party");
-  expect(reportCsv.split("\n")[0]).toContain("late_party");
+  expect(reportCsv.split("\n")[0]).toContain("Scheduled source");
+  expect(reportCsv.split("\n")[0]).toContain("Arriving / drop-off party");
+  expect(reportCsv.split("\n")[0]).toContain("Late party");
   expect(reportCsv).not.toContain("chart_data");
 
   const additionalReportTypes = [
@@ -338,6 +343,164 @@ test("mobile quick issue saves directly to editable report notes", async ({ page
   await expect(page.getByText("Updated attorney follow-up issue", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Delete note Updated attorney follow-up issue" }).click();
   await expect(page.getByRole("status")).toContainText("Date based note deleted");
+});
+
+test("mobile screenshot exhibit builder preserves order and generates a protected local PDF", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "l2f.records.session.v1",
+      JSON.stringify({
+        userId: "user-demo-parent-a",
+        caseId: "case-demo-parenting-plan",
+        email: "demo@example.com",
+        authMode: "local",
+      })
+    );
+  });
+  await page.goto("/records");
+  await page.locator("nav").getByRole("button", { name: /^Files/ }).click();
+  const builder = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Screenshot exhibit builder" }),
+  });
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    "base64"
+  );
+  await builder.getByLabel("Screenshots").setInputFiles([
+    { name: "first.png", mimeType: "image/png", buffer: png },
+    { name: "second.png", mimeType: "image/png", buffer: png },
+  ]);
+  await expect(builder.getByText("1. first.png")).toBeVisible();
+  await expect(builder.getByText("2. second.png")).toBeVisible();
+  await builder.getByRole("button", { name: "Move first.png down" }).click();
+  await expect(builder.getByText("1. second.png")).toBeVisible();
+  await expect(builder.getByText("2. first.png")).toBeVisible();
+  await builder.getByLabel("Exhibit label").fill("Exhibit A");
+  await builder.getByRole("button", { name: "Generate PDF" }).click();
+  await expect(builder.getByRole("status")).toContainText("PDF generated with 3 pages");
+  const downloadPromise = page.waitForEvent("download");
+  await builder.getByRole("button", { name: "Download or share PDF" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("my_custody_case_exhibit_Exhibit-A.pdf");
+  await builder.getByRole("button", { name: "Save PDF to Files" }).click();
+  await expect(builder.getByRole("status")).toContainText("Sign in to private cloud storage");
+  const fitsViewport = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(fitsViewport).toBe(true);
+});
+
+test("attorney portal is a separate read-only mobile experience", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "l2f.records.session.v1",
+      JSON.stringify({
+        userId: "user-demo-parent-a",
+        caseId: "case-demo-parenting-plan",
+        email: "counsel@example.com",
+        authMode: "local",
+      })
+    );
+    window.sessionStorage.setItem("l2f.attorney.access", "opaque-access");
+  });
+  const now = "2026-07-18T00:00:00.000Z";
+  const dataset = {
+    users: [],
+    matters: [{
+      id: "shared-case",
+      userId: "shared-owner",
+      caseName: "Parenting Plan Records",
+      childDisplayLabels: ["Child 1"],
+      userRoleLabel: "Parent A",
+      otherParentLabel: "Parent B",
+      timezone: "America/Anchorage",
+      createdAt: now,
+      updatedAt: now,
+    }],
+    exchangeRules: [],
+    scheduleExceptions: [],
+    custodyDayAssignments: [],
+    exchangeLogs: [],
+    dateNotes: [{
+      id: "note-1",
+      caseId: "shared-case",
+      userId: "shared-owner",
+      noteDate: "2026-07-10",
+      category: "other",
+      title: "Shared issue",
+      body: "User-provided note for review.",
+      tags: [],
+      includeInReports: true,
+      createdAt: now,
+      updatedAt: now,
+    }],
+    evidenceItems: [{
+      id: "file-1",
+      caseId: "shared-case",
+      userId: "shared-owner",
+      originalFileName: "shared-file.pdf",
+      storedFileName: "",
+      fileType: "application/pdf",
+      fileSize: 1024,
+      uploadedAt: now,
+      tags: [],
+      includeInReports: true,
+      malwareScanStatus: "clean",
+      createdAt: now,
+      updatedAt: now,
+    }],
+    childSupportOrders: [],
+    childSupportPayments: [],
+    expenseItems: [],
+    auditLogs: [],
+  };
+  await page.route("**/api/records/attorney/portal", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().postDataJSON()).toEqual({ accessHandle: "opaque-access" });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        accessHandle: "opaque-access",
+        projection: {
+          dataset,
+          evidence: [{
+            ...dataset.evidenceItems[0],
+            downloadHandle: "opaque-evidence",
+          }],
+          sharedAt: now,
+        },
+        updatedAt: now,
+        accessExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        readOnly: true,
+      }),
+    });
+  });
+  await page.route("**/api/records/auth/csrf", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ token: "csrf" }),
+  }));
+  await page.route("**/api/records/attorney/portal/action", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ ok: true }),
+  }));
+
+  await page.goto("/attorney");
+  await expect(page.getByText("Read-only attorney guest", { exact: true })).toBeVisible();
+  await expect(page.getByText(/You may return as often as needed before then/)).toBeVisible();
+  await expect(page.getByText(/You cannot create, edit, delete, upload/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Settings", exact: true })).toHaveCount(0);
+  await expect(page.getByText("Request account deletion")).toHaveCount(0);
+  await page.getByRole("button", { name: "Notes", exact: true }).click();
+  await expect(page.getByText("Shared issue")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Edit|Delete|Upload/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Reports", exact: true }).click();
+  await page.getByRole("button", { name: "Generate report preview" }).click();
+  await expect(page.getByRole("status")).toContainText("Read-only report preview generated");
+  const fitsViewport = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(fitsViewport).toBe(true);
 });
 
 test("mobile create flows stay visible across every record tab and reload with a stale case session", async ({ page }) => {
@@ -557,11 +720,11 @@ test("records account recovery and deletion paths are reachable", async ({ page 
   await expect(page.getByRole("button", { name: "Submit account deletion request" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Email support instead" })).toHaveAttribute(
     "href",
-    "mailto:support@lendori.io?subject=Lost%20to%20Found%20account%20deletion%20request"
+    "mailto:support@lendori.io?subject=My%20Custody%20Case%20account%20deletion%20request"
   );
   await expect(page.getByRole("link", { name: "Email deletion support" })).toHaveAttribute(
     "href",
-    "mailto:support@lendori.io?subject=Lost%20to%20Found%20account%20deletion%20request"
+    "mailto:support@lendori.io?subject=My%20Custody%20Case%20account%20deletion%20request"
   );
   await expect(page.getByText("What may be retained")).toBeVisible();
 

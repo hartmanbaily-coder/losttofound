@@ -8,7 +8,7 @@ const sections: PolicySection[] = [
   {
     title: "What this request covers",
     body: [
-      "Account deletion is for deleting the whole Lost to Found account record and associated personal account data.",
+      "Account deletion is for deleting the whole account record in My Custody Case and associated personal account data.",
       "Associated records include custody matters, calendar records, timeline items, notes, file metadata, reports, support records kept with the account, and private uploaded evidence files where deletion is legally and technically permitted.",
       "Deleting only one custody matter or file can still be done from the Records workspace without deleting the whole account.",
     ],
@@ -43,7 +43,7 @@ export default function AccountDeletePage() {
   return (
     <PolicyPage
       title="Delete Account"
-      description="This page lets users start deletion of their Lost to Found account and associated records."
+      description="This page lets users start deletion of their account and associated My Custody Case records."
       notice="This deletion process should be reviewed by qualified counsel before broad public launch, especially for backup aging, legal holds, support verification, and security-log retention."
       sections={sections}
     >
@@ -54,7 +54,7 @@ export default function AccountDeletePage() {
         <p className="mt-3">
           If you cannot sign in, send the request from the email address connected to the account.
           Use a short message such as
-          <span className="font-medium text-slate-800"> Please delete my Lost to Found account.</span>{" "}
+          <span className="font-medium text-slate-800"> Please delete my account for My Custody Case.</span>{" "}
           Support will follow up if verification or additional confirmation is required.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">

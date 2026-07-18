@@ -1,4 +1,4 @@
-name: LostToFound Live Monitor
+name: My Custody Case Live Monitor
 
 on:
   schedule:
@@ -152,6 +152,6 @@ jobs:
           fi
 
           gh issue create \
-            --title "LostToFound live monitor failed" \
+            --title "My Custody Case live monitor failed" \
             --label "live-monitor" \
             --body "The scheduled live monitor failed. Review the workflow run: ${RUN_URL}"

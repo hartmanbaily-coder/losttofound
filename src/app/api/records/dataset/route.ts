@@ -6,6 +6,7 @@ import {
   isSupabaseRecordsMode,
 } from "@/lib/records/authServer";
 import type { RecordsDataset } from "@/lib/records/types";
+import { invalidateAttorneyAccessForCases } from "@/lib/records/attorneyAccess";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 
 export const dynamic = "force-dynamic";
@@ -109,6 +110,34 @@ export async function PUT(request: NextRequest) {
 
   const { supabase, userId } = context;
   const caseKey = getRecordsCaseKey(request);
+  const { data: currentRow, error: currentError } = await supabase
+    .from("records_case_snapshots")
+    .select("dataset")
+    .eq("user_id", userId)
+    .eq("case_key", caseKey)
+    .maybeSingle();
+  if (currentError) {
+    return NextResponse.json({ error: "Unable to verify current records dataset." }, { status: 500 });
+  }
+  const currentDataset = currentRow?.dataset as Partial<RecordsDataset> | undefined;
+  const nextCaseIds = new Set(
+    body.dataset.matters.filter((matter) => matter.userId === userId).map((matter) => matter.id)
+  );
+  const removedCaseIds = (currentDataset?.matters || [])
+    .filter((matter) => matter.userId === userId && !nextCaseIds.has(matter.id))
+    .map((matter) => matter.id);
+  const invalidation = await invalidateAttorneyAccessForCases({
+    supabase,
+    ownerUserId: userId,
+    caseIds: removedCaseIds,
+    reason: "case_deleted",
+  });
+  if (!invalidation.ok) {
+    return NextResponse.json(
+      { error: "Case deletion was stopped because shared access could not be revoked." },
+      { status: 503 }
+    );
+  }
   const { error } = await supabase.from("records_case_snapshots").upsert(
     {
       user_id: userId,

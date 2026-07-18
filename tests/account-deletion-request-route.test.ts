@@ -8,6 +8,7 @@ const recordSecurityEvent = vi.hoisted(() => vi.fn());
 const insertAuditLog = vi.hoisted(() => vi.fn());
 const revokeSessions = vi.hoisted(() => vi.fn());
 const clearRecordsSessionCookies = vi.hoisted(() => vi.fn());
+const invalidateAllAttorneyAccessForOwner = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/records/authServer", () => ({
   clearRecordsSessionCookies,
@@ -18,6 +19,10 @@ vi.mock("@/lib/records/authServer", () => ({
 
 vi.mock("@/lib/security/securityEvents", () => ({
   recordSecurityEvent,
+}));
+
+vi.mock("@/lib/records/attorneyAccess", () => ({
+  invalidateAllAttorneyAccessForOwner,
 }));
 
 function makeRequest(body: unknown) {
@@ -37,6 +42,7 @@ describe("records account deletion request route", () => {
     resetRateLimitStore();
     insertAuditLog.mockResolvedValue({ error: null });
     revokeSessions.mockResolvedValue({ error: null });
+    invalidateAllAttorneyAccessForOwner.mockResolvedValue({ ok: true });
     getRecordsAuthContext.mockResolvedValue({
       supabase: {
         auth: {

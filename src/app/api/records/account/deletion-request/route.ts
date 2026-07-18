@@ -8,6 +8,7 @@ import {
 } from "@/lib/records/authServer";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
+import { invalidateAllAttorneyAccessForOwner } from "@/lib/records/attorneyAccess";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -90,6 +91,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const attorneyInvalidation = await invalidateAllAttorneyAccessForOwner({
+    supabase: context.supabase,
+    ownerUserId: context.userId,
+    reason: "account_deletion_requested",
+  });
+
   const accessToken =
     context.refreshedSession?.access_token ||
     request.cookies.get(recordsAccessCookieName)?.value;
@@ -138,6 +145,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     detail:
       "Authenticated user initiated complete account deletion and server-side refresh sessions were revoked.",
   });
+
+  if (!attorneyInvalidation.ok) {
+    await recordSecurityEvent({
+      type: "account_deletion_request_failed",
+      severity: "critical",
+      request,
+      userId: context.userId,
+      status: 503,
+      detail: "Deletion request recorded and sessions revoked, but attorney access revocation failed.",
+    });
+    const response = NextResponse.json(
+      {
+        error:
+          "Your deletion request was recorded and sessions were revoked, but shared attorney access could not be confirmed as revoked. Contact support immediately.",
+        requestId,
+        requestedAt,
+        clearLocalSession: true,
+      },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
+    clearRecordsSessionCookies(response);
+    return response;
+  }
 
   const response = NextResponse.json(
     {

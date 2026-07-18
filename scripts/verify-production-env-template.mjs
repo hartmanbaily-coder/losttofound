@@ -34,6 +34,9 @@ const requiredKeys = [
   "OPENAI_IMPORT_MODEL",
   "AUTH_SECRET",
   "AUTH_TRUST_HOST",
+  "ATTORNEY_GUEST_FEATURE_ENABLED",
+  "ATTORNEY_PORTAL_SECRET",
+  "ATTORNEY_INVITE_DEV_DELIVERY",
   "EVIDENCE_MAX_FILE_BYTES",
   "MALWARE_SCAN_PROVIDER",
   "MALWARE_SCANNER_TESTED_AT",
@@ -125,6 +128,19 @@ if (serviceRoleValue && !/^REPLACE_WITH_|^PLACEHOLDER/i.test(serviceRoleValue)) 
 const authSecretValue = String(entries.get("AUTH_SECRET") || "").trim();
 if (authSecretValue && !/^REPLACE_WITH_|^PLACEHOLDER/i.test(authSecretValue)) {
   findings.push("AUTH_SECRET must remain a placeholder in .env.production.example.");
+}
+
+const attorneySecretValue = String(entries.get("ATTORNEY_PORTAL_SECRET") || "").trim();
+if (attorneySecretValue && !/^REPLACE_WITH_|^PLACEHOLDER/i.test(attorneySecretValue)) {
+  findings.push("ATTORNEY_PORTAL_SECRET must remain a placeholder in .env.production.example.");
+}
+
+if (entries.get("ATTORNEY_GUEST_FEATURE_ENABLED") !== "false") {
+  findings.push("ATTORNEY_GUEST_FEATURE_ENABLED must remain false until production invitation delivery is implemented and reviewed.");
+}
+
+if (entries.get("ATTORNEY_INVITE_DEV_DELIVERY") !== "false") {
+  findings.push("ATTORNEY_INVITE_DEV_DELIVERY must be false in production.");
 }
 
 const logSaltValue = String(entries.get("SECURITY_LOG_HASH_SALT") || "").trim();

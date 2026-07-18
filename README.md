@@ -1,6 +1,6 @@
-# Lost to Found Records
+# My Custody Case
 
-Lost to Found Records is a privacy-first MVP for custody, parenting-time, child support, expense, evidence, and family-court documentation workflows.
+My Custody Case is a privacy focused product for organizing custody, parenting time, child support, expense, evidence, and family court records.
 
 Production domain: `losttofound.org`
 

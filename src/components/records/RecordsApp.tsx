@@ -120,6 +120,12 @@ import {
   ReportPreviewChartCard,
   SupportTrendLine,
 } from "./RecordsCharts";
+import ExhibitBuilder from "./ExhibitBuilder";
+import AttorneyAccessPanel from "./AttorneyAccessPanel";
+import {
+  saveScreenshotExhibitToFiles,
+  type ExhibitSaveRequest,
+} from "@/lib/records/exhibitEvidence";
 
 const recordsPrivacyNote =
   "Records are private by default. Use labels such as Child 1 and Parent B instead of real names.";
@@ -504,15 +510,15 @@ export default function RecordsApp() {
 
     if (format === "json") {
       downloadTextFile(
-        `lost-to-found-${slug}.json`,
+        `my_custody_case_${slug}.json`,
         JSON.stringify(packet, null, 2),
         "application/json"
       );
     } else if (format === "csv") {
-      downloadTextFile(`lost-to-found-${slug}.csv`, sectionExportToCsv(packet), "text/csv");
+      downloadTextFile(`my_custody_case_${slug}.csv`, sectionExportToCsv(packet), "text/csv");
     } else {
       const printHtml = buildSectionExportPrintHtml(packet);
-      if (!shareHtmlAsPdf(`lost-to-found-${slug}.pdf`, printHtml)) {
+      if (!shareHtmlAsPdf(`my_custody_case_${slug}.pdf`, printHtml)) {
         const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1000,height=760");
         if (!printWindow) {
           flash("Popup blocked. Allow popups to print the section packet.");
@@ -558,6 +564,12 @@ export default function RecordsApp() {
     }
 
     setSession(nextSession);
+    if (typeof window !== "undefined") {
+      const next = new URLSearchParams(window.location.search).get("next");
+      if (next === "/attorney" || next === "/attorney/accept") {
+        window.location.replace(next);
+      }
+    }
     return { status: "complete" as const };
   }
 
@@ -759,6 +771,7 @@ export default function RecordsApp() {
             {activeView === "Files" && (
               <EvidenceView
                 updateDataset={updateDataset}
+                reloadDataset={reloadDataset}
                 userId={userId}
                 caseId={effectiveCaseId}
                 timezone={caseTimezone}
@@ -2543,7 +2556,7 @@ function TimelineView({
       attention_level: event.severity || "neutral",
     }));
     downloadTextFile(
-      `lost-to-found-timeline-${range.from}-${range.to}.csv`,
+      `my_custody_case_timeline_${range.from}_${range.to}.csv`,
       rowsToCsv(rows),
       "text/csv"
     );
@@ -4927,6 +4940,7 @@ function ImportView({
 
 function EvidenceView({
   updateDataset,
+  reloadDataset,
   userId,
   caseId,
   timezone,
@@ -4937,6 +4951,7 @@ function EvidenceView({
   flash,
 }: {
   updateDataset: ReturnType<typeof useRecordsStore>["updateDataset"];
+  reloadDataset: ReturnType<typeof useRecordsStore>["reloadDataset"];
   userId: string;
   caseId: string;
   timezone: string;
@@ -4977,6 +4992,17 @@ function EvidenceView({
     }
 
     return parsed.evidence;
+  }
+
+  async function saveScreenshotExhibit(request: ExhibitSaveRequest) {
+    return saveScreenshotExhibitToFiles({
+      request,
+      caseId,
+      userId,
+      uploadFile: uploadEvidenceFile,
+      updateDataset,
+      reloadDataset,
+    });
   }
 
   async function addEvidence(event: FormEvent<HTMLFormElement>) {
@@ -5123,7 +5149,7 @@ function EvidenceView({
 
   function printEvidenceSheet(item: EvidenceItem) {
     const printHtml = buildEvidencePrintHtml(item);
-    if (!shareHtmlAsPdf(`lost-to-found-file-sheet-${item.id}.pdf`, printHtml)) {
+    if (!shareHtmlAsPdf(`my_custody_case_file_sheet_${item.id}.pdf`, printHtml)) {
       const printWindow = window.open("", "_blank", "noopener,noreferrer,width=900,height=700");
       if (!printWindow) {
         flash("Popup blocked. Allow popups to print the file sheet.");
@@ -5265,7 +5291,12 @@ function EvidenceView({
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
+    <div className="space-y-4">
+      <ExhibitBuilder
+        cloudStorageEnabled={recordsStorageMode === "supabase"}
+        onSave={saveScreenshotExhibit}
+      />
+      <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
       <Panel
         title="Private file attachment"
         action={recordsStorageMode === "supabase" ? "Private storage" : "Private drafting"}
@@ -5429,6 +5460,7 @@ function EvidenceView({
             </div>
           )}
         </Panel>
+      </div>
       </div>
     </div>
   );
@@ -6220,7 +6252,7 @@ function ReportsView({
       return;
     }
     const csv = reportPreviewToCsv(preview);
-    downloadTextFile(`lost-to-found-records-${reportType}-${range.from}-${range.to}.csv`, csv, "text/csv");
+    downloadTextFile(`my_custody_case_records_${reportType}_${range.from}_${range.to}.csv`, csv, "text/csv");
     updateDataset((current) =>
       withAudit(current, {
         userId,
@@ -6241,7 +6273,7 @@ function ReportsView({
     }
     const body = JSON.stringify({ report: preview, dataScope: { userId, caseId, range } }, null, 2);
     downloadTextFile(
-      `lost-to-found-records-${reportType}-${range.from}-${range.to}.json`,
+      `my_custody_case_records_${reportType}_${range.from}_${range.to}.json`,
       body,
       "application/json"
     );
@@ -6264,7 +6296,7 @@ function ReportsView({
       return;
     }
     const printHtml = buildReportPrintHtml(preview, range);
-    if (!shareHtmlAsPdf(`lost-to-found-records-${reportType}-${range.from}-${range.to}.pdf`, printHtml)) {
+    if (!shareHtmlAsPdf(`my_custody_case_records_${reportType}_${range.from}_${range.to}.pdf`, printHtml)) {
       window.print();
     }
     updateDataset((current) =>
@@ -6610,7 +6642,7 @@ function SettingsView({
       expenseItems: selected.expenseItems,
       auditLogs: selected.auditLogs,
     };
-    downloadTextFile("lost-to-found-records-user-export.json", JSON.stringify(scoped, null, 2), "application/json");
+    downloadTextFile("my_custody_case_records_user_export.json", JSON.stringify(scoped, null, 2), "application/json");
   }
 
   return (
@@ -6770,6 +6802,11 @@ function SettingsView({
       </div>
 
       <div className="min-w-0 space-y-4">
+        <AttorneyAccessPanel
+          caseId={caseId}
+          cloudStorageEnabled={recordsStorageMode === "supabase"}
+        />
+
         <Panel title="Storage status" action={recordsStorageMode === "supabase" ? "Private cloud" : "This browser"}>
           <div className="space-y-3 text-sm leading-6 text-slate-600">
             <div className="grid gap-2 sm:grid-cols-2">
@@ -7029,6 +7066,12 @@ function WorkspaceHeader({
           </div>
 
           <div className="grid grid-cols-2 gap-2 lg:contents">
+            <Link
+              href="/attorney"
+              className="h-10 rounded-md border border-slate-200 bg-white px-4 py-2.5 text-center text-sm font-semibold text-slate-700 transition hover:border-teal-500 hover:text-slate-950"
+            >
+              Shared With Me
+            </Link>
             <button
               type="button"
               onClick={onExport}

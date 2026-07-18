@@ -1,7 +1,7 @@
 {
-  "name": "Lost to Found Case Organization",
-  "short_name": "Lost to Found",
-  "description": "Organize custody and parenting-plan case records, files, timelines, and reports.",
+  "name": "My Custody Case",
+  "short_name": "My Case",
+  "description": "Privately organize custody records, evidence, timelines, expenses, and reports.",
   "id": "/records",
   "start_url": "/records",
   "scope": "/",

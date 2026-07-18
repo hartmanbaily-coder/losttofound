@@ -1,4 +1,4 @@
-const CACHE_NAME = "lost-to-found-shell-v2";
+const CACHE_NAME = "my_custody_case_shell_v3";
 const PUBLIC_ASSETS = [
   "/",
   "/manifest.webmanifest",
@@ -11,6 +11,7 @@ const PUBLIC_ASSETS = [
 const PRIVATE_PREFIXES = [
   "/api/",
   "/records",
+  "/attorney",
   "/auth",
   "/dashboard",
   "/work",

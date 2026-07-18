@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum AppBrand {
-    static let name = "Lost to Found Case Organization"
+    static let name = "My Custody Case"
     static let tagline = "Remove the emotion. Track the data."
     static let supportEmail = "support@lendori.io"
     static let accountDeletionRequestURL = URL(
@@ -57,7 +57,7 @@ struct PrivacySummaryView: View {
             Section {
                 AppBrandHeader()
 
-                Text("Lost to Found is for adult users organizing private custody and parenting plan records.")
+                Text("My Custody Case is for adult users organizing private custody and parenting plan records.")
                     .font(.body)
                     .foregroundStyle(.secondary)
             }

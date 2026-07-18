@@ -18,6 +18,9 @@ const readyEnv = {
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_test_key",
   SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
   AUTH_SECRET: "12345678901234567890123456789012",
+  ATTORNEY_GUEST_FEATURE_ENABLED: "false",
+  ATTORNEY_PORTAL_SECRET: "abcdefghijklmnopqrstuvwxyz123456",
+  ATTORNEY_INVITE_DEV_DELIVERY: "false",
   SUPABASE_MFA_POLICY: "required",
   RECORDS_ENFORCE_MFA: "true",
   SUPABASE_CUSTOM_SMTP_ENABLED: "true",
@@ -74,6 +77,27 @@ describe("production readiness", () => {
 
     expect(report.ready).toBe(true);
     expect(report.blockers).toHaveLength(0);
+  });
+
+  it("requires a distinct cryptographic secret when attorney invitations are enabled", () => {
+    const report = evaluateProductionReadiness({
+      ...readyEnv,
+      ATTORNEY_GUEST_FEATURE_ENABLED: "true",
+      ATTORNEY_PORTAL_SECRET: readyEnv.AUTH_SECRET,
+    }, "2026-06-15T00:00:00.000Z");
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("attorney-portal-secret");
+  });
+
+  it("requires the dedicated attorney secret even while new invitations are disabled", () => {
+    const report = evaluateProductionReadiness({
+      ...readyEnv,
+      ATTORNEY_PORTAL_SECRET: "",
+    }, "2026-06-15T00:00:00.000Z");
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("attorney-portal-secret");
   });
 
   it("accepts the app-level leaked-password guard as a free-plan compensating control", () => {
