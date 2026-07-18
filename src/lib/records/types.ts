@@ -267,6 +267,8 @@ export interface EvidenceItem {
   reviewedAt?: string;
   submittedAt?: string;
   malwareScanStatus?: "pending" | "clean" | "blocked" | "failed";
+  derivationType?: "screenshot_exhibit";
+  sourceEvidenceIds?: Id[];
   createdAt: string;
   updatedAt: string;
 }

@@ -27,6 +27,8 @@ export interface RecordsAuthContext {
   supabase: ReturnType<typeof createSupabaseAdminClient>;
   userId: string;
   email: string;
+  emailConfirmedAt?: string;
+  assuranceLevel: "aal1" | "aal2" | null;
   caseId: string;
   refreshedSession?: Session;
 }
@@ -89,7 +91,9 @@ export function safeRecordsAuthNextPath(value: string | null | undefined) {
   }
 }
 
-export function getAccessTokenAal(accessToken: string | undefined) {
+export function getAccessTokenAal(
+  accessToken: string | undefined
+): "aal1" | "aal2" | null {
   if (!accessToken) return null;
   const [, payload] = accessToken.split(".");
   if (!payload) return null;
@@ -229,6 +233,8 @@ export async function getRecordsAuthContext(request: NextRequest) {
         supabase,
         userId: data.user.id,
         email: data.user.email || "",
+        emailConfirmedAt: data.user.email_confirmed_at,
+        assuranceLevel: getAccessTokenAal(accessToken),
         caseId,
       };
     }
@@ -247,6 +253,8 @@ export async function getRecordsAuthContext(request: NextRequest) {
         supabase,
         userId: user.id,
         email: user.email || "",
+        emailConfirmedAt: user.email_confirmed_at,
+        assuranceLevel: getAccessTokenAal(refreshed.access_token),
         caseId,
         refreshedSession: refreshed,
       };

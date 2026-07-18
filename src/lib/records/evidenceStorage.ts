@@ -130,7 +130,7 @@ export async function getAuthoritativeEvidenceItem(input: {
     .limit(50);
 
   if (error) {
-    return { error: "Unable to verify evidence record." } as const;
+    return { error: "Unable to verify evidence record.", reason: "query_failed" as const };
   }
 
   const evidence = findEvidenceItemInSnapshots(data || [], {
@@ -140,7 +140,10 @@ export async function getAuthoritativeEvidenceItem(input: {
   });
 
   if (!evidence) {
-    return { error: "Evidence record was not found for this account." } as const;
+    return {
+      error: "Evidence record was not found for this account.",
+      reason: "not_found" as const,
+    };
   }
 
   return { evidence } as const;

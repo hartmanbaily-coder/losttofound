@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Lost to Found</string>
+	<string>My Case</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -23,7 +23,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Lost to Found uses Face ID to protect access to your private records workspace.</string>
+	<string>My Custody Case uses Face ID to protect access to your private records workspace.</string>
 	<key>WKAppBoundDomains</key>
 	<array>
 		<string>losttofound.org</string>

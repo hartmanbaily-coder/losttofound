@@ -1,4 +1,4 @@
-# Lost to Found TestFlight Release Lane
+# My Custody Case TestFlight Release Lane
 
 ## The rule
 
@@ -13,10 +13,10 @@ The native Records tab loads `https://losttofound.org/records`. A website releas
 
 ## One-time App Store Connect setup
 
-1. In **Apps > Lost to Found > TestFlight**, create an **Internal Testing** group, such as `Core Testers`.
+1. In **Apps > My Custody Case: Organizer > TestFlight**, create an **Internal Testing** group, such as `Core Testers`.
 2. Add the internal App Store Connect users who should receive builds.
 3. Enable **Automatic distribution** for that group.
-4. In the TestFlight app on every test device, enable **Automatic Updates** for Lost to Found.
+4. In the TestFlight app on every test device, enable **Automatic Updates** for My Custody Case.
 
 Use internal testing while iterating. External testers require a separate external group and may require Beta App Review.
 
@@ -24,7 +24,7 @@ Use internal testing while iterating. External testers require a separate extern
 
 Automatic distribution applies to builds uploaded from Xcode. Builds created by **Xcode Cloud** must still be added to an internal testing group manually in App Store Connect after their upload status becomes **Complete**. This is why builds can appear in Xcode Cloud and App Store Connect but testers remain on an older build.
 
-For an already-complete Cloud build: open **Apps > Lost to Found > TestFlight > iOS**, select the build, then add it to `Core Testers` and enter the **What to Test** notes. Do this now for build `12` after confirming that it is Complete and has no missing compliance prompt.
+For an already complete Cloud build: open **Apps > My Custody Case: Organizer > TestFlight > iOS**, select the build, then add it to `Core Testers` and enter the **What to Test** notes. Do this now for build `12` after confirming that it is Complete and has no missing compliance prompt.
 
 Use the local `npm run ios:testflight` lane below when automatic internal distribution is the priority. Do not alternate release lanes without checking the TestFlight group assignment.
 
@@ -41,7 +41,7 @@ Use the local `npm run ios:testflight` lane below when automatic internal distri
 
 The command creates a Release archive and uploads it to App Store Connect. It uses the Xcode-supported `manageAppVersionAndBuildNumber` option, which chooses the next unused build number at upload time. The project’s configured build is synchronized to the latest known Cloud build (`12`); do not manually edit `CURRENT_PROJECT_VERSION` before every TestFlight build.
 
-After the upload, open **Apps > Lost to Found > TestFlight > iOS > Build Uploads**:
+After the upload, open **Apps > My Custody Case: Organizer > TestFlight > iOS > Build Uploads**:
 
 - **Processing**: wait for Apple. Nothing else to do.
 - **Complete**: the build is ready; the automatic internal group distributes it.

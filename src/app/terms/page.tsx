@@ -4,7 +4,7 @@ const sections: PolicySection[] = [
   {
     title: "Records workspace",
     body: [
-      "Lost to Found Records is a private workspace for adults organizing custody, parenting time, child support, expense, file, and family court documentation.",
+      "My Custody Case is a private workspace for adults organizing custody, parenting time, child support, expense, file, and family court documentation.",
       "The service is for factual organization, recordkeeping, calendar planning, file storage, and user directed report exports.",
       "The service may change as account controls, imports, exports, deletion workflows, retention policies, and security operations mature.",
     ],
@@ -71,6 +71,14 @@ const sections: PolicySection[] = [
       "Users are responsible for keeping account credentials, devices, email accounts, and authenticator apps secure.",
       "The service may require multi factor authentication, stronger password rules, session controls, account verification, rate limits, or manual review.",
       "Users should promptly report suspected unauthorized access or security concerns through the support contact.",
+    ],
+  },
+  {
+    title: "Attorney guest access",
+    body: [
+      "An owner may invite one adult attorney guest to a dedicated read-only portal when that feature is enabled. Acceptance starts a seven-day access period during which the guest may return as often as needed. A new invitation is required after that period ends. The guest cannot edit records, change report settings, upload evidence, invite others, or access owner account settings.",
+      "Sharing access does not state that the guest represents the owner and does not automatically create attorney-client privilege or any confidentiality protection beyond the service's technical controls.",
+      "Owners may revoke future access, and attorney guests may leave a matter, but the service cannot retrieve reports or evidence already downloaded outside the app.",
     ],
   },
   {

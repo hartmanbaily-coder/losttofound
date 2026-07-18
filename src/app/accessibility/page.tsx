@@ -5,7 +5,7 @@ const sections: PolicySection[] = [
   {
     title: "Commitment",
     body: [
-      "Lost to Found Records is intended to be usable by adult users who need to organize sensitive family court records without unnecessary visual or technical barriers.",
+      "My Custody Case is intended to be usable by adult users who need to organize sensitive family court records without unnecessary visual or technical barriers.",
       "The site should be developed toward recognized web accessibility practices, including keyboard access, readable contrast, semantic structure, form labels, focus states, and responsive layouts.",
       "Accessibility work should continue as the app adds imports, reports, file handling, charts, and calendar interactions.",
     ],
@@ -67,7 +67,7 @@ export default function AccessibilityPage() {
           <a href={supportMailto} className="font-mono font-semibold text-emerald-700 underline underline-offset-2">
             {supportEmail}
           </a>
-          . Use a subject such as Lost to Found accessibility issue and include the page, browser, device, and affected task.
+          . Use a subject such as My Custody Case accessibility issue and include the page, browser, device, and affected task.
         </p>
       </section>
     </PolicyPage>

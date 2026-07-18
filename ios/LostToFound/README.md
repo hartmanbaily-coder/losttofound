@@ -1,6 +1,6 @@
-# Lost to Found iOS
+# My Custody Case iOS
 
-This folder prepares Lost to Found Case Organization for the Apple App Store path.
+This folder prepares My Custody Case: Organizer for the Apple App Store path.
 
 The iOS app is a native SwiftUI shell with:
 
@@ -10,7 +10,7 @@ The iOS app is a native SwiftUI shell with:
 - WebKit app-bound domains for `losttofound.org` and `www.losttofound.org`.
 - External link handling that opens non-product links outside the workspace.
 - Native privacy/support summaries that mirror the public policy pages and expose account deletion support.
-- App icon assets generated from the Lost to Found book, records, graph, and gavel logo.
+- App icon assets generated from the My Custody Case book, records, graph, and gavel logo.
 
 ## Local Setup
 

@@ -69,10 +69,10 @@ export default function HomePage() {
       <section className="mx-auto grid min-h-[calc(100vh-88px)] max-w-7xl content-center gap-10 px-4 pb-10 pt-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_500px] lg:px-8">
         <div className="flex max-w-3xl flex-col justify-center">
           <h1 className="text-5xl font-semibold tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
-            {siteName}
+            Your custody case, organized.
           </h1>
           <p className="mt-5 max-w-2xl text-xl leading-8 text-slate-600">
-            Build a clean record from exchanges, FaceTime, notes, files, and reports.
+            Privately organize custody events, parenting time, expenses, notes, and evidence in one place, then create clear reports for personal review or your attorney.
           </p>
 
           <div className="mt-8 rounded-xl border border-slate-200 bg-white p-2 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">

@@ -6,7 +6,7 @@ This checklist covers dashboard-controlled Supabase Auth settings that cannot be
 
 ## Current Policy
 
-Keep Lost to Found invite-only until launch review is complete:
+Keep My Custody Case invite-only until launch review is complete:
 
 - `NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED=false`
 - `RECORDS_SIGNUPS_ENABLED=false`

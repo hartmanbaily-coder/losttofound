@@ -58,10 +58,10 @@ final class WebViewModel {
             case NSURLErrorTimedOut:
                 loadErrorMessage = "The connection timed out before the records workspace responded."
             case NSURLErrorCannotFindHost, NSURLErrorCannotConnectToHost, NSURLErrorNetworkConnectionLost:
-                loadErrorMessage = "Lost to Found could not reach the records service. Check your connection and try again."
+                loadErrorMessage = "My Custody Case could not reach the records service. Check your connection and try again."
             case NSURLErrorSecureConnectionFailed, NSURLErrorServerCertificateUntrusted,
                  NSURLErrorServerCertificateHasBadDate, NSURLErrorServerCertificateHasUnknownRoot:
-                loadErrorMessage = "A secure connection to Lost to Found could not be established."
+                loadErrorMessage = "A secure connection to My Custody Case could not be established."
             default:
                 loadErrorMessage = "The records workspace could not be loaded. Please try again."
             }

@@ -139,7 +139,7 @@ export function AccountDeletionRequest() {
           className="mt-1 h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
         />
         <span>
-          I understand this starts deletion of my whole Lost to Found account and associated
+          I understand this starts deletion of my whole account in My Custody Case and associated
           account records, subject to legal retention, security review, and backup aging.
         </span>
       </label>

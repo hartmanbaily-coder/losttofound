@@ -99,6 +99,9 @@ const supabaseFinalEnvNames = new Set([
   "SUPABASE_PASSWORD_REAUTH_ENABLED",
   "SUPABASE_AUTH_HARDENING_VERIFIED_AT",
   "RECORDS_EVIDENCE_BUCKET",
+  "ATTORNEY_GUEST_FEATURE_ENABLED",
+  "ATTORNEY_PORTAL_SECRET",
+  "ATTORNEY_INVITE_DEV_DELIVERY",
   "BACKUP_RESTORE_TESTED_AT",
   "TWO_USER_ISOLATION_TESTED_AT",
 ]);
@@ -168,6 +171,22 @@ const checks = [
     "must be configured as a server-only secret",
   ],
   ["AUTH_SECRET", hasStrongSecret(process.env.AUTH_SECRET), "must be at least 32 characters"],
+  [
+    "ATTORNEY_GUEST_FEATURE_ENABLED",
+    isBooleanString(process.env.ATTORNEY_GUEST_FEATURE_ENABLED),
+    "must be an explicit true/false; keep false until production invitation delivery is implemented and reviewed",
+  ],
+  [
+    "ATTORNEY_PORTAL_SECRET",
+    hasStrongSecret(process.env.ATTORNEY_PORTAL_SECRET)
+      && process.env.ATTORNEY_PORTAL_SECRET !== process.env.AUTH_SECRET,
+    "must be a separate secret of at least 32 characters",
+  ],
+  [
+    "ATTORNEY_INVITE_DEV_DELIVERY",
+    process.env.ATTORNEY_INVITE_DEV_DELIVERY === "false",
+    "must be false in production",
+  ],
   ["SUPABASE_MFA_POLICY", process.env.SUPABASE_MFA_POLICY === "required", "must be required"],
   ["RECORDS_ENFORCE_MFA", isEnabled(process.env.RECORDS_ENFORCE_MFA), "must be true"],
   ["SUPABASE_CUSTOM_SMTP_ENABLED", isEnabled(process.env.SUPABASE_CUSTOM_SMTP_ENABLED), "must be true"],

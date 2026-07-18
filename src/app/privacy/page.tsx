@@ -57,6 +57,15 @@ const sections: PolicySection[] = [
     ],
   },
   {
+    title: "Attorney guest access",
+    body: [
+      "If you invite an attorney guest, the invited adult account can view the selected case and download its reports and evidence through a dedicated read-only portal for seven days after acceptance, following email confirmation and multi factor authentication.",
+      "The owner can see pending and accepted invitation status and privacy-safe access, report, and evidence-download events. Activity logs do not intentionally include note bodies, file names, payment references, report contents, raw invitation tokens, or storage locations.",
+      "The seven-day access period ending, revocation, case deletion, or an account deletion request blocks future protected requests, but copies already downloaded by the attorney cannot be recalled. A new invitation is required for another access period.",
+      "An invitation does not by itself establish legal representation or attorney-client privilege. Attorney-sharing, activity-log retention, and deletion language require qualified legal review before broad launch.",
+    ],
+  },
+  {
     title: "Cookies and tracking",
     body: [
       "The service uses authentication and session cookies needed to keep users signed in and protect account access.",

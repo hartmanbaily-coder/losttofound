@@ -75,4 +75,4 @@ fi
 "${script_dir}/install-health-watchdog.sh"
 printf '%s\n' "${release_tag}" >"${state_dir}/current-release"
 docker image prune --force >/dev/null
-echo "LostToFound release ${release_tag} deployed successfully."
+echo "My Custody Case release ${release_tag} deployed successfully."

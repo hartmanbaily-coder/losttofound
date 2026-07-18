@@ -45,6 +45,9 @@ export const supabaseFinalCheckIds = [
   "supabase-password-reauth",
   "supabase-auth-hardening-verified",
   "records-evidence-bucket",
+  "attorney-guest-feature-flag",
+  "attorney-portal-secret",
+  "attorney-development-delivery",
   "backup-restore-tested",
   "two-user-isolation-tested",
 ] as const;
@@ -235,6 +238,28 @@ export function evaluateProductionReadiness(
         env.NEXT_PUBLIC_RECORDS_STORAGE_MODE === "supabase",
       "blocker",
       "Set both RECORDS_STORAGE_MODE and NEXT_PUBLIC_RECORDS_STORAGE_MODE to supabase before production."
+    ),
+    check(
+      "attorney-guest-feature-flag",
+      "Attorney guest feature flag is explicit",
+      isBooleanString(env.ATTORNEY_GUEST_FEATURE_ENABLED),
+      "blocker",
+      "Set ATTORNEY_GUEST_FEATURE_ENABLED=false until production invitation delivery is implemented and reviewed."
+    ),
+    check(
+      "attorney-portal-secret",
+      "Attorney portal has a separate strong cryptographic secret",
+      hasStrongSecret(env.ATTORNEY_PORTAL_SECRET)
+        && env.ATTORNEY_PORTAL_SECRET !== env.AUTH_SECRET,
+      "blocker",
+      "Set ATTORNEY_PORTAL_SECRET to a separate random value of at least 32 characters."
+    ),
+    check(
+      "attorney-development-delivery",
+      "Development invitation links are disabled in production",
+      env.ATTORNEY_INVITE_DEV_DELIVERY === "false",
+      "blocker",
+      "Set ATTORNEY_INVITE_DEV_DELIVERY=false in production. Development fragment links are not production email delivery."
     ),
     check(
       "supabase-url",

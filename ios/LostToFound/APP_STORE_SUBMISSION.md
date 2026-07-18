@@ -4,8 +4,8 @@ This draft is a working submission packet. It should be reviewed before public s
 
 ## App Identity
 
-- App name: Lost to Found Case Organization
-- Display name: Lost to Found
+- App name: My Custody Case: Organizer
+- Display name: My Case
 - Bundle ID: `io.lendori.losttofound`
 - Version: `0.1.0`
 - Build: `1`
@@ -20,51 +20,45 @@ This draft is a working submission packet. It should be reviewed before public s
 - Privacy Policy URL: `https://losttofound.org/privacy`
 - Terms URL: `https://losttofound.org/terms`
 
-## Subtitle Options
+## Subtitle
 
-Apple subtitles are limited to 30 characters. Strong options:
-
-- Custody record organizer
-- Track custody case records
-- Parenting plan records
-
-Recommended: Custody record organizer
+Evidence, Logs & Court Reports
 
 ## Promotional Text Draft
 
-Remove the emotion. Track the data. Organize custody records, parenting-plan timelines, files, and reports in one private workspace.
+Remove the emotion. Track the data. Organize custody events, parenting time, expenses, notes, and evidence in one private workspace.
 
 ## Description Draft
 
-Lost to Found Case Organization helps adult users organize custody and parenting-plan documentation in a private records workspace.
+My Custody Case helps adult users privately organize custody records and supporting evidence.
 
-Track dated notes, exchanges, FaceTime issues, files, calendar items, and report-ready summaries from one place. The app is built for factual organization: it helps users maintain cleaner records and exports for personal review or attorney conversations.
+Track dated notes, exchanges, FaceTime issues, expenses, files, calendar items, and clear reports from one place. The app is built for factual organization and personal recordkeeping. It helps users maintain cleaner records for personal review or attorney conversations.
 
 Key features:
 
-- Private records workspace for custody and parenting-plan documentation
+- Private records workspace for custody and parenting plan documentation
 - Timeline, calendar, notes, and file organization
 - Document upload support through the protected workspace
 - Report and export workflows for review
-- Device-level unlock with Face ID, Touch ID, or passcode
+- Device level unlock with Face ID, Touch ID, or passcode
 - Controlled records web view limited to `losttofound.org` and `www.losttofound.org`
-- Privacy, security, and AI-data-use notices available in app
+- Privacy, security, and AI data use notices available in app
 
 Important boundaries:
 
-- Lost to Found does not provide legal advice.
-- Lost to Found is not a law firm and does not create an attorney-client relationship.
+- My Custody Case does not provide legal advice.
+- My Custody Case is not a law firm and does not create an attorney client relationship.
 - Users are responsible for verifying records against original source material.
 - The app is for adult users only and is not directed to children.
-- The app is not an emergency service, law enforcement tool, supervised exchange tool, or co-parent messaging system.
+- The app is not an emergency service, law enforcement tool, supervised exchange tool, or coparent messaging system.
 
 ## Keywords Draft
 
-custody, parenting plan, records, court, timeline, documents, co-parenting, evidence, family, organization
+coparenting,parenting time,evidence,incident log,expenses,calendar,attorney,family court,records
 
 ## Review Notes Draft
 
-Lost to Found is a private records organizer for adult users documenting custody and parenting-plan information. It is not a legal advice app, law firm, emergency service, child-facing app, social network, payment processor, or co-parent messaging platform.
+My Custody Case is a private records organizer for adult users documenting custody and parenting plan information. It is not a legal advice app, law firm, emergency service, child facing app, social network, payment processor, or coparent messaging platform.
 
 The app uses a native SwiftUI shell with a device-authentication gate, native tab navigation, native privacy/support surfaces, and a controlled `WKWebView` workspace. The web view is app-bound to `losttofound.org` and `www.losttofound.org`; external web links and `mailto:` links open outside the records workspace.
 

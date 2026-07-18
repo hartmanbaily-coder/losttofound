@@ -1,0 +1,271 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import {
+  createAttorneyInvitationToken,
+  hashAttorneyInvitationToken,
+  isAttorneyPortalCryptoReady,
+  normalizeAttorneyEmail,
+  protectAttorneyEmail,
+  revealAttorneyEmail,
+  sealAttorneyHandle,
+} from "@/lib/records/attorneyCrypto";
+import { checkAttorneyGuestEntitlement } from "@/lib/records/attorneyEntitlement";
+import { recordAttorneyAccessEvent } from "@/lib/records/attorneyAccess";
+import {
+  getAttorneyAuthContext,
+  isAttorneyDevelopmentDeliveryEnabled,
+  ownerCaseExists,
+} from "@/lib/records/attorneyServer";
+import { recordsAppBaseUrl } from "@/lib/records/authServer";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
+import { recordsCsrfError, verifyRecordsCsrf } from "@/lib/security/csrf";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+const createInvitationSchema = z.object({
+  email: z.string().trim().email().max(254),
+  caseId: z.string().trim().min(1).max(180),
+});
+
+type InvitationRow = {
+  id: string;
+  invited_email_ciphertext: string;
+  invited_email_nonce: string;
+  invited_email_tag: string;
+  status: "pending" | "accepted" | "revoked" | "expired" | "replaced";
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  case_id: string;
+};
+
+function invitationStatus(row: InvitationRow) {
+  if (row.status === "pending" && new Date(row.expires_at).getTime() <= Date.now()) return "expired";
+  return row.status;
+}
+
+export async function GET(request: NextRequest) {
+  const rateLimit = checkRateLimit(request, {
+    id: "records-attorney-owner-list",
+    limit: 120,
+    windowMs: 60 * 1000,
+  });
+  if (rateLimit.limited) return rateLimitExceededResponse(rateLimit);
+  const context = await getAttorneyAuthContext(request);
+  if ("error" in context) return context.error;
+  if (!isAttorneyPortalCryptoReady()) {
+    return NextResponse.json({ error: "Attorney access encryption is not configured." }, { status: 503 });
+  }
+
+  const [invitationResult, grantResult, eventResult] = await Promise.all([
+    context.supabase
+      .from("records_attorney_invitations")
+      .select("id,invited_email_ciphertext,invited_email_nonce,invited_email_tag,status,created_at,expires_at,accepted_at,revoked_at,case_id")
+      .eq("owner_user_id", context.userId)
+      .order("created_at", { ascending: false })
+      .limit(25),
+    context.supabase
+      .from("records_attorney_grants")
+      .select("id,invitation_id,case_id,granted_at,expires_at,revoked_at,left_at")
+      .eq("owner_user_id", context.userId)
+      .order("granted_at", { ascending: false })
+      .limit(10),
+    context.supabase
+      .from("records_attorney_access_events")
+      .select("event_type,created_at,metadata")
+      .eq("owner_user_id", context.userId)
+      .order("created_at", { ascending: false })
+      .limit(30),
+  ]);
+  if (invitationResult.error || grantResult.error || eventResult.error) {
+    return NextResponse.json({ error: "Unable to load attorney access status." }, { status: 500 });
+  }
+
+  const handleExpiry = Date.now() + 60 * 60 * 1000;
+  const now = Date.now();
+  const entitlement = checkAttorneyGuestEntitlement(context.userId);
+  const grantsByInvitation = new Map(
+    (grantResult.data || []).map((grant) => [grant.invitation_id, grant])
+  );
+  const invitations = (invitationResult.data as InvitationRow[]).map((row) => {
+    const grant = grantsByInvitation.get(row.id);
+    let email = "Protected email";
+    try {
+      email = revealAttorneyEmail({
+        ciphertext: row.invited_email_ciphertext,
+        nonce: row.invited_email_nonce,
+        tag: row.invited_email_tag,
+      });
+    } catch {
+      // Keep a non-sensitive label if old encrypted data cannot be opened.
+    }
+    return {
+      handle: sealAttorneyHandle({
+        kind: "invitation",
+        id: row.id,
+        subject: context.userId,
+        expiresAt: handleExpiry,
+      }),
+      email,
+      caseId: row.case_id,
+      status: invitationStatus(row),
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      acceptedAt: row.accepted_at,
+      revokedAt: row.revoked_at,
+      accessExpiresAt: grant?.expires_at || null,
+      accessActive: Boolean(
+        grant
+        && !grant.revoked_at
+        && !grant.left_at
+        && new Date(grant.expires_at).getTime() > now
+      ),
+    };
+  });
+  const grants = (grantResult.data || []).map((row) => ({
+    handle: sealAttorneyHandle({
+      kind: "grant",
+      id: row.id,
+      subject: context.userId,
+      expiresAt: handleExpiry,
+    }),
+    caseId: row.case_id,
+    grantedAt: row.granted_at,
+    expiresAt: row.expires_at,
+    revokedAt: row.revoked_at,
+    leftAt: row.left_at,
+    active: !row.revoked_at && !row.left_at && new Date(row.expires_at).getTime() > now,
+  }));
+
+  return NextResponse.json(
+    {
+      invitations,
+      grants,
+      events: (eventResult.data || []).map((event) => ({
+        type: event.event_type,
+        createdAt: event.created_at,
+        metadata: event.metadata,
+      })),
+      delivery: isAttorneyDevelopmentDeliveryEnabled() ? "development_link" : "not_configured",
+      featureEnabled: entitlement.allowed,
+    },
+    { headers: { "Cache-Control": "no-store" } }
+  );
+}
+
+export async function POST(request: NextRequest) {
+  const rateLimit = checkRateLimit(request, {
+    id: "records-attorney-invitation-create",
+    limit: 12,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (rateLimit.limited) return rateLimitExceededResponse(rateLimit);
+  if (!verifyRecordsCsrf(request).ok) return recordsCsrfError();
+  const context = await getAttorneyAuthContext(request);
+  if ("error" in context) return context.error;
+  const userLimit = checkRateLimit(request, {
+    id: "records-attorney-invitation-create-user",
+    key: context.userId,
+    limit: 5,
+    windowMs: 24 * 60 * 60 * 1000,
+  });
+  if (userLimit.limited) return rateLimitExceededResponse(userLimit);
+  const entitlement = checkAttorneyGuestEntitlement(context.userId);
+  if (!entitlement.allowed) return NextResponse.json({ error: entitlement.reason }, { status: 403 });
+  if (!isAttorneyDevelopmentDeliveryEnabled()) {
+    return NextResponse.json(
+      { error: "Attorney invitation delivery is disabled until production SMTP is configured." },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+  if (!isAttorneyPortalCryptoReady()) {
+    return NextResponse.json({ error: "Attorney access encryption is not configured." }, { status: 503 });
+  }
+
+  const parsed = createInvitationSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Enter a valid attorney email and shared case." }, { status: 400 });
+  }
+  const email = normalizeAttorneyEmail(parsed.data.email);
+  if (email === normalizeAttorneyEmail(context.email)) {
+    return NextResponse.json({ error: "Invite a different adult account." }, { status: 400 });
+  }
+  const caseKey = "default";
+  if (!(await ownerCaseExists({
+    supabase: context.supabase,
+    ownerUserId: context.userId,
+    caseKey,
+    caseId: parsed.data.caseId,
+  }))) {
+    return NextResponse.json({ error: "The selected case is unavailable." }, { status: 404 });
+  }
+
+  const [activeGrant, pendingInvite] = await Promise.all([
+    context.supabase
+      .from("records_attorney_grants")
+      .select("id")
+      .eq("owner_user_id", context.userId)
+      .is("revoked_at", null)
+      .is("left_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .maybeSingle(),
+    context.supabase
+      .from("records_attorney_invitations")
+      .select("id")
+      .eq("owner_user_id", context.userId)
+      .eq("status", "pending")
+      .maybeSingle(),
+  ]);
+  if (activeGrant.error || pendingInvite.error) {
+    return NextResponse.json({ error: "Unable to verify current attorney access." }, { status: 500 });
+  }
+  if (activeGrant.data) {
+    return NextResponse.json({ error: "This account already has an active attorney guest." }, { status: 409 });
+  }
+  if (pendingInvite.data) {
+    return NextResponse.json({ error: "Resend or revoke the existing pending invitation first." }, { status: 409 });
+  }
+
+  const token = createAttorneyInvitationToken();
+  const protectedEmail = protectAttorneyEmail(email);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await context.supabase
+    .from("records_attorney_invitations")
+    .insert({
+      owner_user_id: context.userId,
+      case_key: caseKey,
+      case_id: parsed.data.caseId,
+      invited_email_hash: protectedEmail.hash,
+      invited_email_ciphertext: protectedEmail.ciphertext,
+      invited_email_nonce: protectedEmail.nonce,
+      invited_email_tag: protectedEmail.tag,
+      token_hash: hashAttorneyInvitationToken(token),
+      status: "pending",
+      expires_at: expiresAt,
+    })
+    .select("id,created_at")
+    .single();
+  if (error || !data) {
+    return NextResponse.json({ error: "Unable to create the attorney invitation." }, { status: 500 });
+  }
+  await recordAttorneyAccessEvent({
+    supabase: context.supabase,
+    ownerUserId: context.userId,
+    actorUserId: context.userId,
+    caseId: parsed.data.caseId,
+    invitationId: data.id,
+    eventType: "invitation_created",
+  });
+
+  return NextResponse.json(
+    {
+      ok: true,
+      expiresAt,
+      developmentInvitationUrl: `${recordsAppBaseUrl(request)}/attorney/accept#token=${token}`,
+      warning: "Development delivery only. Do not send this link from a production environment.",
+    },
+    { status: 201, headers: { "Cache-Control": "no-store" } }
+  );
+}

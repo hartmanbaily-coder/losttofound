@@ -1,0 +1,115 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  createAttorneyInvitationToken,
+  hashAttorneyInvitationToken,
+  isAttorneyPortalCryptoReady,
+  openAttorneyHandle,
+} from "@/lib/records/attorneyCrypto";
+import { recordAttorneyAccessEvent } from "@/lib/records/attorneyAccess";
+import {
+  getAttorneyAuthContext,
+  isAttorneyDevelopmentDeliveryEnabled,
+} from "@/lib/records/attorneyServer";
+import { recordsAppBaseUrl } from "@/lib/records/authServer";
+import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
+import { recordsCsrfError, verifyRecordsCsrf } from "@/lib/security/csrf";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+export async function POST(request: NextRequest) {
+  const rateLimit = checkRateLimit(request, {
+    id: "records-attorney-invitation-action",
+    limit: 20,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (rateLimit.limited) return rateLimitExceededResponse(rateLimit);
+  if (!verifyRecordsCsrf(request).ok) return recordsCsrfError();
+  const context = await getAttorneyAuthContext(request);
+  if ("error" in context) return context.error;
+  if (!isAttorneyPortalCryptoReady()) {
+    return NextResponse.json({ error: "Attorney access encryption is not configured." }, { status: 503 });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as {
+    handle?: unknown;
+    action?: unknown;
+  };
+  const handleValue = typeof body.handle === "string" ? body.handle : "";
+  const action = body.action === "resend" || body.action === "revoke" ? body.action : "";
+  const handle = openAttorneyHandle(handleValue, {
+    kind: "invitation",
+    subject: context.userId,
+  });
+  if (!handle || !action) {
+    return NextResponse.json({ error: "Invitation is unavailable. Refresh and try again." }, { status: 404 });
+  }
+
+  const { data: invitation, error: invitationError } = await context.supabase
+    .from("records_attorney_invitations")
+    .select("id,case_id,status")
+    .eq("id", handle.id)
+    .eq("owner_user_id", context.userId)
+    .maybeSingle();
+  if (invitationError || !invitation) {
+    return NextResponse.json({ error: "Invitation is unavailable. Refresh and try again." }, { status: 404 });
+  }
+
+  if (action === "revoke") {
+    if (invitation.status !== "pending" && invitation.status !== "accepted") {
+      return NextResponse.json({ error: "This invitation is no longer active." }, { status: 409 });
+    }
+    const { data: revoked, error } = await context.supabase.rpc(
+      "revoke_records_attorney_invitation",
+      {
+        p_owner_user_id: context.userId,
+        p_invitation_id: invitation.id,
+      }
+    );
+    if (error || revoked !== true) {
+      return NextResponse.json({ error: "Unable to revoke attorney access." }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+  }
+
+  if (!isAttorneyDevelopmentDeliveryEnabled()) {
+    return NextResponse.json(
+      { error: "Attorney invitation delivery is disabled until production SMTP is configured." },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
+  }
+  if (invitation.status !== "pending" && invitation.status !== "expired") {
+    return NextResponse.json({ error: "Only pending or expired invitations can be resent." }, { status: 409 });
+  }
+  const token = createAttorneyInvitationToken();
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: replacementId, error } = await context.supabase.rpc(
+    "replace_records_attorney_invitation",
+    {
+      p_owner_user_id: context.userId,
+      p_invitation_id: invitation.id,
+      p_token_hash: hashAttorneyInvitationToken(token),
+      p_expires_at: expiresAt,
+    }
+  );
+  if (error || !replacementId) {
+    return NextResponse.json({ error: "Unable to replace the invitation." }, { status: 500 });
+  }
+  await recordAttorneyAccessEvent({
+    supabase: context.supabase,
+    ownerUserId: context.userId,
+    actorUserId: context.userId,
+    caseId: invitation.case_id,
+    invitationId: replacementId as string,
+    eventType: "invitation_resent",
+  });
+  return NextResponse.json(
+    {
+      ok: true,
+      expiresAt,
+      developmentInvitationUrl: `${recordsAppBaseUrl(request)}/attorney/accept#token=${token}`,
+      warning: "Development delivery only. The prior token is invalid.",
+    },
+    { headers: { "Cache-Control": "no-store" } }
+  );
+}

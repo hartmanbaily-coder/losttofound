@@ -83,7 +83,7 @@ export default function SecurityPage() {
           <a href={supportMailto} className="font-mono font-semibold text-emerald-700 underline underline-offset-2">
             {supportEmail}
           </a>
-          . Use a clear subject such as Lost to Found security report and avoid including sensitive case details unless requested for investigation.
+          . Use a clear subject such as My Custody Case security report and avoid including sensitive case details unless requested for investigation.
         </p>
       </section>
     </PolicyPage>
