@@ -164,7 +164,7 @@ export function ReportPreviewChartCard({ chart }: { chart: ReportPreviewChart })
   );
 
   return (
-    <div className="rounded-md border border-slate-200 bg-white p-3">
+    <div className="report-chart-card rounded-md border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-slate-950">{chart.title}</h3>

@@ -47,6 +47,7 @@ export const supabaseFinalCheckIds = [
   "records-evidence-bucket",
   "attorney-guest-feature-flag",
   "attorney-portal-secret",
+  "attorney-owner-share-delivery",
   "attorney-development-delivery",
   "backup-restore-tested",
   "two-user-isolation-tested",
@@ -244,7 +245,7 @@ export function evaluateProductionReadiness(
       "Attorney guest feature flag is explicit",
       isBooleanString(env.ATTORNEY_GUEST_FEATURE_ENABLED),
       "blocker",
-      "Set ATTORNEY_GUEST_FEATURE_ENABLED=false until production invitation delivery is implemented and reviewed."
+      "Set ATTORNEY_GUEST_FEATURE_ENABLED to an explicit true or false value."
     ),
     check(
       "attorney-portal-secret",
@@ -253,6 +254,15 @@ export function evaluateProductionReadiness(
         && env.ATTORNEY_PORTAL_SECRET !== env.AUTH_SECRET,
       "blocker",
       "Set ATTORNEY_PORTAL_SECRET to a separate random value of at least 32 characters."
+    ),
+    check(
+      "attorney-owner-share-delivery",
+      "Owner shared attorney invitation links are configured",
+      isBooleanString(env.ATTORNEY_INVITE_OWNER_SHARE_ENABLED)
+        && (!isEnabled(env.ATTORNEY_GUEST_FEATURE_ENABLED)
+          || isEnabled(env.ATTORNEY_INVITE_OWNER_SHARE_ENABLED)),
+      "blocker",
+      "Set ATTORNEY_INVITE_OWNER_SHARE_ENABLED=true when attorney guest access is enabled."
     ),
     check(
       "attorney-development-delivery",

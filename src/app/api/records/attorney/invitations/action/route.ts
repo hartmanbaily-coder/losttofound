@@ -7,8 +7,8 @@ import {
 } from "@/lib/records/attorneyCrypto";
 import { recordAttorneyAccessEvent } from "@/lib/records/attorneyAccess";
 import {
+  attorneyInvitationDeliveryMode,
   getAttorneyAuthContext,
-  isAttorneyDevelopmentDeliveryEnabled,
 } from "@/lib/records/attorneyServer";
 import { recordsAppBaseUrl } from "@/lib/records/authServer";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
@@ -72,9 +72,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   }
 
-  if (!isAttorneyDevelopmentDeliveryEnabled()) {
+  const delivery = attorneyInvitationDeliveryMode();
+  if (delivery === "not_configured") {
     return NextResponse.json(
-      { error: "Attorney invitation delivery is disabled until production SMTP is configured." },
+      { error: "Attorney invitation sharing is not enabled for this deployment." },
       { status: 503, headers: { "Cache-Control": "no-store" } }
     );
   }
@@ -107,8 +108,12 @@ export async function POST(request: NextRequest) {
     {
       ok: true,
       expiresAt,
-      developmentInvitationUrl: `${recordsAppBaseUrl(request)}/attorney/accept#token=${token}`,
-      warning: "Development delivery only. The prior token is invalid.",
+      invitationUrl: `${recordsAppBaseUrl(request)}/attorney/accept#token=${token}`,
+      delivery,
+      warning:
+        delivery === "owner_share"
+          ? "Share the replacement link only with the intended attorney. The prior link is invalid."
+          : "Development delivery only. The prior token is invalid.",
     },
     { headers: { "Cache-Control": "no-store" } }
   );

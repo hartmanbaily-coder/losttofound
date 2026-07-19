@@ -138,9 +138,11 @@ const navItems = [
   "Exchanges",
   "Notes",
   "Files",
+  "Screenshot PDFs",
   "Child Support",
   "Expenses",
   "Reports",
+  "Attorney Access",
   "Settings",
 ] as const;
 
@@ -624,8 +626,8 @@ export default function RecordsApp() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f4f7f6] text-slate-950">
-      <div className="grid min-h-screen lg:grid-cols-[288px_minmax(0,1fr)]">
+    <div className="records-app-shell min-h-screen bg-[#f4f7f6] text-slate-950">
+      <div className="records-app-grid grid min-h-screen lg:grid-cols-[288px_minmax(0,1fr)]">
         <aside className="overflow-hidden border-b border-slate-200 bg-white/95 lg:overflow-visible lg:border-b-0 lg:border-r lg:border-slate-200">
           <div className="flex flex-col p-4 lg:sticky lg:top-0 lg:h-screen">
             <div className="flex items-center gap-3 border-b border-slate-200 pb-4">
@@ -673,7 +675,7 @@ export default function RecordsApp() {
           </div>
         </aside>
 
-        <main className="min-w-0">
+        <main className="records-workspace min-w-0">
           <WorkspaceHeader
             activeView={activeView}
             matters={selected.matters}
@@ -686,7 +688,7 @@ export default function RecordsApp() {
             onLogout={logout}
           />
 
-          <div className="space-y-5 px-4 py-5 lg:px-6">
+          <div className="records-workspace-content space-y-5 px-4 py-5 lg:px-6">
             {toast && (
               <div
                 role="status"
@@ -701,6 +703,7 @@ export default function RecordsApp() {
                 range={range}
                 calendarEvents={timelineEvents}
                 evidenceCount={selected.evidenceItems.length}
+                onOpen={openView}
               />
             )}
             {activeView === "Calendar" && (
@@ -768,7 +771,7 @@ export default function RecordsApp() {
                 flash={flash}
               />
             )}
-            {activeView === "Files" && (
+            {(activeView === "Files" || activeView === "Screenshot PDFs") && (
               <EvidenceView
                 updateDataset={updateDataset}
                 reloadDataset={reloadDataset}
@@ -820,6 +823,12 @@ export default function RecordsApp() {
                 updateDataset={updateDataset}
               />
             )}
+            {activeView === "Attorney Access" && (
+              <AttorneyAccessPanel
+                caseId={effectiveCaseId}
+                cloudStorageEnabled={recordsStorageMode === "supabase"}
+              />
+            )}
             {activeView === "Settings" && (
               <SettingsView
                 dataset={dataset}
@@ -836,7 +845,7 @@ export default function RecordsApp() {
               />
             )}
           </div>
-          <PolicyFooter recordsNote={recordsPrivacyNote} />
+          <PolicyFooter className="no-print" recordsNote={recordsPrivacyNote} />
         </main>
       </div>
     </div>
@@ -1482,10 +1491,12 @@ function DashboardView({
   range,
   calendarEvents,
   evidenceCount,
+  onOpen,
 }: {
   range: DateRange;
   calendarEvents: CalendarEvent[];
   evidenceCount: number;
+  onOpen: (view: ActiveView) => void;
 }) {
   const visibleEvents = calendarEvents.filter(isTimelineVisibleEvent);
   const dashboardEvents = visibleEvents.filter(
@@ -1514,6 +1525,28 @@ function DashboardView({
 
   return (
     <div className="space-y-5">
+      <section className="grid gap-3 sm:grid-cols-2" aria-label="Quick tools">
+        <button
+          type="button"
+          onClick={() => onOpen("Screenshot PDFs")}
+          className="rounded-lg border border-teal-200 bg-teal-50 p-4 text-left transition hover:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-200"
+        >
+          <span className="text-sm font-semibold text-teal-950">Create a screenshot PDF</span>
+          <span className="mt-1 block text-xs leading-5 text-teal-800">
+            Select, arrange, and compile screenshots into a letter size exhibit.
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpen("Attorney Access")}
+          className="rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-100"
+        >
+          <span className="text-sm font-semibold text-slate-950">Share with an attorney</span>
+          <span className="mt-1 block text-xs leading-5 text-slate-600">
+            Create or revoke seven day read-only access and review access history.
+          </span>
+        </button>
+      </section>
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Timeline records" value={stats.timelineCount} detail={`${range.from} to ${range.to}`} />
         <StatCard label="Late exchanges" value={stats.lateExchangeCount} detail="From visible timeline records" tone="amber" />
@@ -6297,7 +6330,14 @@ function ReportsView({
     }
     const printHtml = buildReportPrintHtml(preview, range);
     if (!shareHtmlAsPdf(`my_custody_case_records_${reportType}_${range.from}_${range.to}.pdf`, printHtml)) {
-      window.print();
+      const printWindow = window.open("", "_blank", "width=1000,height=760");
+      if (!printWindow) {
+        flash("Popup blocked. Allow popups to print the report.");
+        return;
+      }
+      printWindow.opener = null;
+      printWindow.document.write(printHtml);
+      printWindow.document.close();
     }
     updateDataset((current) =>
       withAudit(current, {
@@ -6360,8 +6400,8 @@ function ReportsView({
             Download report JSON
           </button>
           <p className="text-xs leading-5 text-slate-500">
-            CSV contains the report&apos;s dated record rows in a clean table. PDF output uses your browser print
-            dialog. Downloaded reports leave protected storage.
+            CSV contains the report&apos;s dated record rows in a clean table. PDF output uses a letter size report
+            layout before opening your print dialog. Downloaded reports leave protected storage.
           </p>
         </div>
       </Panel>
@@ -6379,19 +6419,19 @@ function ReportsView({
             <p className="mt-2 text-sm leading-6 text-slate-600">{preview.disclaimer}</p>
             <p className="mt-2 text-xs text-slate-500">Generated {preview.generatedAt}</p>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="report-metrics grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {preview.metrics.map((metric) => (
               <StatMini key={metric.label} label={metric.label} value={String(metric.value)} />
             ))}
           </div>
-          <div className="grid gap-3">
+          <div className="report-summary-list grid gap-3">
             {preview.summaries.map((summary) => (
               <p key={summary} className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
                 {summary}
               </p>
             ))}
           </div>
-          <div className="grid gap-3">
+          <div className="report-chart-list grid gap-3">
             {preview.charts.map((chart) => (
               <ReportPreviewChartCard key={chart.title} chart={chart} />
             ))}
@@ -7766,7 +7806,10 @@ function ReportPrintRows({
                 const cell = row[cellIndex];
                 if (isEmptyReportCell(cell)) return null;
                 return (
-                  <div key={`${header}-${cellIndex}`}>
+                  <div
+                    key={`${header}-${cellIndex}`}
+                    className={isWideReportField(header) ? "report-print-record-field-wide" : undefined}
+                  >
                     <dt>{header}</dt>
                     <dd>{cell}</dd>
                   </div>
@@ -7787,6 +7830,10 @@ function isEmptyReportCell(cell: ReactNode) {
 function formatReportCell(cell: ReactNode) {
   if (typeof cell === "string" || typeof cell === "number") return String(cell);
   return "";
+}
+
+function isWideReportField(header: string) {
+  return /^(notes?|details?|description|issue|tags|source text|metadata)$/i.test(header.trim());
 }
 
 function StatusPill({ label }: { label: string }) {
@@ -8559,59 +8606,105 @@ type PrintableExportPacket = Pick<
 
 function buildSectionExportPrintHtml(packet: PrintableExportPacket) {
   return `<!doctype html>
-    <html>
+    <html lang="en">
       <head>
+        <meta charset="utf-8" />
         <title>${escapeHtml(packet.title)}</title>
         <style>
-          @page { margin: 0.55in; }
-          body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #0f172a; margin: 0; }
-          h1 { font-size: 24px; line-height: 1.2; margin: 0 0 6px; }
-          h2 { font-size: 15px; margin: 24px 0 8px; }
-          h3 { font-size: 13px; margin: 0 0 8px; }
-          p { color: #475569; font-size: 12px; line-height: 1.55; margin: 0; }
-          .muted { color: #64748b; }
-          .notice { border: 1px solid #fde68a; background: #fffbeb; padding: 10px; margin: 14px 0; font-size: 12px; line-height: 1.5; color: #713f12; }
-          .summary { display: grid; gap: 8px; margin: 16px 0; }
-          .summary p { border: 1px solid #e2e8f0; background: #f8fafc; padding: 10px; color: #334155; }
-          .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
-          .metric { border: 1px solid #e2e8f0; padding: 10px; }
-          .metric strong { display: block; font-size: 18px; color: #0f766e; margin-top: 4px; }
-          .chart { break-inside: avoid; border: 1px solid #e2e8f0; padding: 12px; margin: 12px 0; }
-          .chart-row { margin-top: 8px; }
-          .chart-label { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; color: #334155; }
-          .track { height: 8px; background: #f1f5f9; border-radius: 999px; margin-top: 4px; overflow: hidden; }
-          .bar { height: 8px; border-radius: 999px; background: #d97706; }
+          @page { size: letter; margin: 0.55in; }
+          * { box-sizing: border-box; }
+          html { color-scheme: light; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          body { background: #ffffff; color: #0f172a; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; }
+          h1 { font-size: 25px; letter-spacing: -0.02em; line-height: 1.15; margin: 4px 0 6px; }
+          h2 { color: #0f172a; font-size: 15px; line-height: 1.3; margin: 24px 0 9px; }
+          h3 { color: #0f172a; font-size: 13px; line-height: 1.35; margin: 0; }
+          p { color: #475569; font-size: 11px; line-height: 1.5; margin: 0; }
+          .report-header { border-top: 6px solid #0f766e; padding-top: 13px; }
+          .brand { color: #0f766e; font-size: 9px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
+          .range { color: #64748b; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+          .header-meta { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }
+          .case-name { color: #334155; font-size: 12px; font-weight: 650; }
+          .generated { color: #64748b; font-size: 10px; text-align: right; }
+          .notice { background: #fffbeb; border: 1px solid #fcd34d; border-left: 4px solid #d97706; color: #713f12; font-size: 10px; line-height: 1.45; margin: 14px 0; padding: 9px 11px; }
+          .metrics { display: grid; gap: 8px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 14px 0 0; }
+          .metric { background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 5px; break-inside: avoid; min-width: 0; padding: 9px; }
+          .metric-label { color: #64748b; font-size: 9px; font-weight: 650; line-height: 1.35; }
+          .metric strong { color: #0f172a; display: block; font-size: 18px; line-height: 1.15; margin-top: 4px; }
+          .metric-detail { color: #64748b; font-size: 9px; margin-top: 3px; }
+          .summary { display: grid; gap: 8px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 9px 0 0; }
+          .summary p { background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 5px; break-inside: avoid; color: #334155; padding: 9px 10px; }
+          .summary .summary-primary { background: #ecfdf5; border-color: #99f6e4; color: #134e4a; font-weight: 650; grid-column: 1 / -1; }
+          .chart { border: 1px solid #dbe4ee; border-radius: 5px; break-inside: avoid; margin: 0 0 10px; padding: 11px 12px 12px; }
+          .chart + .chart { margin-top: 10px; }
+          .chart-description { margin-top: 3px; }
+          .chart-row { break-inside: avoid; margin-top: 7px; }
+          .chart-label { align-items: baseline; display: flex; gap: 12px; justify-content: space-between; }
+          .chart-label span { color: #334155; font-size: 9px; line-height: 1.35; }
+          .chart-label span:last-child { color: #0f172a; flex: 0 0 auto; font-weight: 700; text-align: right; }
+          .track { background: #e2e8f0; border-radius: 999px; height: 6px; margin-top: 3px; overflow: hidden; }
+          .bar { background: #0f766e; border-radius: 999px; height: 6px; }
           .bar.secondary { background: #2563eb; }
-          .bar.tertiary { background: #64748b; }
-          table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 11px; }
-          th, td { border: 1px solid #cbd5e1; padding: 6px; vertical-align: top; text-align: left; }
-          th { background: #f8fafc; color: #334155; }
-          ul { color: #475569; font-size: 12px; line-height: 1.5; margin: 8px 0 0 18px; padding: 0; }
+          .bar.tertiary { background: #b45309; }
+          .guidance { background: #f8fafc; border: 1px solid #dbe4ee; border-radius: 5px; break-inside: avoid; margin-top: 18px; padding: 10px 12px; }
+          .guidance h2 { margin: 0 0 5px; }
+          .guidance ul { color: #475569; font-size: 10px; line-height: 1.45; margin: 0 0 0 16px; padding: 0; }
+          .records-section { margin-top: 22px; }
+          .records-section > h2 { border-bottom: 2px solid #0f766e; margin-bottom: 10px; padding-bottom: 5px; }
+          .record-list { display: grid; gap: 9px; }
+          .record { border: 1px solid #cbd5e1; border-radius: 5px; break-inside: avoid; padding: 10px 11px; }
+          .record-heading { align-items: flex-start; border-bottom: 1px solid #e2e8f0; display: flex; gap: 12px; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; }
+          .record-title { color: #0f172a; font-size: 12px; font-weight: 750; line-height: 1.3; }
+          .record-subtitle { color: #64748b; font-size: 9px; margin-top: 2px; }
+          .record-date { color: #475569; flex: 0 0 auto; font-size: 10px; font-weight: 700; text-align: right; }
+          .record-fields { display: grid; gap: 5px 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
+          .record-field { align-items: start; display: grid; gap: 6px; grid-template-columns: 78px minmax(0, 1fr); min-width: 0; }
+          .record-field-wide { grid-column: 1 / -1; }
+          .record-field dt { color: #64748b; font-size: 7.5px; font-weight: 750; line-height: 1.35; margin: 0; text-transform: uppercase; }
+          .record-field dd { color: #1e293b; font-size: 9.5px; line-height: 1.38; margin: 0; overflow-wrap: anywhere; }
+          .empty { color: #64748b; font-style: italic; }
+          @media print {
+            .report-header, .metrics, .metric, .summary p, .chart, .guidance, .record { break-inside: avoid-page; }
+            h1, h2, h3 { break-after: avoid-page; }
+            p { orphans: 3; widows: 3; }
+          }
         </style>
       </head>
       <body>
-        <p class="muted">${escapeHtml(packet.range.from)} to ${escapeHtml(packet.range.to)}</p>
-        <h1>${escapeHtml(packet.title)}</h1>
-        <p>${escapeHtml(packet.caseName)}</p>
-        <p class="muted">Generated ${escapeHtml(packet.generatedAt)}</p>
+        <header class="report-header">
+          <p class="brand">${escapeHtml(siteName)}</p>
+          <p class="range">${escapeHtml(packet.range.from)} to ${escapeHtml(packet.range.to)}</p>
+          <h1>${escapeHtml(packet.title)}</h1>
+          <div class="header-meta">
+            <p class="case-name">${escapeHtml(packet.caseName)}</p>
+            <p class="generated">Generated ${escapeHtml(packet.generatedAt)}</p>
+          </div>
+        </header>
         <div class="notice">${escapeHtml(packet.disclaimer)}</div>
         <section class="metrics">
           ${packet.metrics
             .map(
-              (metric) => `<div class="metric"><p>${escapeHtml(metric.label)}</p><strong>${escapeHtml(
-                String(metric.value)
-              )}</strong><p>${escapeHtml(metric.detail || "")}</p></div>`
+              (metric) => `<div class="metric"><p class="metric-label">${escapeHtml(
+                metric.label
+              )}</p><strong>${escapeHtml(String(metric.value))}</strong>${
+                metric.detail ? `<p class="metric-detail">${escapeHtml(metric.detail)}</p>` : ""
+              }</div>`
             )
             .join("")}
         </section>
         <section class="summary">
-          ${packet.summaries.map((summary) => `<p>${escapeHtml(summary)}</p>`).join("")}
+          ${packet.summaries
+            .map(
+              (summary, index) =>
+                `<p${index === 0 ? ' class="summary-primary"' : ""}>${escapeHtml(summary)}</p>`
+            )
+            .join("")}
         </section>
         <h2>Charts</h2>
-        ${packet.charts.map(buildPrintableChartHtml).join("") || "<p>No chart data for this range.</p>"}
-        <h2>Suggested use</h2>
-        <ul>${packet.suggestedUses.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
-        <h2>Tables</h2>
+        ${packet.charts.map(buildPrintableChartHtml).join("") || '<p class="empty">No chart data for this range.</p>'}
+        <section class="guidance">
+          <h2>Before sharing</h2>
+          <ul>${packet.suggestedUses.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+        </section>
         ${packet.tables.map(buildPrintableTableHtml).join("")}
         <script>window.print();</script>
       </body>
@@ -8684,7 +8777,7 @@ function buildEvidencePrintHtml(item: EvidenceItem) {
 
 function buildPrintableChartHtml(chart: SectionExportPacket["charts"][number]) {
   if (chart.rows.length === 0) {
-    return `<div class="chart"><h3>${escapeHtml(chart.title)}</h3><p>No chart data for this range.</p></div>`;
+    return `<div class="chart"><h3>${escapeHtml(chart.title)}</h3><p class="empty">No chart data for this range.</p></div>`;
   }
   const values = chart.rows.flatMap((row) =>
     [row.value, row.secondaryValue, row.tertiaryValue].filter((value): value is number => typeof value === "number")
@@ -8693,7 +8786,7 @@ function buildPrintableChartHtml(chart: SectionExportPacket["charts"][number]) {
 
   return `<div class="chart">
     <h3>${escapeHtml(chart.title)}${chart.unit ? ` (${escapeHtml(chart.unit)})` : ""}</h3>
-    ${chart.description ? `<p>${escapeHtml(chart.description)}</p>` : ""}
+    ${chart.description ? `<p class="chart-description">${escapeHtml(chart.description)}</p>` : ""}
     ${chart.rows
       .map((row) => {
         const width = Math.max(4, Math.min(100, (Math.abs(row.value) / max) * 100));
@@ -8733,27 +8826,57 @@ function buildPrintableChartHtml(chart: SectionExportPacket["charts"][number]) {
 }
 
 function buildPrintableTableHtml(table: SectionExportPacket["tables"][number]) {
-  return `<section>
+  if (table.rows.length === 0) {
+    return `<section class="records-section"><h2>${escapeHtml(
+      table.title
+    )}</h2><p class="empty">No rows for this range.</p></section>`;
+  }
+
+  const normalizedHeaders = table.headers.map((header) => header.trim().toLowerCase());
+  const findHeaderIndex = (...names: string[]) =>
+    names.map((name) => normalizedHeaders.indexOf(name)).find((index) => index >= 0);
+  const dateIndex = findHeaderIndex("date");
+  const timeIndex = findHeaderIndex("time");
+  const titleIndex = findHeaderIndex("title", "file", "issue");
+  const secondaryIndex = findHeaderIndex("description", "source");
+
+  return `<section class="records-section">
     <h2>${escapeHtml(table.title)}</h2>
-    ${
-      table.rows.length === 0
-        ? "<p>No rows for this range.</p>"
-        : `<table>
-            <thead>
-              <tr>${table.headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr>
-            </thead>
-            <tbody>
-              ${table.rows
-                .map(
-                  (row) =>
-                    `<tr>${table.headers
-                      .map((_, index) => `<td>${escapeHtml(row[index] || "")}</td>`)
-                      .join("")}</tr>`
-                )
-                .join("")}
-            </tbody>
-          </table>`
-    }
+    <div class="record-list">
+      ${table.rows
+        .map((row, rowIndex) => {
+          const title = titleIndex === undefined ? `Record ${rowIndex + 1}` : String(row[titleIndex] || `Record ${rowIndex + 1}`);
+          const secondary =
+            secondaryIndex === undefined || secondaryIndex === titleIndex ? "" : String(row[secondaryIndex] || "");
+          const date = dateIndex === undefined ? "" : String(row[dateIndex] || "");
+          const time = timeIndex === undefined ? "" : String(row[timeIndex] || "");
+          const headingIndexes = new Set(
+            [titleIndex, secondaryIndex, dateIndex, timeIndex].filter((index): index is number => index !== undefined)
+          );
+          const fields = table.headers
+            .map((header, index) => {
+              const value = String(row[index] || "").trim();
+              if (!value || headingIndexes.has(index)) return "";
+              const wideClass = isWideReportField(header) ? " record-field-wide" : "";
+              return `<div class="record-field${wideClass}"><dt>${escapeHtml(header)}</dt><dd>${escapeHtml(
+                value
+              )}</dd></div>`;
+            })
+            .join("");
+
+          return `<article class="record">
+            <div class="record-heading">
+              <div>
+                <p class="record-title">${escapeHtml(title)}</p>
+                ${secondary ? `<p class="record-subtitle">${escapeHtml(secondary)}</p>` : ""}
+              </div>
+              ${date || time ? `<p class="record-date">${escapeHtml([date, time].filter(Boolean).join(" "))}</p>` : ""}
+            </div>
+            ${fields ? `<dl class="record-fields">${fields}</dl>` : ""}
+          </article>`;
+        })
+        .join("")}
+    </div>
   </section>`;
 }
 

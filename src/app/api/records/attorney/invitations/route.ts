@@ -12,8 +12,8 @@ import {
 import { checkAttorneyGuestEntitlement } from "@/lib/records/attorneyEntitlement";
 import { recordAttorneyAccessEvent } from "@/lib/records/attorneyAccess";
 import {
+  attorneyInvitationDeliveryMode,
   getAttorneyAuthContext,
-  isAttorneyDevelopmentDeliveryEnabled,
   ownerCaseExists,
 } from "@/lib/records/attorneyServer";
 import { recordsAppBaseUrl } from "@/lib/records/authServer";
@@ -148,7 +148,7 @@ export async function GET(request: NextRequest) {
         createdAt: event.created_at,
         metadata: event.metadata,
       })),
-      delivery: isAttorneyDevelopmentDeliveryEnabled() ? "development_link" : "not_configured",
+      delivery: attorneyInvitationDeliveryMode(),
       featureEnabled: entitlement.allowed,
     },
     { headers: { "Cache-Control": "no-store" } }
@@ -174,9 +174,10 @@ export async function POST(request: NextRequest) {
   if (userLimit.limited) return rateLimitExceededResponse(userLimit);
   const entitlement = checkAttorneyGuestEntitlement(context.userId);
   if (!entitlement.allowed) return NextResponse.json({ error: entitlement.reason }, { status: 403 });
-  if (!isAttorneyDevelopmentDeliveryEnabled()) {
+  const delivery = attorneyInvitationDeliveryMode();
+  if (delivery === "not_configured") {
     return NextResponse.json(
-      { error: "Attorney invitation delivery is disabled until production SMTP is configured." },
+      { error: "Attorney invitation sharing is not enabled for this deployment." },
       { status: 503, headers: { "Cache-Control": "no-store" } }
     );
   }
@@ -263,8 +264,12 @@ export async function POST(request: NextRequest) {
     {
       ok: true,
       expiresAt,
-      developmentInvitationUrl: `${recordsAppBaseUrl(request)}/attorney/accept#token=${token}`,
-      warning: "Development delivery only. Do not send this link from a production environment.",
+      invitationUrl: `${recordsAppBaseUrl(request)}/attorney/accept#token=${token}`,
+      delivery,
+      warning:
+        delivery === "owner_share"
+          ? "Share this private link only with the intended attorney. The link expires in seven days and becomes unusable after acceptance."
+          : "Development delivery only. Do not send this link from a production environment.",
     },
     { status: 201, headers: { "Cache-Control": "no-store" } }
   );

@@ -36,6 +36,7 @@ const requiredKeys = [
   "AUTH_TRUST_HOST",
   "ATTORNEY_GUEST_FEATURE_ENABLED",
   "ATTORNEY_PORTAL_SECRET",
+  "ATTORNEY_INVITE_OWNER_SHARE_ENABLED",
   "ATTORNEY_INVITE_DEV_DELIVERY",
   "EVIDENCE_MAX_FILE_BYTES",
   "MALWARE_SCAN_PROVIDER",
@@ -136,7 +137,11 @@ if (attorneySecretValue && !/^REPLACE_WITH_|^PLACEHOLDER/i.test(attorneySecretVa
 }
 
 if (entries.get("ATTORNEY_GUEST_FEATURE_ENABLED") !== "false") {
-  findings.push("ATTORNEY_GUEST_FEATURE_ENABLED must remain false until production invitation delivery is implemented and reviewed.");
+  findings.push("ATTORNEY_GUEST_FEATURE_ENABLED must remain false in the production template.");
+}
+
+if (entries.get("ATTORNEY_INVITE_OWNER_SHARE_ENABLED") !== "false") {
+  findings.push("ATTORNEY_INVITE_OWNER_SHARE_ENABLED must remain false in the production template.");
 }
 
 if (entries.get("ATTORNEY_INVITE_DEV_DELIVERY") !== "false") {

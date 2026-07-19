@@ -359,10 +359,12 @@ test("mobile screenshot exhibit builder preserves order and generates a protecte
     );
   });
   await page.goto("/records");
-  await page.locator("nav").getByRole("button", { name: /^Files/ }).click();
+  await expect(page.locator("nav").getByRole("button", { name: "Screenshot PDFs", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Create a screenshot PDF" }).click();
   const builder = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Screenshot exhibit builder" }),
   });
+  await expect(builder).toBeVisible();
   const png = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
     "base64"
@@ -385,6 +387,8 @@ test("mobile screenshot exhibit builder preserves order and generates a protecte
   expect(download.suggestedFilename()).toBe("my_custody_case_exhibit_Exhibit-A.pdf");
   await builder.getByRole("button", { name: "Save PDF to Files" }).click();
   await expect(builder.getByRole("status")).toContainText("Sign in to private cloud storage");
+  await page.locator("nav").getByRole("button", { name: "Attorney Access", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Attorney access", exact: true })).toBeVisible();
   const fitsViewport = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   expect(fitsViewport).toBe(true);
 });

@@ -92,3 +92,17 @@ export function isAttorneyDevelopmentDeliveryEnabled(
 ) {
   return env.NODE_ENV !== "production" && env.ATTORNEY_INVITE_DEV_DELIVERY === "true";
 }
+
+export function isAttorneyOwnerShareEnabled(
+  env: Record<string, string | undefined> = process.env
+) {
+  return env.ATTORNEY_INVITE_OWNER_SHARE_ENABLED === "true";
+}
+
+export function attorneyInvitationDeliveryMode(
+  env: Record<string, string | undefined> = process.env
+) {
+  if (isAttorneyOwnerShareEnabled(env)) return "owner_share" as const;
+  if (isAttorneyDevelopmentDeliveryEnabled(env)) return "development_link" as const;
+  return "not_configured" as const;
+}

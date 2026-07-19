@@ -1,4 +1,4 @@
-const CACHE_NAME = "my_custody_case_shell_v3";
+const CACHE_NAME = "my_custody_case_shell_v4";
 const PUBLIC_ASSETS = [
   "/",
   "/manifest.webmanifest",

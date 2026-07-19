@@ -9,8 +9,8 @@ const recordAttorneyAccessEvent = vi.hoisted(() => vi.fn());
 const ownerCaseExists = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/records/attorneyServer", () => ({
+  attorneyInvitationDeliveryMode: () => "owner_share",
   getAttorneyAuthContext,
-  isAttorneyDevelopmentDeliveryEnabled: () => true,
   ownerCaseExists,
 }));
 
@@ -43,7 +43,6 @@ describe("attorney invitation owner routes", () => {
     vi.clearAllMocks();
     resetRateLimitStore();
     process.env.ATTORNEY_PORTAL_SECRET = secret;
-    process.env.ATTORNEY_INVITE_DEV_DELIVERY = "true";
     ownerCaseExists.mockResolvedValue(true);
   });
 
@@ -97,8 +96,9 @@ describe("attorney invitation owner routes", () => {
     }));
     const body = await response.json();
     expect(response.status).toBe(201);
-    expect(body.developmentInvitationUrl).toMatch(/\/attorney\/accept#token=[A-Za-z0-9_-]{43}$/);
-    const rawToken = body.developmentInvitationUrl.split("#token=")[1];
+    expect(body.invitationUrl).toMatch(/\/attorney\/accept#token=[A-Za-z0-9_-]{43}$/);
+    expect(body.delivery).toBe("owner_share");
+    const rawToken = body.invitationUrl.split("#token=")[1];
     expect(inserted[0].token_hash).toMatch(/^[a-f0-9]{64}$/);
     expect(inserted[0].token_hash).not.toBe(rawToken);
     expect(String(inserted[0].invited_email_ciphertext)).not.toContain("counsel@example.com");
@@ -185,7 +185,7 @@ describe("attorney invitation owner routes", () => {
       { handle, action: "resend" }
     ));
     const body = await response.json();
-    const rawToken = String(body.developmentInvitationUrl).split("#token=")[1];
+    const rawToken = String(body.invitationUrl).split("#token=")[1];
     expect(response.status).toBe(200);
     expect(rawToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(rpc).toHaveBeenCalledWith("replace_records_attorney_invitation", expect.objectContaining({

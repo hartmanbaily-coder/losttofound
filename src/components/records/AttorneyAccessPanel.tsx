@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import QRCode from "react-qr-code";
 import { attorneyMutation } from "@/lib/records/attorneyClient";
 
 type Invitation = {
@@ -36,7 +37,7 @@ type AttorneyAccessState = {
   invitations: Invitation[];
   grants: Grant[];
   events: AccessEvent[];
-  delivery: "development_link" | "not_configured";
+  delivery: "owner_share" | "development_link" | "not_configured";
   featureEnabled: boolean;
 };
 
@@ -54,7 +55,7 @@ export default function AttorneyAccessPanel({
   const [state, setState] = useState<AttorneyAccessState | null>(null);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
-  const [developmentUrl, setDevelopmentUrl] = useState("");
+  const [invitationUrl, setInvitationUrl] = useState("");
 
   const load = useCallback(async () => {
     if (!cloudStorageEnabled) return;
@@ -92,11 +93,11 @@ export default function AttorneyAccessPanel({
     const email = String(new FormData(form).get("attorneyEmail") || "");
     setBusy("create");
     setMessage("");
-    setDevelopmentUrl("");
+    setInvitationUrl("");
     try {
       const result = await attorneyMutation("/api/records/attorney/invitations", { email, caseId });
-      setDevelopmentUrl(String(result.developmentInvitationUrl || ""));
-      setMessage("Invitation created. The link expires in seven days; acceptance starts seven days of read-only access.");
+      setInvitationUrl(String(result.invitationUrl || ""));
+      setMessage("Invitation created. Share the private link with the intended attorney. Acceptance starts seven days of read-only access.");
       form.reset();
       await load();
     } catch (error) {
@@ -109,13 +110,13 @@ export default function AttorneyAccessPanel({
   async function reinvite(invitation: Invitation) {
     setBusy(invitation.handle);
     setMessage("");
-    setDevelopmentUrl("");
+    setInvitationUrl("");
     try {
       const result = await attorneyMutation("/api/records/attorney/invitations", {
         email: invitation.email,
         caseId: invitation.caseId,
       });
-      setDevelopmentUrl(String(result.developmentInvitationUrl || ""));
+      setInvitationUrl(String(result.invitationUrl || ""));
       setMessage("A new seven-day invitation was created. The prior access remains expired.");
       await load();
     } catch (error) {
@@ -128,19 +129,48 @@ export default function AttorneyAccessPanel({
   async function invitationAction(invitation: Invitation, action: "resend" | "revoke") {
     setBusy(invitation.handle);
     setMessage("");
-    setDevelopmentUrl("");
+    setInvitationUrl("");
     try {
       const result = await attorneyMutation("/api/records/attorney/invitations/action", {
         handle: invitation.handle,
         action,
       });
-      setDevelopmentUrl(String(result.developmentInvitationUrl || ""));
+      setInvitationUrl(String(result.invitationUrl || ""));
       setMessage(action === "revoke" ? "Attorney access revoked immediately." : "A new invitation replaced the prior link.");
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to update invitation.");
     } finally {
       setBusy("");
+    }
+  }
+
+  async function copyInvitationLink() {
+    if (!invitationUrl) return;
+    try {
+      await navigator.clipboard.writeText(invitationUrl);
+      setMessage("Private invitation link copied.");
+    } catch {
+      setMessage("The link could not be copied automatically. Press and hold the link to copy it.");
+    }
+  }
+
+  async function shareInvitationLink() {
+    if (!invitationUrl) return;
+    if (typeof navigator.share !== "function") {
+      await copyInvitationLink();
+      return;
+    }
+    try {
+      await navigator.share({
+        title: "My Custody Case attorney access",
+        text: "Private seven day read-only access invitation. Open this link using the attorney account that was invited.",
+        url: invitationUrl,
+      });
+      setMessage("Invitation share sheet opened.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setMessage("The invitation could not be shared. Copy the private link instead.");
     }
   }
 
@@ -179,7 +209,12 @@ export default function AttorneyAccessPanel({
 
       {state?.delivery === "not_configured" ? (
         <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-          Production invitation sending is disabled until custom SMTP is configured. This readiness blocker remains open.
+          Invitation sharing is not configured for this deployment.
+        </p>
+      ) : null}
+      {state?.delivery === "owner_share" ? (
+        <p className="mt-3 rounded-md border border-teal-200 bg-teal-50 p-3 text-sm leading-6 text-teal-950">
+          My Custody Case does not email this invitation. After creating it, use Share Link, Copy Link, or the QR code to deliver it through a channel you trust.
         </p>
       ) : null}
       {!newInvitationsEnabled ? (
@@ -198,17 +233,30 @@ export default function AttorneyAccessPanel({
         </button>
       </form>
 
-      {developmentUrl ? (
+      {invitationUrl ? (
         <div className="mt-3 rounded-md border border-teal-200 bg-teal-50 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-teal-900">Development/testing link only</p>
-          <p className="mt-1 break-all text-xs text-teal-950">{developmentUrl}</p>
-          <button
-            type="button"
-            className="btn-secondary mt-2"
-            onClick={() => void navigator.clipboard.writeText(developmentUrl).then(() => setMessage("Development invitation link copied."))}
-          >
-            Copy testing link
-          </button>
+          <p className="text-xs font-semibold uppercase tracking-wide text-teal-900">Private invitation link</p>
+          <p className="mt-1 text-xs leading-5 text-teal-950">
+            This link is shown only for sharing now. It expires in seven days and becomes unusable after acceptance.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-[132px_1fr] sm:items-center">
+            <div className="w-fit rounded-md border border-teal-200 bg-white p-2" aria-label="Attorney invitation QR code">
+              <QRCode value={invitationUrl} size={112} bgColor="#ffffff" fgColor="#0f172a" />
+            </div>
+            <div className="min-w-0">
+              <p className="break-all rounded border border-teal-200 bg-white p-2 font-mono text-[11px] leading-4 text-slate-700">
+                {invitationUrl}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" className="btn-primary" onClick={() => void shareInvitationLink()}>
+                  Share link
+                </button>
+                <button type="button" className="btn-secondary" onClick={() => void copyInvitationLink()}>
+                  Copy link
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -229,7 +277,7 @@ export default function AttorneyAccessPanel({
               </div>
               <div className="flex flex-wrap gap-2">
                 {(invitation.status === "pending" || invitation.status === "expired") ? (
-                  <button type="button" className="btn-secondary" disabled={busy === invitation.handle} onClick={() => void invitationAction(invitation, "resend")}>Resend with new link</button>
+                  <button type="button" className="btn-secondary" disabled={busy === invitation.handle} onClick={() => void invitationAction(invitation, "resend")}>Replace with new link</button>
                 ) : null}
                 {invitation.status === "accepted" && invitation.accessExpiresAt && !invitation.accessActive ? (
                   <button type="button" className="btn-secondary" disabled={busy === invitation.handle || !newInvitationsEnabled || Boolean(pending)} onClick={() => void reinvite(invitation)}>Invite again for 7 days</button>

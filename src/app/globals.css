@@ -40,6 +40,7 @@ body {
   html,
   body {
     background: white !important;
+    min-width: 0 !important;
     width: auto !important;
   }
 
@@ -61,8 +62,28 @@ body {
     background: white !important;
   }
 
+  .records-app-shell,
+  .records-workspace,
+  .records-workspace-content {
+    background: white !important;
+    margin: 0 !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+  }
+
+  .records-app-grid {
+    display: block !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    min-height: 0 !important;
+    width: 100% !important;
+  }
+
   .report-print-layout {
     display: block !important;
+    grid-template-columns: minmax(0, 1fr) !important;
     width: 100% !important;
   }
 
@@ -115,6 +136,41 @@ body {
   .report-surface p {
     orphans: 3;
     widows: 3;
+  }
+
+  .report-metrics {
+    break-inside: avoid !important;
+    display: grid !important;
+    gap: 8pt !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .report-metrics > div {
+    background: #f8fafc !important;
+    break-inside: avoid !important;
+    padding: 8pt !important;
+  }
+
+  .report-summary-list {
+    display: grid !important;
+    gap: 8pt !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .report-summary-list > p {
+    break-inside: avoid !important;
+    margin: 0 !important;
+    padding: 8pt !important;
+  }
+
+  .report-chart-list {
+    display: block !important;
+  }
+
+  .report-chart-card {
+    break-inside: avoid !important;
+    margin: 0 0 10pt !important;
+    padding: 10pt !important;
   }
 
   .report-surface .overflow-x-auto {
@@ -193,13 +249,21 @@ body {
 
   .report-print-record dl {
     display: grid !important;
-    gap: 4pt 10pt !important;
-    grid-template-columns: 82pt minmax(0, 1fr) !important;
+    gap: 5pt 14pt !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     margin: 0 !important;
   }
 
   .report-print-record dl > div {
-    display: contents !important;
+    align-items: start !important;
+    display: grid !important;
+    gap: 6pt !important;
+    grid-template-columns: 82pt minmax(0, 1fr) !important;
+    min-width: 0 !important;
+  }
+
+  .report-print-record dl > .report-print-record-field-wide {
+    grid-column: 1 / -1 !important;
   }
 
   .report-print-record dt {
@@ -228,8 +292,9 @@ body {
     width: 100% !important;
   }
 
-  .report-surface > div,
-  .report-surface .recharts-wrapper {
+  .report-surface > div:first-child,
+  .report-surface .recharts-wrapper,
+  .report-table-section > h3 {
     break-inside: avoid;
   }
 }

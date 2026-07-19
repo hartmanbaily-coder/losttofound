@@ -20,6 +20,7 @@ const readyEnv = {
   AUTH_SECRET: "12345678901234567890123456789012",
   ATTORNEY_GUEST_FEATURE_ENABLED: "false",
   ATTORNEY_PORTAL_SECRET: "abcdefghijklmnopqrstuvwxyz123456",
+  ATTORNEY_INVITE_OWNER_SHARE_ENABLED: "false",
   ATTORNEY_INVITE_DEV_DELIVERY: "false",
   SUPABASE_MFA_POLICY: "required",
   RECORDS_ENFORCE_MFA: "true",
@@ -88,6 +89,28 @@ describe("production readiness", () => {
 
     expect(report.ready).toBe(false);
     expect(report.blockers.map((item) => item.id)).toContain("attorney-portal-secret");
+  });
+
+  it("requires owner sharing when attorney invitations are enabled", () => {
+    const report = evaluateProductionReadiness({
+      ...readyEnv,
+      ATTORNEY_GUEST_FEATURE_ENABLED: "true",
+      ATTORNEY_INVITE_OWNER_SHARE_ENABLED: "false",
+    }, "2026-06-15T00:00:00.000Z");
+
+    expect(report.ready).toBe(false);
+    expect(report.blockers.map((item) => item.id)).toContain("attorney-owner-share-delivery");
+  });
+
+  it("accepts reviewed owner sharing without development delivery", () => {
+    const report = evaluateProductionReadiness({
+      ...readyEnv,
+      ATTORNEY_GUEST_FEATURE_ENABLED: "true",
+      ATTORNEY_INVITE_OWNER_SHARE_ENABLED: "true",
+    }, "2026-06-15T00:00:00.000Z");
+
+    expect(report.blockers.map((item) => item.id)).not.toContain("attorney-owner-share-delivery");
+    expect(report.blockers.map((item) => item.id)).not.toContain("attorney-development-delivery");
   });
 
   it("requires the dedicated attorney secret even while new invitations are disabled", () => {

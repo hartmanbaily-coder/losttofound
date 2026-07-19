@@ -101,6 +101,7 @@ const supabaseFinalEnvNames = new Set([
   "RECORDS_EVIDENCE_BUCKET",
   "ATTORNEY_GUEST_FEATURE_ENABLED",
   "ATTORNEY_PORTAL_SECRET",
+  "ATTORNEY_INVITE_OWNER_SHARE_ENABLED",
   "ATTORNEY_INVITE_DEV_DELIVERY",
   "BACKUP_RESTORE_TESTED_AT",
   "TWO_USER_ISOLATION_TESTED_AT",
@@ -174,7 +175,14 @@ const checks = [
   [
     "ATTORNEY_GUEST_FEATURE_ENABLED",
     isBooleanString(process.env.ATTORNEY_GUEST_FEATURE_ENABLED),
-    "must be an explicit true/false; keep false until production invitation delivery is implemented and reviewed",
+    "must be an explicit true/false",
+  ],
+  [
+    "ATTORNEY_INVITE_OWNER_SHARE_ENABLED",
+    isBooleanString(process.env.ATTORNEY_INVITE_OWNER_SHARE_ENABLED)
+      && (!isEnabled(process.env.ATTORNEY_GUEST_FEATURE_ENABLED)
+        || isEnabled(process.env.ATTORNEY_INVITE_OWNER_SHARE_ENABLED)),
+    "must be an explicit true/false and must be true when attorney guest access is enabled",
   ],
   [
     "ATTORNEY_PORTAL_SECRET",

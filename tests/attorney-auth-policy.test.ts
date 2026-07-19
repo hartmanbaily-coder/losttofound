@@ -8,7 +8,10 @@ vi.mock("@/lib/records/authServer", () => ({
   isSupabaseRecordsMode: () => true,
 }));
 
-import { getAttorneyAuthContext } from "@/lib/records/attorneyServer";
+import {
+  attorneyInvitationDeliveryMode,
+  getAttorneyAuthContext,
+} from "@/lib/records/attorneyServer";
 
 const request = new NextRequest("https://losttofound.org/api/records/attorney/portal");
 
@@ -51,5 +54,21 @@ describe("attorney authentication policy", () => {
     };
     getRecordsAuthContext.mockResolvedValue(expected);
     await expect(getAttorneyAuthContext(request)).resolves.toBe(expected);
+  });
+
+  it("allows reviewed owner sharing in production without development delivery", () => {
+    expect(attorneyInvitationDeliveryMode({
+      NODE_ENV: "production",
+      ATTORNEY_INVITE_OWNER_SHARE_ENABLED: "true",
+      ATTORNEY_INVITE_DEV_DELIVERY: "false",
+    })).toBe("owner_share");
+  });
+
+  it("never treats the development flag as production delivery", () => {
+    expect(attorneyInvitationDeliveryMode({
+      NODE_ENV: "production",
+      ATTORNEY_INVITE_OWNER_SHARE_ENABLED: "false",
+      ATTORNEY_INVITE_DEV_DELIVERY: "true",
+    })).toBe("not_configured");
   });
 });
