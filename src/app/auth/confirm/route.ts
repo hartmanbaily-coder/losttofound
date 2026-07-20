@@ -4,7 +4,6 @@ import { createServerSupabaseAuthClient } from "@/lib/supabaseClient";
 import {
   isSupabaseRecordsMode,
   recordsAppBaseUrl,
-  safeRecordsAuthNextPath,
   setRecordsPasswordRecoveryCookie,
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
@@ -14,7 +13,7 @@ import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
 export const dynamic = "force-dynamic";
 
-const allowedOtpTypes = new Set(["email", "recovery", "signup", "invite", "magiclink", "email_change"]);
+const allowedOtpTypes = new Set(["email", "recovery", "signup"]);
 
 export async function GET(request: NextRequest) {
   const baseUrl = recordsAppBaseUrl(request);
@@ -26,8 +25,11 @@ export async function GET(request: NextRequest) {
 
   const tokenHash = request.nextUrl.searchParams.get("token_hash");
   const type = request.nextUrl.searchParams.get("type");
-  const next = safeRecordsAuthNextPath(request.nextUrl.searchParams.get("next"));
-  const redirectUrl = new URL(next, baseUrl);
+  const isRecovery = type === "recovery";
+  const redirectUrl = new URL(
+    isRecovery ? "/records?auth=recovery" : "/records?auth=confirmed",
+    baseUrl
+  );
 
   if (!tokenHash || !type || !allowedOtpTypes.has(type)) {
     return NextResponse.redirect(errorRedirect);
@@ -41,7 +43,7 @@ export async function GET(request: NextRequest) {
 
   if (error || !data.session?.access_token || !data.session.refresh_token || !data.user?.id) {
     await recordSecurityEvent({
-      type: "auth_email_confirm_failed",
+      type: isRecovery ? "auth_recovery_session_failed" : "auth_email_confirm_failed",
       severity: "warning",
       request,
       status: 401,
@@ -51,15 +53,17 @@ export async function GET(request: NextRequest) {
 
   await upsertRecordsProfile({ userId: data.user.id, email: data.user.email || "" });
   await recordSecurityEvent({
-    type: "auth_email_confirmed",
+    type: isRecovery ? "auth_recovery_session_accepted" : "auth_email_confirmed",
     severity: "info",
     request,
     userId: data.user.id,
-    status: 302,
+    status: 307,
   });
 
   const response = NextResponse.redirect(redirectUrl);
-  setRecordsSessionCookies(response, data.session, demoCaseId);
-  if (type === "recovery") setRecordsPasswordRecoveryCookie(response);
+  if (isRecovery) {
+    setRecordsSessionCookies(response, data.session, demoCaseId);
+    setRecordsPasswordRecoveryCookie(response);
+  }
   return response;
 }

@@ -9,6 +9,8 @@ export type SecurityEventType =
   | "auth_signup_requested"
   | "auth_signup_failed"
   | "auth_signup_compromised_password_blocked"
+  | "auth_signup_confirmation_resent"
+  | "auth_signup_confirmation_resend_failed"
   | "auth_email_confirmed"
   | "auth_email_confirm_failed"
   | "auth_password_reset_requested"

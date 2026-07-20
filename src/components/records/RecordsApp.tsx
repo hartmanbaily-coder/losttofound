@@ -44,6 +44,7 @@ import {
   parseTags,
   readRecordsSession,
   requestRecordsPasswordReset,
+  resendRecordsSignupConfirmation,
   signInRecordsSession,
   signUpRecordsAccount,
   signOutRecordsSession,
@@ -58,6 +59,7 @@ import {
   type RecordsMfaEnrollment,
   type RecordsSession,
 } from "@/lib/records/clientStore";
+import { parseRecordsAuthFragment } from "@/lib/records/authClient";
 import {
   buildReportPreview,
   buildSectionExportPacket,
@@ -165,7 +167,12 @@ type LoginFlowResult =
   | { status: "complete" }
   | { status: "mfa_required" }
   | { status: "mfa_enrollment_required"; enrollment: RecordsMfaEnrollment };
-type LoginScreenMode = "login" | "signup" | "reset" | "update_password";
+type LoginScreenMode =
+  | "login"
+  | "signup"
+  | "resend_confirmation"
+  | "reset"
+  | "update_password";
 
 const defaultRangePreset: DateRangePreset = "currentMonth";
 
@@ -968,30 +975,48 @@ function LoginScreen({
 
     const params = new URLSearchParams(window.location.search);
     const authState = params.get("auth");
-    if (authState === "recovery") {
-      setMode("update_password");
-      setMessage("Choose a new password to finish account recovery.");
-    } else if (authState === "confirmed") {
+    const fragment = parseRecordsAuthFragment(window.location.hash, authState);
+
+    if (fragment.kind === "confirmation") {
+      window.history.replaceState(null, "", "/records?auth=confirmed");
+      setMode("login");
       setMessage("Email confirmed. Sign in to continue.");
-    } else if (authState === "confirm-error") {
-      setError("Confirmation link is invalid or expired.");
+      return;
     }
 
-    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-    const accessToken = hash.get("access_token");
-    const refreshToken = hash.get("refresh_token");
-    const expiresIn = hash.get("expires_in");
+    if (fragment.kind === "error") {
+      window.history.replaceState(null, "", "/records?auth=confirm-error");
+      setMode("login");
+      setError("Confirmation link is invalid or expired.");
+      return;
+    }
 
-    if (!accessToken || !refreshToken || recoveryHandledRef.current) return;
+    if (fragment.kind !== "recovery") {
+      if (authState === "recovery") {
+        setMode("update_password");
+        setMessage("Choose a new password to finish account recovery.");
+      } else if (authState === "confirmed") {
+        setMessage("Email confirmed. Sign in to continue.");
+      } else if (authState === "confirm-error") {
+        setError("Confirmation link is invalid or expired.");
+      }
+      return;
+    }
+
+    if (recoveryHandledRef.current) return;
     recoveryHandledRef.current = true;
+    window.history.replaceState(null, "", "/records?auth=recovery");
     setMode("update_password");
     setRecoveryHydrating(true);
     setError("");
     setMessage("Preparing password recovery.");
 
-    void acceptRecordsRecoverySession({ accessToken, refreshToken, expiresIn })
+    void acceptRecordsRecoverySession({
+      accessToken: fragment.accessToken,
+      refreshToken: fragment.refreshToken,
+      expiresIn: fragment.expiresIn,
+    })
       .then(() => {
-        window.history.replaceState(null, "", "/records?auth=recovery");
         setMessage("Choose a new password to finish account recovery.");
       })
       .catch((recoveryError: unknown) => {
@@ -1104,6 +1129,32 @@ function LoginScreen({
     }
   }
 
+  async function onResendConfirmationSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") || "").trim();
+    const adultConfirmed = formData.get("adult") === "on";
+
+    if (!adultConfirmed || !email.includes("@")) {
+      setError("Enter your email and confirm adult use.");
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await resendRecordsSignupConfirmation(email, adultConfirmed);
+      setMessage(result.message);
+    } catch (resendError) {
+      setError(
+        resendError instanceof Error ? resendError.message : "Confirmation email could not be resent."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function onPasswordUpdateSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -1164,6 +1215,8 @@ function LoginScreen({
       : "Verify authenticator"
     : mode === "signup"
       ? "Create account"
+      : mode === "resend_confirmation"
+        ? "Resend confirmation"
       : mode === "reset"
         ? "Reset password"
         : mode === "update_password"
@@ -1303,6 +1356,39 @@ function LoginScreen({
                   className="h-10 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
                 >
                   {submitting ? "Sending..." : "Send reset link"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchMode("login")}
+                  className="min-h-11 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-teal-500"
+                >
+                  Back to sign in
+                </button>
+              </form>
+            ) : mode === "resend_confirmation" ? (
+              <form method="post" onSubmit={onResendConfirmationSubmit} className="mt-5 space-y-4">
+                <Field label="Email">
+                  <input
+                    name="email"
+                    type="email"
+                    className="input"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    autoCorrect="off"
+                    spellCheck={false}
+                  />
+                </Field>
+                <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
+                  <input name="adult" type="checkbox" defaultChecked className="mt-1" />
+                  <span>I am an adult user requesting access to my own records account.</span>
+                </label>
+                {error && <p className="text-sm font-medium text-red-700">{error}</p>}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="min-h-11 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
+                >
+                  {submitting ? "Sending..." : "Send new confirmation link"}
                 </button>
                 <button
                   type="button"
@@ -1457,7 +1543,7 @@ function LoginScreen({
                   {!appReady ? "Loading workspace..." : submitting ? "Signing in..." : "Enter records workspace"}
                 </button>
                 {recordsStorageMode === "supabase" && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm">
                     <button
                       type="button"
                       onClick={() => switchMode("reset")}
@@ -1466,13 +1552,22 @@ function LoginScreen({
                       Forgot password?
                     </button>
                     {signupsEnabled && (
-                      <button
-                        type="button"
-                        onClick={() => switchMode("signup")}
-                        className="font-semibold text-teal-700 hover:text-teal-900"
-                      >
-                        Create account
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => switchMode("resend_confirmation")}
+                          className="font-semibold text-teal-700 hover:text-teal-900"
+                        >
+                          Resend confirmation
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => switchMode("signup")}
+                          className="font-semibold text-teal-700 hover:text-teal-900"
+                        >
+                          Create account
+                        </button>
+                      </>
                     )}
                   </div>
                 )}

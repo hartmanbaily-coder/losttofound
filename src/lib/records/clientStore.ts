@@ -417,6 +417,35 @@ export async function requestRecordsPasswordReset(
   };
 }
 
+export async function resendRecordsSignupConfirmation(
+  email: string,
+  adultConfirmed: boolean
+): Promise<RecordsAuthMessage> {
+  const response = await fetch("/api/records/auth/signup/resend", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, adultConfirmed }),
+  });
+
+  const body = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
+    message?: string;
+    error?: string;
+  };
+
+  if (!response.ok) {
+    throw new Error(body.error || `Confirmation resend failed with ${response.status}.`);
+  }
+
+  return {
+    ok: body.ok === true,
+    message:
+      body.message ||
+      "If an unconfirmed account exists for that email, a new confirmation link will be sent.",
+  };
+}
+
 export async function acceptRecordsRecoverySession(input: {
   accessToken: string;
   refreshToken: string;
