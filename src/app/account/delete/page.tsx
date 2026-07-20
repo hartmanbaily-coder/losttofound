@@ -6,35 +6,24 @@ import { accountDeletionMailto, supportEmail } from "@/lib/site";
 
 const sections: PolicySection[] = [
   {
-    title: "What this request covers",
+    title: "What will be deleted",
     body: [
-      "Account deletion is for deleting the whole account record in My Custody Case and associated personal account data.",
-      "Associated records include custody matters, calendar records, timeline items, notes, file metadata, reports, support records kept with the account, and private uploaded evidence files where deletion is legally and technically permitted.",
-      "Deleting only one custody matter or file can still be done from the Records workspace without deleting the whole account.",
+      "Deleting your account removes the account and its custody matters, calendars, notes, support and expense records, reports, and uploaded files from active systems.",
+      "Limited information may be kept when required by law, and deleted information may remain temporarily in backups.",
     ],
   },
   {
     title: "Before you request deletion",
     body: [
-      "Export any records, reports, or file indexes you need before requesting deletion.",
-      "Download any private files you still need to preserve outside the service.",
-      "Do not include passwords, authenticator codes, court files, message archives, Social Security numbers, full card numbers, or unnecessary child details in the request message.",
+      "Export any records and download any files you need before submitting the request.",
+      "Account deletion cannot be undone after processing is complete.",
     ],
   },
   {
-    title: "Timing and verification",
+    title: "What happens next",
     body: [
-      "Support may need to verify that the requester controls the account email before deletion is processed.",
-      "Deletion may take time when private storage, backups, support records, security logs, or vendor systems must be reviewed.",
-      "A confirmation should be sent after the deletion request is completed or if the request cannot be completed as submitted.",
-    ],
-  },
-  {
-    title: "What may be retained",
-    body: [
-      "Some information may remain for a limited time in backups until the applicable backup retention window expires.",
-      "Security logs, audit records, support correspondence, billing records if any, and records under valid legal hold or legal obligation may be retained where required.",
-      "Retained information should be limited to what is necessary for security, legal, financial, or operational requirements.",
+      "Submitting a request signs you out and ends active Attorney Access.",
+      "We may verify your identity. We aim to complete verified deletion requests within 30 days and will email you when processing is complete.",
     ],
   },
 ];
@@ -43,14 +32,13 @@ export default function AccountDeletePage() {
   return (
     <PolicyPage
       title="Delete Account"
-      description="This page lets users start deletion of their account and associated My Custody Case records."
-      notice="This deletion process should be reviewed by qualified counsel before broad public launch, especially for backup aging, legal holds, support verification, and security-log retention."
+      description="Permanently delete your My Custody Case account and associated records."
       sections={sections}
     >
       <AccountDeletionRequest />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-        <h2 className="text-base font-semibold text-slate-950">Support Fallback</h2>
+        <h2 className="text-base font-semibold text-slate-950">Cannot sign in?</h2>
         <p className="mt-3">
           If you cannot sign in, send the request from the email address connected to the account.
           Use a short message such as

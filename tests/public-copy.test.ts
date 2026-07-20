@@ -1,0 +1,58 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const customerFacingFiles = [
+  "src/app/privacy/page.tsx",
+  "src/app/terms/page.tsx",
+  "src/app/security/page.tsx",
+  "src/app/accessibility/page.tsx",
+  "src/app/ai-data-use/page.tsx",
+  "src/app/subprocessors/page.tsx",
+  "src/app/contact/page.tsx",
+  "src/app/account/delete/page.tsx",
+  "src/app/account/delete/AccountDeletionRequest.tsx",
+  "src/components/records/AttorneyAccessPanel.tsx",
+  "src/components/records/AttorneyPortal.tsx",
+  "src/components/records/ExhibitBuilder.tsx",
+  "ios/LostToFound/LostToFound/NativePolicyView.swift",
+];
+
+const forbiddenPublicPhrases = [
+  /broad public launch/i,
+  /qualified legal review/i,
+  /product baseline/i,
+  /prepared for broader use/i,
+  /retention language/i,
+  /not configured for this deployment/i,
+  /configured server side model/i,
+  /MFA ready structure/i,
+  /protected route/i,
+  /reloading cloud storage/i,
+];
+
+describe("customer facing copy", () => {
+  it("does not expose internal readiness or implementation language", () => {
+    for (const file of customerFacingFiles) {
+      const source = readFileSync(resolve(process.cwd(), file), "utf8");
+      for (const phrase of forbiddenPublicPhrases) {
+        expect(source, `${file} contains ${phrase}`).not.toMatch(phrase);
+      }
+    }
+  });
+
+  it("uses the monitored support channel", () => {
+    const site = readFileSync(resolve(process.cwd(), "src/lib/site.ts"), "utf8");
+    expect(site).toContain('supportEmail = "support@lendori.io"');
+    expect(site).not.toContain("securityEmail");
+  });
+
+  it("states the deletion completion target", () => {
+    const deletionPage = readFileSync(
+      resolve(process.cwd(), "src/app/account/delete/page.tsx"),
+      "utf8"
+    );
+    expect(deletionPage).toContain("within 30 days");
+    expect(deletionPage).toContain("email you when processing is complete");
+  });
+});

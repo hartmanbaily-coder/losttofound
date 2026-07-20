@@ -8,15 +8,11 @@ export const supportEmail = "support@lendori.io";
 export const supportMailto = `mailto:${supportEmail}`;
 export const accountDeletionPath = "/account/delete";
 export const accountDeletionMailto = `mailto:${supportEmail}?subject=My%20Custody%20Case%20account%20deletion%20request`;
-export const policyLastUpdated = "July 7, 2026";
+export const policyLastUpdated = "July 19, 2026";
 
 export const publicPolicyLinks = [
   { href: "/privacy", label: "Privacy" },
   { href: "/terms", label: "Terms" },
-  { href: "/security", label: "Security" },
-  { href: "/ai-data-use", label: "AI data use" },
-  { href: "/subprocessors", label: "Subprocessors" },
-  { href: "/accessibility", label: "Accessibility" },
   { href: "/contact", label: "Contact" },
   { href: accountDeletionPath, label: "Account deletion" },
 ];

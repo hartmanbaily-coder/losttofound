@@ -174,7 +174,7 @@ export default function AttorneyPortal() {
         throw new Error(body.error || "Evidence file is unavailable.");
       }
       await downloadBlobFile(item.originalFileName, await response.blob());
-      setMessage("Evidence download prepared through the protected route.");
+      setMessage("Your evidence download is ready.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Evidence download failed.");
     } finally {

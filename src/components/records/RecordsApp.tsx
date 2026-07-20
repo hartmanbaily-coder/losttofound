@@ -4282,12 +4282,10 @@ function ImportView({
     const parsed = (await response.json().catch(() => ({}))) as {
       evidence?: Partial<EvidenceItem>;
       error?: string;
-      blockers?: string[];
     };
 
     if (!response.ok) {
-      const details = parsed.blockers?.length ? ` ${parsed.blockers.join(" ")}` : "";
-      throw new Error(`${parsed.error || "File upload failed."}${details}`);
+      throw new Error(parsed.error || "File upload failed.");
     }
 
     if (!parsed.evidence?.storagePath || parsed.evidence.malwareScanStatus !== "clean") {
@@ -4530,21 +4528,13 @@ function ImportView({
         </Panel>
 
         <Panel title="Message archive" action="CSV, TXT, HTML">
-          <div className="mb-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-            AI review sends this import text to the configured server side model and returns editable drafts only.
-          </div>
           <form onSubmit={reviewMessageArchive} className="grid gap-3">
             <Field label="Archive file">
               <input name="archive" type="file" className="input" accept=".csv,.txt,.html,text/csv,text/plain,text/html" />
             </Field>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <button className="btn-primary" type="submit" value="rules" disabled={parsing || assistBusy}>
-                {parsing ? "Reviewing..." : "Review message file"}
-              </button>
-              <button className="btn-secondary" type="submit" value="ai" disabled={parsing || assistBusy}>
-                {assistBusy ? "AI reviewing..." : "AI review file"}
-              </button>
-            </div>
+            <button className="btn-primary" type="submit" value="rules" disabled={parsing || assistBusy}>
+              {parsing ? "Reviewing..." : "Review message file"}
+            </button>
           </form>
         </Panel>
 
@@ -5012,12 +5002,10 @@ function EvidenceView({
     const parsed = (await response.json().catch(() => ({}))) as {
       evidence?: Partial<EvidenceItem>;
       error?: string;
-      blockers?: string[];
     };
 
     if (!response.ok) {
-      const details = parsed.blockers?.length ? ` ${parsed.blockers.join(" ")}` : "";
-      throw new Error(`${parsed.error || "File upload failed."}${details}`);
+      throw new Error(parsed.error || "File upload failed.");
     }
 
     if (!parsed.evidence?.storagePath || parsed.evidence.malwareScanStatus !== "clean") {
@@ -6693,7 +6681,7 @@ function SettingsView({
         ))}
       </datalist>
       <div className="min-w-0 space-y-4">
-        <Panel title="Account settings" action="MFA ready structure">
+        <Panel title="Account settings" action="Profile">
           <form onSubmit={updateProfile} className="grid gap-3">
             <Field label="Display name">
               <input name="displayName" className="input" defaultValue={profile?.displayName || ""} />
@@ -6862,8 +6850,9 @@ function SettingsView({
               </div>
             </div>
             <p>
-              Records are saved behind authenticated server routes when cloud storage is active.
-              Browser-only mode is for private drafting on this device.
+              {recordsStorageMode === "supabase"
+                ? "Your records are saved to your account and available when you sign in."
+                : "Records in browser mode stay on this device."}
             </p>
           </div>
         </Panel>
@@ -6884,18 +6873,20 @@ function SettingsView({
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <button type="button" onClick={logout} className="btn-secondary">
-                Clear session
+                Sign out
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  clearFailedLoginAttempts();
-                  flash("Demo login lockout counter reset.");
-                }}
-                className="btn-secondary"
-              >
-                Reset lockout counter
-              </button>
+              {recordsStorageMode === "local" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearFailedLoginAttempts();
+                    flash("Demo login lockout counter reset.");
+                  }}
+                  className="btn-secondary"
+                >
+                  Reset demo lockout
+                </button>
+              ) : null}
             </div>
             <p>Use the session controls when switching accounts or stepping away from this device.</p>
           </div>
@@ -6913,16 +6904,15 @@ function SettingsView({
               {recordsStorageMode === "supabase" ? "Clear workspace data" : "Reset synthetic demo data"}
             </button>
             <Link href={accountDeletionPath} className="btn-secondary text-center">
-              Request account deletion
+              Delete my account
             </Link>
             <Link href="/privacy" className="btn-secondary text-center">
               Privacy and deletion policy
             </Link>
           </div>
           <p className="mt-4 text-sm leading-6 text-slate-600">
-            Export your data before major cleanup. Deleting the selected case removes its records
-            from this workspace. Account deletion requests are handled through support so export,
-            backup aging, security review, and any valid legal hold can be checked.
+            Export anything you need before deleting a case or your account. Deleted information
+            cannot be restored from the app.
           </p>
         </Panel>
 
@@ -6934,14 +6924,6 @@ function SettingsView({
             <li>Attach files only when they support a specific date, note, expense, or exchange.</li>
             <li>Review the Reports tab before exporting anything for another person or agency.</li>
           </ol>
-        </Panel>
-
-        <Panel title="Session and security notes" action="Privacy defaults">
-          <div className="space-y-3 text-sm leading-6 text-slate-600">
-            <p>No child accounts, public profiles, social features, coparent messaging, advertising trackers, or session replay are included.</p>
-            <p>Cloud storage is designed to keep account sessions protected and limit what browser scripts can access.</p>
-            <p>Attached files use server mediated private object storage, require a clean malware scan before download, and never expose public or anonymous share links.</p>
-          </div>
         </Panel>
 
         <Panel title="Audit trail" action={`${selected.auditLogs.length} entries`}>

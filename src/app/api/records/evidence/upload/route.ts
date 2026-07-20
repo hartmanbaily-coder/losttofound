@@ -59,7 +59,6 @@ export async function POST(request: NextRequest) {
       NextResponse.json(
         {
           error: "Evidence upload is temporarily unavailable.",
-          blockers: readiness.blockers,
         },
         { status: 503 }
       ),

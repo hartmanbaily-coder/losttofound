@@ -174,7 +174,7 @@ export default function ExhibitBuilder({
   async function save() {
     if (!generated) return;
     if (!cloudStorageEnabled) {
-      setMessage("Sign in to private cloud storage before saving a generated exhibit to Files.");
+      setMessage("Sign in before saving a generated exhibit to Files.");
       return;
     }
     if (generated.blob.size > exhibitLimits.maximumEvidenceBytes) {
@@ -212,7 +212,7 @@ export default function ExhibitBuilder({
           includeInReports,
         },
       });
-      setMessage("The generated exhibit was saved to Files and confirmed after reloading cloud storage.");
+      setMessage("The generated exhibit was saved to Files.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The generated exhibit could not be saved.");
     } finally {

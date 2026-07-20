@@ -176,7 +176,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       requestedAt,
       clearLocalSession: true,
       message:
-        "Account deletion request received and active refresh sessions revoked. Support will verify and process complete account deletion subject to legal, security, and backup-retention requirements.",
+        "Your request was received and you have been signed out. We aim to complete verified deletion requests within 30 days and will email you when processing is complete.",
     },
     { status: 202, headers: { "Cache-Control": "no-store" } }
   );

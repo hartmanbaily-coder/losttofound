@@ -2,51 +2,27 @@ import { PolicyPage, type PolicySection } from "@/components/PolicyPage";
 
 const sections: PolicySection[] = [
   {
-    title: "Records workspace",
+    title: "Purpose",
     body: [
-      "My Custody Case is a private workspace for adults organizing custody, parenting time, child support, expense, file, and family court documentation.",
-      "The service is for factual organization, recordkeeping, calendar planning, file storage, and user directed report exports.",
-      "The service may change as account controls, imports, exports, deletion workflows, retention policies, and security operations mature.",
+      "My Custody Case helps adults organize custody records, calendars, expenses, files, and reports.",
+      "It does not provide legal advice, legal representation, court findings, or a guarantee that any record will be accepted as evidence.",
+      "Consult a qualified attorney about your situation and applicable court rules.",
     ],
   },
   {
-    title: "Adult use",
+    title: "Accounts",
     body: [
-      "The service is intended for adult users only.",
-      "Do not create accounts for children, invite children to use the service, or use the service as a child facing product.",
-      "Users are responsible for using privacy minded labels and avoiding unnecessary sensitive identifiers.",
+      "You must be an adult and provide accurate account information.",
+      "Keep your password, email account, authenticator, and devices secure. Contact us promptly if you suspect unauthorized access.",
+      "Do not create an account for a child or allow a child to use your account.",
     ],
   },
   {
-    title: "No legal advice",
+    title: "Your records",
     body: [
-      "The service does not provide legal advice, legal strategy, legal determinations, filing advice, legal representation, or attorney client privilege.",
-      "Users should consult a qualified attorney about court orders, evidence handling, filing requirements, child support obligations, and their specific situation.",
-      "Generated summaries, timelines, calendars, exports, and reports are user organization tools, not legal findings or court ready legal arguments by themselves.",
-    ],
-  },
-  {
-    title: "User responsibility",
-    body: [
-      "Users are responsible for the accuracy, completeness, legality, and appropriateness of records they enter, upload, import, export, or share.",
-      "Users should verify imported records against original source materials before using them in reports or sharing them with an attorney, court, agency, or other third party.",
-      "Users are responsible for protecting downloaded files and exports after they leave the app's protected storage.",
-    ],
-  },
-  {
-    title: "Evidence and admissibility",
-    body: [
-      "The service does not guarantee that any note, file, photo, receipt, export, report, calendar, or evidence item will be accepted or relied on by a court, agency, mediator, attorney, or other third party.",
-      "Users are responsible for preserving originals, following applicable court rules, avoiding misleading edits, and keeping records complete enough to verify context.",
-      "The service may reject files by type, size, malware scan result, authorization failure, or security policy.",
-    ],
-  },
-  {
-    title: "AI assisted features",
-    body: [
-      "AI assisted import, if enabled, is intended to help structure user provided notes, messages, documents, or file summaries.",
-      "AI output can be incomplete, inaccurate, or overbroad and must be reviewed by the user before saving, exporting, or relying on it.",
-      "AI assisted features do not provide legal advice, predict court outcomes, determine credibility, or decide whether evidence is admissible.",
+      "You are responsible for records you enter, upload, export, or share and for having the right to use them.",
+      "Keep original source files, review generated reports for accuracy, and protect copies downloaded from the app.",
+      "We may reject unsafe, unsupported, or oversized files.",
     ],
   },
   {
@@ -54,55 +30,30 @@ const sections: PolicySection[] = [
     body: [
       "Do not use the service to harass, stalk, threaten, impersonate, surveil, dox, or unlawfully disclose another person's information.",
       "Do not upload malware, exploit code, illegal content, or content you do not have the right to store or use.",
-      "Do not attempt to bypass authorization, access another user's records, disrupt the service, reverse engineer private security controls, or overload import/export workflows.",
+      "Do not attempt to access another user's records, bypass account protections, or disrupt the service.",
     ],
   },
   {
-    title: "Safety boundaries",
+    title: "Attorney Access",
     body: [
-      "The service is not an emergency service, crisis service, law enforcement tool, supervised exchange service, or safety response provider.",
-      "Users should contact local emergency services, law enforcement, legal counsel, court staff, or qualified support professionals when appropriate.",
-      "The service does not monitor family safety, enforce court orders, or contact another parent or third party on a user's behalf.",
+      "You may invite one adult attorney account to read the selected case for seven days after acceptance.",
+      "You can revoke future access, but copies already downloaded cannot be recalled.",
+      "An invitation does not establish legal representation or attorney client privilege.",
     ],
   },
   {
-    title: "Accounts and security",
+    title: "Availability and account actions",
     body: [
-      "Users are responsible for keeping account credentials, devices, email accounts, and authenticator apps secure.",
-      "The service may require multi factor authentication, stronger password rules, session controls, account verification, rate limits, or manual review.",
-      "Users should promptly report suspected unauthorized access or security concerns through the support contact.",
+      "The service may be temporarily unavailable for maintenance, security, or provider outages.",
+      "We may limit or end access for misuse, security risk, or violation of these terms.",
+      "You can export records and request account deletion. Limited information may be retained when required by law.",
     ],
   },
   {
-    title: "Attorney guest access",
+    title: "Safety and changes",
     body: [
-      "An owner may invite one adult attorney guest to a dedicated read-only portal when that feature is enabled. Acceptance starts a seven-day access period during which the guest may return as often as needed. A new invitation is required after that period ends. The guest cannot edit records, change report settings, upload evidence, invite others, or access owner account settings.",
-      "Sharing access does not state that the guest represents the owner and does not automatically create attorney-client privilege or any confidentiality protection beyond the service's technical controls.",
-      "Owners may revoke future access, and attorney guests may leave a matter, but the service cannot retrieve reports or evidence already downloaded outside the app.",
-    ],
-  },
-  {
-    title: "Payments and financial records",
-    body: [
-      "Child support and expense tools are for documentation only.",
-      "The service does not process child support payments, collect bank login credentials, scrape bank accounts, store full account/card numbers, or verify that a payment legally satisfies an obligation.",
-      "Users are responsible for confirming payment status with their bank, payment provider, agency, court, attorney, or other appropriate source.",
-    ],
-  },
-  {
-    title: "Availability and changes",
-    body: [
-      "The service may be unavailable during maintenance, security events, vendor outages, deployment work, or operational incidents.",
-      "Features may be added, changed, limited, or removed as the service matures.",
-      "We may update these terms and will identify the current version by the updated date on this page.",
-    ],
-  },
-  {
-    title: "Deletion and retention",
-    body: [
-      "Users may be offered export, file deletion, case deletion, and account deletion controls.",
-      "Deleted records may remain in backups until those backups expire under the retention schedule.",
-      "Deletion may be delayed or limited when legally required, when needed for security investigation, or when a valid hold applies.",
+      "My Custody Case is not an emergency service and does not monitor safety or enforce court orders. Contact emergency services when immediate help is needed.",
+      "We may update the service or these terms. The date on this page identifies the current version.",
     ],
   },
 ];
@@ -111,8 +62,7 @@ export default function TermsPage() {
   return (
     <PolicyPage
       title="Terms of Use"
-      description="These terms set the boundaries for using the records workspace, including adult only use, no legal advice, evidence limitations, AI assisted import, account security, and acceptable use."
-      notice="These terms are a product baseline and should be reviewed by qualified counsel before broad public launch or before relying on them for customer facing enforcement."
+      description="The rules and limitations for using My Custody Case."
       sections={sections}
     />
   );

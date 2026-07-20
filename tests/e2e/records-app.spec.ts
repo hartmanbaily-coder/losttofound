@@ -709,7 +709,7 @@ test("records account recovery and deletion paths are reachable", async ({ page 
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
 
-  const accountDeletion = page.getByRole("link", { name: "Request account deletion" });
+  const accountDeletion = page.getByRole("link", { name: "Delete my account" });
   await expect(accountDeletion).toBeVisible();
   await expect(accountDeletion).toHaveAttribute("href", "/account/delete");
 
@@ -720,8 +720,8 @@ test("records account recovery and deletion paths are reachable", async ({ page 
   await accountDeletion.click();
   await expect(page).toHaveURL(/\/account\/delete$/);
   await expect(page.getByRole("heading", { name: "Delete Account" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Authenticated Deletion Request" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Submit account deletion request" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Request account deletion" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request account deletion" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Email support instead" })).toHaveAttribute(
     "href",
     "mailto:support@lendori.io?subject=My%20Custody%20Case%20account%20deletion%20request"
@@ -730,7 +730,7 @@ test("records account recovery and deletion paths are reachable", async ({ page 
     "href",
     "mailto:support@lendori.io?subject=My%20Custody%20Case%20account%20deletion%20request"
   );
-  await expect(page.getByText("What may be retained")).toBeVisible();
+  await expect(page.getByText("What happens next")).toBeVisible();
 
   await page.goto("/records");
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();

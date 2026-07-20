@@ -13,10 +13,6 @@ enum AppBrand {
 private let appPolicyLinks: [PolicyLink] = [
     PolicyLink(title: "Privacy Policy", url: URL(string: "https://losttofound.org/privacy")!),
     PolicyLink(title: "Terms of Use", url: URL(string: "https://losttofound.org/terms")!),
-    PolicyLink(title: "Security", url: URL(string: "https://losttofound.org/security")!),
-    PolicyLink(title: "AI Data Use", url: URL(string: "https://losttofound.org/ai-data-use")!),
-    PolicyLink(title: "Subprocessors", url: URL(string: "https://losttofound.org/subprocessors")!),
-    PolicyLink(title: "Accessibility", url: URL(string: "https://losttofound.org/accessibility")!),
     PolicyLink(title: "Account Deletion", url: AppBrand.accountDeletionRequestURL),
     PolicyLink(title: "Contact", url: URL(string: "https://losttofound.org/contact")!)
 ]
@@ -67,7 +63,7 @@ struct PrivacySummaryView: View {
                 Label("No public profiles or social feeds", systemImage: "eye.slash")
                 Label("No advertising trackers", systemImage: "hand.raised")
                 Label("User controlled records and exports", systemImage: "doc.text.magnifyingglass")
-                Label("Account deletion requests start from Support", systemImage: "person.crop.circle.badge.xmark")
+                Label("Account deletion available in the app", systemImage: "person.crop.circle.badge.xmark")
             }
 
             NativePolicyFooterSections()
@@ -83,7 +79,7 @@ struct SupportView: View {
                 AppBrandHeader()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Need account, privacy, deletion, accessibility, or security help?")
+                    Text("Need account, privacy, deletion, accessibility, or product help?")
                         .font(.headline)
                     Text("Email support without putting sensitive case details in the subject line.")
                         .font(.subheadline)
@@ -113,7 +109,7 @@ struct SupportView: View {
                     Label("Privacy and deletion policy", systemImage: "doc.text.magnifyingglass")
                 }
 
-                Text("The deletion request opens inside the app so your signed-in records session can be verified. Support can also help with data export, correction, privacy questions, and recovery. Do not include sensitive case details unless support asks for them.")
+                Text("The deletion request opens inside the app so your account can be verified. Support can also help with data export, correction, privacy questions, and recovery. Do not include sensitive case details unless support asks for them.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

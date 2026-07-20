@@ -103,10 +103,10 @@ export function AccountDeletionRequest() {
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <h2 className="text-base font-semibold text-slate-950">Authenticated Deletion Request</h2>
+      <h2 className="text-base font-semibold text-slate-950">Request account deletion</h2>
       <p className="mt-3">
-        A signed-in account holder can start complete account deletion here. The request is recorded
-        server-side for the authenticated account before support verification and processing.
+        Submit the request while signed in. You will be signed out immediately, and we aim to
+        complete verified deletion requests within 30 days.
       </p>
 
       <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -125,8 +125,8 @@ export function AccountDeletionRequest() {
         )}
         {sessionStatus === "unavailable" && (
           <p>
-            Authenticated deletion requests are available in the production records workspace. If
-            you cannot access the account, contact support from the account email address.
+            We could not verify your sign-in. Try again or contact support from the email address
+            connected to your account.
           </p>
         )}
       </div>
@@ -139,8 +139,8 @@ export function AccountDeletionRequest() {
           className="mt-1 h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
         />
         <span>
-          I understand this starts deletion of my whole account in My Custody Case and associated
-          account records, subject to legal retention, security review, and backup aging.
+          I understand this will permanently delete my account and associated My Custody Case
+          records, except information that must be retained by law.
         </span>
       </label>
 
@@ -151,7 +151,7 @@ export function AccountDeletionRequest() {
           disabled={!canSubmit}
           className="inline-flex min-h-11 items-center justify-center rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
         >
-          {requestState.status === "submitting" ? "Submitting..." : "Submit account deletion request"}
+          {requestState.status === "submitting" ? "Submitting..." : "Request account deletion"}
         </button>
         <Link
           href="/records"
@@ -171,7 +171,7 @@ export function AccountDeletionRequest() {
         <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
           <p className="font-semibold">Account deletion request submitted.</p>
           <p className="mt-1">{requestState.message}</p>
-          <p className="mt-2 font-mono text-xs">Request ID: {requestState.requestId}</p>
+          <p className="mt-2 text-xs">Save this request number: {requestState.requestId}</p>
         </div>
       )}
 

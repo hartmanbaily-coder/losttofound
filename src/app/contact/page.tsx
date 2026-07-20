@@ -5,35 +5,24 @@ import { accountDeletionPath, supportEmail, supportMailto } from "@/lib/site";
 
 const sections: PolicySection[] = [
   {
-    title: "General support",
+    title: "Account and product support",
     body: [
-      "Use support for account access, sign in problems, authenticator recovery, file upload issues, import issues, export issues, calendar behavior, report bugs, and product feedback.",
-      "Include the affected page or route, what you expected to happen, what happened instead, browser/device details, and any visible error message.",
-      "Do not include passwords, authenticator codes, full message archives, full court files, or unnecessary child details in the initial email.",
+      "Contact support for sign in, account recovery, files, imports, exports, calendars, reports, accessibility, or product problems.",
+      "Include the affected page, what happened, and your device. Do not send passwords, verification codes, court files, or sensitive case details.",
     ],
   },
   {
-    title: "Privacy requests",
+    title: "Privacy and deletion",
     body: [
-      "Use the account deletion page to start complete account deletion. Use support for access, correction, export, account data, retention, or privacy policy questions.",
-      "Include the email address connected to the account so the request can be matched after verification.",
-      "Some privacy requests may require identity verification before action is taken.",
+      "Use the Account Deletion page to delete your account. Contact support for access, correction, export, or privacy questions.",
+      "We may verify your identity before acting on an account or privacy request.",
     ],
   },
   {
-    title: "Security reports",
+    title: "Security",
     body: [
-      "Report suspected unauthorized access, cross account data exposure, private file access issues, login or MFA problems, evidence download concerns, or security vulnerabilities.",
-      "Include concise reproduction steps, route, account email involved, time observed, browser/device details, and screenshots only if they are redacted.",
-      "Do not test against another user's account or access records that are not yours.",
-    ],
-  },
-  {
-    title: "Accessibility issues",
-    body: [
-      "Report inaccessible forms, buttons, calendar controls, charts, exports, navigation, contrast, keyboard access, screen reader issues, or mobile layout problems.",
-      "Include the page, task, browser, device, assistive technology if relevant, and what blocked completion.",
-      "If a workaround exists, include it so the issue can be prioritized accurately.",
+      "Contact support promptly if you suspect unauthorized access or discover a security vulnerability.",
+      "Include the affected page, approximate time, and device without sending private records.",
     ],
   },
   {
@@ -41,15 +30,7 @@ const sections: PolicySection[] = [
     body: [
       "Support cannot provide legal advice, court strategy, filing advice, emergency response, law enforcement response, or supervised exchange services.",
       "For legal advice, contact a qualified attorney. For emergencies or immediate safety concerns, contact local emergency services or appropriate authorities.",
-      "For court deadlines or filing requirements, verify requirements with the court, agency, attorney, or governing body.",
-    ],
-  },
-  {
-    title: "Response expectations",
-    body: [
-      "Support response times are not guaranteed while the product is still being prepared for broader use.",
-      "Security, account access, privacy, and evidence file issues should be prioritized over general feature requests.",
-      "Do not rely on support email as the only place to preserve court records, original evidence, or deadlines.",
+      "Do not rely on support email to preserve records or meet a deadline.",
     ],
   },
 ];

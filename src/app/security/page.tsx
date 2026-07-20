@@ -3,67 +3,33 @@ import { supportEmail, supportMailto } from "@/lib/site";
 
 const sections: PolicySection[] = [
   {
-    title: "Security posture",
+    title: "Protecting your account",
     body: [
-      "The records workspace is designed for private custody and family court records, so security controls focus on authentication, authorization, private storage, malware resistant uploads, and conservative data sharing.",
-      "The app uses server managed HttpOnly cookies, server side records API routes, Supabase Auth, private evidence storage, and route level authorization checks.",
-      "Security sensitive configuration, such as service keys and AI provider keys, should remain in server side secret storage and should not be exposed to browser code.",
+      "My Custody Case uses verified accounts and additional sign in verification to protect access to records.",
+      "Use a unique password, protect your email and authenticator, and sign out on devices you do not control.",
+      "Account recovery may require identity verification.",
     ],
   },
   {
-    title: "Account protection",
+    title: "Keeping your records private",
     body: [
-      "Production accounts may require strong passwords, email verification, multi factor authentication, session controls, and manual recovery review.",
-      "Users should protect their email account, device, password manager, and authenticator app because those can affect access to records.",
-      "Manual recovery requests may require identity and account verification before access is restored.",
+      "The app keeps each custody matter and its files tied to the account that created them.",
+      "Custody records are not public. Access by another app user is limited to sharing you initiate, such as seven day Attorney Access, or an export or file you choose to send.",
+      "If you see records you do not recognize or believe someone else accessed your account, contact support promptly. Do not include sensitive case details in your initial message.",
     ],
   },
   {
-    title: "Record isolation",
+    title: "Files and exports",
     body: [
-      "Records are scoped by authenticated user and custody matter so one user's records should not be available to another user.",
-      "Server routes should enforce ownership before reading, saving, exporting, downloading, or deleting records and files.",
-      "Any cross account data exposure concern should be reported immediately as a security issue.",
+      "Uploaded files are checked before they can be stored or downloaded.",
+      "Files and generated reports are private inside the app. Protect any copy you download or share because the app cannot control it afterward.",
     ],
   },
   {
-    title: "File uploads",
+    title: "Report a concern",
     body: [
-      "Evidence files may be checked for file type, size, authorization, and malware scan result before storage or later use.",
-      "Files should be stored in private buckets or private object storage, not public anonymous links.",
-      "Downloaded files and generated exports are no longer protected by the app once a user stores or shares them outside the service.",
-    ],
-  },
-  {
-    title: "Monitoring and logging",
-    body: [
-      "Operational logs may include request metadata, security events, failed login patterns, rate limit events, upload decisions, and incident response details.",
-      "Logs should avoid unnecessary sensitive case details, full file contents, passwords, authentication codes, service role keys, and raw private storage paths.",
-      "Security events may be reviewed to investigate abuse, reliability issues, unauthorized access attempts, and suspected incidents.",
-    ],
-  },
-  {
-    title: "Incident response",
-    body: [
-      "If a suspected security incident occurs, the response process should identify affected systems, preserve relevant logs, contain the issue, evaluate affected data, remediate the root cause, and determine notice obligations.",
-      "State breach notification laws and other privacy obligations may require notice when certain personal information is involved.",
-      "Incident handling may limit account access, file downloads, imports, or exports while investigation and containment are underway.",
-    ],
-  },
-  {
-    title: "Responsible disclosure",
-    body: [
-      "Please report suspected vulnerabilities, authentication problems, authorization bypasses, data exposure, private file access issues, or cross account access concerns promptly.",
-      "Do not access, modify, copy, delete, or disclose another user's records while testing or reporting a concern.",
-      "This site does not currently offer a paid bug bounty. Reports are still appreciated and will be reviewed based on severity and reproducibility.",
-    ],
-  },
-  {
-    title: "What not to send by email",
-    body: [
-      "Do not email passwords, authenticator codes, full court files, full message archives, Social Security numbers, full bank account numbers, or full card numbers.",
-      "For security reports, include the route, account email involved, time observed, browser/device details, and concise reproduction steps.",
-      "If screenshots are needed, redact unnecessary names, child details, addresses, financial identifiers, and court sensitive material.",
+      "If you see records you do not recognize or believe someone else accessed your account, sign out and contact us promptly.",
+      "Include the affected page, approximate time, and device. Do not email passwords, verification codes, court files, or sensitive case details.",
     ],
   },
 ];
@@ -72,7 +38,7 @@ export default function SecurityPage() {
   return (
     <PolicyPage
       title="Security"
-      description="This page explains the security posture for the records workspace, how file and account protections are intended to work, and how to report concerns."
+      description="How to protect your account and report a security concern."
       notice="Security controls reduce risk but do not make any internet service risk free. Keep local downloads, exports, passwords, and devices protected."
       sections={sections}
     >
@@ -83,7 +49,7 @@ export default function SecurityPage() {
           <a href={supportMailto} className="font-mono font-semibold text-emerald-700 underline underline-offset-2">
             {supportEmail}
           </a>
-          . Use a clear subject such as My Custody Case security report and avoid including sensitive case details unless requested for investigation.
+          . Do not include sensitive case details unless we ask for them.
         </p>
       </section>
     </PolicyPage>

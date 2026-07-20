@@ -204,12 +204,12 @@ export default function AttorneyAccessPanel({
 
       <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
         Revocation blocks future requests immediately, but My Custody Case cannot recall copies already downloaded.
-        Access activity is logged without record contents. Case or account deletion invalidates access; retention language still requires qualified legal review.
+        Access history records dates and actions without including record contents. Deleting the case or account ends access.
       </div>
 
       {state?.delivery === "not_configured" ? (
         <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-          Invitation sharing is not configured for this deployment.
+          Attorney invitations are temporarily unavailable.
         </p>
       ) : null}
       {state?.delivery === "owner_share" ? (
@@ -219,7 +219,7 @@ export default function AttorneyAccessPanel({
       ) : null}
       {!newInvitationsEnabled ? (
         <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-          New attorney invitations are not enabled for this deployment. Existing access can still be reviewed or revoked.
+          New attorney invitations are temporarily unavailable. Existing access can still be reviewed or revoked.
         </p>
       ) : null}
 

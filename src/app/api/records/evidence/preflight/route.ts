@@ -54,7 +54,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Evidence intake is temporarily unavailable.",
-        blockers: readiness.blockers,
       },
       { status: 503 }
     );
