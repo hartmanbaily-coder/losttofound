@@ -1,6 +1,6 @@
 # My Custody Case iOS
 
-This folder prepares My Custody Case: Organizer for the Apple App Store path.
+This folder prepares My Custody Case for the Apple App Store path.
 
 The iOS app is a native SwiftUI shell with:
 

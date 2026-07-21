@@ -10,6 +10,7 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/${runtime_uid}}"
 export DOCKER_HOST="${DOCKER_HOST:-unix://${XDG_RUNTIME_DIR}/docker.sock}"
 export COMPOSE_PROJECT_NAME=losttofound
 export LOSTTOFOUND_ENV_FILE="${env_file}"
+public_url="${LOSTTOFOUND_PUBLIC_URL:-https://losttofound.org}"
 
 for attempt in $(seq 1 30); do
   if curl --fail --silent --show-error http://127.0.0.1:8080/caddy-health >/dev/null && \
@@ -18,6 +19,22 @@ for attempt in $(seq 1 30); do
   fi
   if [[ ${attempt} -eq 30 ]]; then
     echo "Local Caddy/app health checks did not become ready." >&2
+    exit 1
+  fi
+  sleep 5
+done
+
+for attempt in $(seq 1 12); do
+  cloudflared_container="$(docker compose --env-file "${env_file}" -f "${compose_file}" ps -q cloudflared)"
+  if [[ -n ${cloudflared_container} ]] && \
+    [[ $(docker inspect --format '{{.State.Running}}' "${cloudflared_container}") == "true" ]] && \
+    docker compose --env-file "${env_file}" -f "${compose_file}" logs --no-color cloudflared 2>&1 | \
+      grep -q 'Registered tunnel connection' && \
+    curl --fail --silent --show-error "${public_url}/records" >/dev/null; then
+    break
+  fi
+  if [[ ${attempt} -eq 12 ]]; then
+    echo "Cloudflare Tunnel did not become reachable at ${public_url}." >&2
     exit 1
   fi
   sleep 5
@@ -62,6 +79,11 @@ if [[ ${readiness_status} == "not_ready" && ${#readiness_blockers[@]} -eq 0 ]]; 
   echo "Readiness API returned not_ready without an explanatory blocker." >&2
   exit 1
 fi
+readiness_blocked=false
+if [[ ${readiness_status} == "not_ready" ]]; then
+  readiness_blocked=true
+  echo "Customer readiness remains BLOCKED: ${readiness_blockers[*]}" >&2
+fi
 
 login_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
   --request POST \
@@ -76,7 +98,14 @@ fi
 docker compose --env-file "${env_file}" -f "${compose_file}" exec -T losttofound \
   node scripts/verify-malware-scanner.mjs
 docker compose --env-file "${env_file}" -f "${compose_file}" exec -T losttofound \
+  node scripts/verify-supabase-auth-public-settings.mjs
+docker compose --env-file "${env_file}" -f "${compose_file}" exec -T losttofound \
   env RECORDS_APP_BASE_URL=http://caddy:8080 ALLOW_INSECURE_HEADER_CHECK=true \
   node scripts/verify-security-headers.mjs
 
-echo "Local deployment smoke checks passed."
+if [[ ${readiness_blocked} == "true" ]]; then
+  echo "Application health checks passed, but customer readiness is blocked." >&2
+  exit 2
+fi
+
+echo "Local deployment and customer-readiness checks passed."

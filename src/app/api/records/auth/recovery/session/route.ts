@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseSessionClient } from "@/lib/supabaseClient";
 import {
+  createServerSupabaseAuthClient,
+  createServerSupabaseSessionClient,
+} from "@/lib/supabaseClient";
+import {
+  isRecordsSignupEnabled,
   isSupabaseRecordsMode,
   setRecordsPasswordRecoveryCookie,
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
 import { demoCaseId } from "@/lib/records/seed";
-import { upsertRecordsProfile } from "@/lib/records/profileServer";
+import { recordsProfileExists, upsertRecordsProfile } from "@/lib/records/profileServer";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
@@ -49,12 +53,31 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const claimsClient = createServerSupabaseAuthClient();
+    const verifiedClaims = await claimsClient.auth.getClaims(accessToken);
+    const claims = verifiedClaims.data?.claims as {
+      amr?: Array<{ method?: unknown }>;
+      session_id?: unknown;
+      sub?: unknown;
+    } | undefined;
+    const recoveryMethod = claims?.amr?.some((entry) => entry.method === "recovery") === true;
+    const sessionId = typeof claims?.session_id === "string" ? claims.session_id : "";
+    const subject = typeof claims?.sub === "string" ? claims.sub : "";
+    if (verifiedClaims.error || !recoveryMethod || !sessionId || !subject) {
+      throw verifiedClaims.error || new Error("Access token is not bound to account recovery.");
+    }
+
     const authClient = await createServerSupabaseSessionClient({
       accessToken,
       refreshToken,
     });
     const { data, error } = await authClient.auth.getUser();
-    if (error || !data.user?.id) throw error || new Error("Recovery session user missing.");
+    if (error || !data.user?.id || data.user.id !== subject) {
+      throw error || new Error("Recovery session user does not match the verified token.");
+    }
+    if (!isRecordsSignupEnabled() && !(await recordsProfileExists(data.user.id))) {
+      throw new Error("Records profile is not approved while account creation is disabled.");
+    }
 
     await upsertRecordsProfile({ userId: data.user.id, email: data.user.email || "" });
     await recordSecurityEvent({
@@ -78,7 +101,7 @@ export async function POST(request: NextRequest) {
       },
       demoCaseId
     );
-    setRecordsPasswordRecoveryCookie(response);
+    setRecordsPasswordRecoveryCookie(response, { userId: data.user.id, sessionId });
     return response;
   } catch {
     await recordSecurityEvent({

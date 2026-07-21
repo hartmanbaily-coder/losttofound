@@ -1,6 +1,6 @@
 {
   "name": "My Custody Case",
-  "short_name": "My Case",
+  "short_name": "My Custody Case",
   "description": "Privately organize custody records, evidence, timelines, expenses, and reports.",
   "id": "/records",
   "start_url": "/records",

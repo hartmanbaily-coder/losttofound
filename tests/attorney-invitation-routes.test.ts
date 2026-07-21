@@ -214,4 +214,33 @@ describe("attorney invitation owner routes", () => {
     expect(limited.headers.get("Retry-After")).toBeTruthy();
     expect(getAttorneyAuthContext).not.toHaveBeenCalled();
   });
+
+  it("does not let invalid pre-auth requests consume the attorney action quota", async () => {
+    const invalidRequest = () => new NextRequest(
+      "https://losttofound.org/api/records/attorney/invitations/action",
+      {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: "{}",
+      }
+    );
+    for (let index = 0; index < 25; index += 1) {
+      const response = await invitationAction(invalidRequest());
+      expect(response.status).toBe(403);
+    }
+
+    getAttorneyAuthContext.mockResolvedValue({
+      supabase: {},
+      userId: ownerId,
+      email: "owner@example.com",
+      emailConfirmedAt: "2026-01-01T00:00:00.000Z",
+      assuranceLevel: "aal2",
+    });
+    const legitimate = await invitationAction(request(
+      "/api/records/attorney/invitations/action",
+      { handle: "invalid-handle", action: "revoke" }
+    ));
+
+    expect(legitimate.status).toBe(404);
+  });
 });

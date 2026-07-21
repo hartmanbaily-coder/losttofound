@@ -2,13 +2,14 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseAuthClient } from "@/lib/supabaseClient";
 import {
+  isRecordsSignupEnabled,
   isSupabaseRecordsMode,
   recordsAppBaseUrl,
   setRecordsPasswordRecoveryCookie,
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
 import { demoCaseId } from "@/lib/records/seed";
-import { upsertRecordsProfile } from "@/lib/records/profileServer";
+import { recordsProfileExists, upsertRecordsProfile } from "@/lib/records/profileServer";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,16 @@ export async function GET(request: NextRequest) {
   if (!tokenHash || !type || !allowedOtpTypes.has(type)) {
     return NextResponse.redirect(errorRedirect);
   }
+  if (type === "signup" && !isRecordsSignupEnabled()) {
+    await recordSecurityEvent({
+      type: "auth_signup_confirmation_blocked",
+      severity: "warning",
+      request,
+      status: 403,
+      detail: "Signup confirmation was rejected because account creation is disabled.",
+    });
+    return NextResponse.redirect(errorRedirect);
+  }
 
   const supabase = createServerSupabaseAuthClient();
   const { data, error } = await supabase.auth.verifyOtp({
@@ -51,6 +62,35 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(errorRedirect);
   }
 
+  let recoverySessionId = "";
+  if (isRecovery) {
+    const verifiedClaims = await supabase.auth.getClaims(data.session.access_token);
+    const claims = verifiedClaims.data?.claims as {
+      amr?: Array<{ method?: unknown }>;
+      session_id?: unknown;
+      sub?: unknown;
+    } | undefined;
+    const recoveryMethod = claims?.amr?.some((entry) => entry.method === "recovery") === true;
+    recoverySessionId = typeof claims?.session_id === "string" ? claims.session_id : "";
+    if (
+      verifiedClaims.error ||
+      !recoveryMethod ||
+      !recoverySessionId ||
+      claims?.sub !== data.user.id ||
+      (!isRecordsSignupEnabled() && !(await recordsProfileExists(data.user.id)))
+    ) {
+      await recordSecurityEvent({
+        type: "auth_recovery_session_failed",
+        severity: "warning",
+        request,
+        userId: data.user.id,
+        status: 401,
+        detail: "Verified recovery callback did not satisfy the records recovery binding.",
+      });
+      return NextResponse.redirect(errorRedirect);
+    }
+  }
+
   await upsertRecordsProfile({ userId: data.user.id, email: data.user.email || "" });
   await recordSecurityEvent({
     type: isRecovery ? "auth_recovery_session_accepted" : "auth_email_confirmed",
@@ -63,7 +103,10 @@ export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(redirectUrl);
   if (isRecovery) {
     setRecordsSessionCookies(response, data.session, demoCaseId);
-    setRecordsPasswordRecoveryCookie(response);
+    setRecordsPasswordRecoveryCookie(response, {
+      userId: data.user.id,
+      sessionId: recoverySessionId,
+    });
   }
   return response;
 }

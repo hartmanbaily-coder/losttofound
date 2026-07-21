@@ -593,6 +593,7 @@ export function buildCalendarEvents(
       tags: note.tags,
       severity: noteSeverity(note),
       sourceLabel: "Date note",
+      includeInReports: note.includeInReports,
       relatedIds: [
         note.id,
         note.relatedExchangeId,
@@ -623,6 +624,7 @@ export function buildCalendarEvents(
             ? ("attention" as const)
             : ("neutral" as const),
         sourceLabel: "File attachment",
+        includeInReports: item.includeInReports,
         relatedIds: [
           item.id,
           item.relatedExchangeId,
@@ -668,6 +670,10 @@ export function buildCalendarEvents(
 
 export function isTimelineVisibleEvent(event: CalendarEvent) {
   return event.type !== "custody_day";
+}
+
+export function isReportIncludedTimelineEvent(event: CalendarEvent) {
+  return event.includeInReports !== false;
 }
 
 export function timelineSearchText(event: CalendarEvent) {

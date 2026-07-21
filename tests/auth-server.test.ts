@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { NextRequest, NextResponse } from "next/server";
 import {
   getAccessTokenAal,
+  hasRecordsPasswordRecoveryCookie,
   isRecordsMfaRequired,
   isRecordsSignupEnabled,
   isStrongRecordsPassword,
   safeRecordsAuthNextPath,
+  setRecordsPasswordRecoveryCookie,
+  recordsPasswordRecoveryCookieName,
 } from "@/lib/records/authServer";
 import { selectTotpFactorForVerification } from "@/lib/records/mfaServer";
 import { isUsableSupabasePublicKey } from "@/lib/supabaseClient";
@@ -30,9 +34,18 @@ describe("records auth server helpers", () => {
   });
 
   it("keeps account creation behind an explicit gate", () => {
-    expect(isRecordsSignupEnabled({ RECORDS_SIGNUPS_ENABLED: "true" })).toBe(true);
-    expect(isRecordsSignupEnabled({ NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: "true" })).toBe(true);
-    expect(isRecordsSignupEnabled({ RECORDS_SIGNUPS_ENABLED: "false" })).toBe(false);
+    expect(isRecordsSignupEnabled({
+      RECORDS_SIGNUPS_ENABLED: "true",
+      NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: "true",
+    })).toBe(true);
+    expect(isRecordsSignupEnabled({
+      RECORDS_SIGNUPS_ENABLED: "true",
+      NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: "false",
+    })).toBe(false);
+    expect(isRecordsSignupEnabled({
+      RECORDS_SIGNUPS_ENABLED: "false",
+      NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: "true",
+    })).toBe(false);
   });
 
   it("uses the configured strong-password minimum", () => {
@@ -54,6 +67,40 @@ describe("records auth server helpers", () => {
     expect(safeRecordsAuthNextPath("https://evil.example/records")).toBe("/records");
     expect(safeRecordsAuthNextPath("//evil.example/records")).toBe("/records");
     expect(safeRecordsAuthNextPath("/admin")).toBe("/records");
+  });
+
+  it("signs recovery authorization and binds it to the verified user and session", () => {
+    const previousSecret = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "synthetic-test-recovery-secret-with-32-chars";
+    try {
+      const response = NextResponse.json({ ok: true });
+      setRecordsPasswordRecoveryCookie(response, {
+        userId: "user-1",
+        sessionId: "session-1",
+      });
+      const recoveryCookie = response.cookies.get(recordsPasswordRecoveryCookieName)?.value;
+      expect(recoveryCookie).toBeTruthy();
+      expect(recoveryCookie).not.toBe("1");
+
+      const request = new NextRequest("https://losttofound.org/records", {
+        headers: { Cookie: `${recordsPasswordRecoveryCookieName}=${recoveryCookie}` },
+      });
+      expect(
+        hasRecordsPasswordRecoveryCookie(request, {
+          userId: "user-1",
+          sessionId: "session-1",
+        })
+      ).toBe(true);
+      expect(
+        hasRecordsPasswordRecoveryCookie(request, {
+          userId: "user-1",
+          sessionId: "different-session",
+        })
+      ).toBe(false);
+    } finally {
+      if (previousSecret === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      else process.env.SUPABASE_SERVICE_ROLE_KEY = previousSecret;
+    }
   });
 
   it("prefers verified TOTP factors over abandoned enrollments", () => {

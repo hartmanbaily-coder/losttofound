@@ -18,15 +18,17 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  if (!verifyRecordsCsrf(request).ok) return recordsCsrfError();
+  const context = await getAttorneyAuthContext(request);
+  if ("error" in context) return context.error;
+
   const rateLimit = checkRateLimit(request, {
     id: "records-attorney-invitation-action",
+    key: context.userId,
     limit: 20,
     windowMs: 60 * 60 * 1000,
   });
   if (rateLimit.limited) return rateLimitExceededResponse(rateLimit);
-  if (!verifyRecordsCsrf(request).ok) return recordsCsrfError();
-  const context = await getAttorneyAuthContext(request);
-  if ("error" in context) return context.error;
   if (!isAttorneyPortalCryptoReady()) {
     return NextResponse.json({ error: "Attorney access encryption is not configured." }, { status: 503 });
   }

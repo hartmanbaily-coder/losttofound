@@ -1,3 +1,4 @@
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import type { Session } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
@@ -48,7 +49,10 @@ export function isRecordsMfaRequired(env: Record<string, string | undefined> = p
 }
 
 export function isRecordsSignupEnabled(env: Record<string, string | undefined> = process.env) {
-  return env.RECORDS_SIGNUPS_ENABLED === "true" || env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED === "true";
+  return (
+    env.RECORDS_SIGNUPS_ENABLED === "true" &&
+    env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED === "true"
+  );
 }
 
 export function recordsPasswordMinimumLength(env: Record<string, string | undefined> = process.env) {
@@ -160,16 +164,79 @@ export function clearRecordsSessionCookies(response: NextResponse) {
   response.cookies.set(recordsPasswordRecoveryCookieName, "", baseCookieOptions(0));
 }
 
-export function setRecordsPasswordRecoveryCookie(response: NextResponse) {
+interface RecordsPasswordRecoveryBinding {
+  userId: string;
+  sessionId: string;
+}
+
+interface RecordsPasswordRecoveryPayload extends RecordsPasswordRecoveryBinding {
+  expiresAt: number;
+  nonce: string;
+  version: 1;
+}
+
+function recordsPasswordRecoverySecret(env: Record<string, string | undefined> = process.env) {
+  const secret = env.RECORDS_RECOVERY_COOKIE_SECRET || env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret || secret.length < 32) {
+    throw new Error("A recovery-cookie signing secret of at least 32 characters is required.");
+  }
+  return secret;
+}
+
+function signRecordsPasswordRecoveryPayload(encodedPayload: string) {
+  return createHmac("sha256", recordsPasswordRecoverySecret())
+    .update(encodedPayload)
+    .digest("base64url");
+}
+
+export function setRecordsPasswordRecoveryCookie(
+  response: NextResponse,
+  binding: RecordsPasswordRecoveryBinding
+) {
+  const payload: RecordsPasswordRecoveryPayload = {
+    ...binding,
+    expiresAt: Date.now() + passwordRecoveryCookieMaxAge * 1000,
+    nonce: randomBytes(24).toString("base64url"),
+    version: 1,
+  };
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const value = `${encodedPayload}.${signRecordsPasswordRecoveryPayload(encodedPayload)}`;
   response.cookies.set(
     recordsPasswordRecoveryCookieName,
-    "1",
+    value,
     baseCookieOptions(passwordRecoveryCookieMaxAge)
   );
 }
 
-export function hasRecordsPasswordRecoveryCookie(request: NextRequest) {
-  return request.cookies.get(recordsPasswordRecoveryCookieName)?.value === "1";
+export function hasRecordsPasswordRecoveryCookie(
+  request: NextRequest,
+  binding: RecordsPasswordRecoveryBinding
+) {
+  const value = request.cookies.get(recordsPasswordRecoveryCookieName)?.value || "";
+  const [encodedPayload, suppliedSignature, extra] = value.split(".");
+  if (!encodedPayload || !suppliedSignature || extra) return false;
+
+  try {
+    const expectedSignature = signRecordsPasswordRecoveryPayload(encodedPayload);
+    const supplied = Buffer.from(suppliedSignature, "base64url");
+    const expected = Buffer.from(expectedSignature, "base64url");
+    if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return false;
+
+    const payload = JSON.parse(
+      Buffer.from(encodedPayload, "base64url").toString("utf8")
+    ) as Partial<RecordsPasswordRecoveryPayload>;
+    return (
+      payload.version === 1 &&
+      payload.userId === binding.userId &&
+      payload.sessionId === binding.sessionId &&
+      typeof payload.expiresAt === "number" &&
+      payload.expiresAt > Date.now() &&
+      typeof payload.nonce === "string" &&
+      payload.nonce.length >= 24
+    );
+  } catch {
+    return false;
+  }
 }
 
 function getAllowedBearerToken(request: NextRequest) {

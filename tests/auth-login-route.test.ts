@@ -5,14 +5,25 @@ import { POST } from "@/app/api/records/auth/login/route";
 import { resetRateLimitStore } from "@/lib/security/rateLimit";
 
 const signInWithPassword = vi.hoisted(() => vi.fn());
+const setSession = vi.hoisted(() => vi.fn());
+const signOut = vi.hoisted(() => vi.fn());
+const recordsProfileExists = vi.hoisted(() => vi.fn());
+const upsertRecordsProfile = vi.hoisted(() => vi.fn());
 const recordSecurityEvent = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabaseClient", () => ({
   createServerSupabaseAuthClient: () => ({
     auth: {
       signInWithPassword,
+      setSession,
+      signOut,
     },
   }),
+}));
+
+vi.mock("@/lib/records/profileServer", () => ({
+  recordsProfileExists,
+  upsertRecordsProfile,
 }));
 
 vi.mock("@/lib/security/securityEvents", () => ({
@@ -30,6 +41,7 @@ function makeRequest(email: string) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Origin: "https://losttofound.org",
       "X-Forwarded-For": "192.0.2.10",
     },
     body: JSON.stringify({
@@ -54,7 +66,12 @@ describe("records login route", () => {
       NEXT_PUBLIC_SUPABASE_ANON_KEY: fakeJwt({ role: "anon" }),
       RECORDS_ENFORCE_MFA: "false",
       SUPABASE_MFA_POLICY: "optional",
+      RECORDS_SIGNUPS_ENABLED: "true",
+      NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: "true",
     };
+    recordsProfileExists.mockResolvedValue(true);
+    setSession.mockResolvedValue({ data: {}, error: null });
+    signOut.mockResolvedValue({ error: null });
   });
 
   afterEach(() => {
@@ -84,6 +101,27 @@ describe("records login route", () => {
     );
   });
 
+  it("rejects cross-origin simple requests before credentials reach Supabase", async () => {
+    const response = await POST(
+      new NextRequest("https://losttofound.org/api/records/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain",
+          Origin: "https://attacker.example",
+          "Sec-Fetch-Site": "cross-site",
+        },
+        body: JSON.stringify({
+          adultConfirmed: true,
+          email: "attacker@example.test",
+          password: "not-the-real-password",
+        }),
+      })
+    );
+
+    expect(response.status).toBe(403);
+    expect(signInWithPassword).not.toHaveBeenCalled();
+  });
+
   it("tells a user when email confirmation is the actual blocker", async () => {
     signInWithPassword.mockResolvedValue({
       data: { session: null, user: null },
@@ -109,6 +147,59 @@ describe("records login route", () => {
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({
       error: "Authentication service is temporarily unavailable.",
+    });
+  });
+
+  it("blocks a direct Supabase identity without an existing records profile when signup is disabled", async () => {
+    process.env.RECORDS_SIGNUPS_ENABLED = "false";
+    process.env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED = "false";
+    recordsProfileExists.mockResolvedValue(false);
+    signInWithPassword.mockResolvedValue({
+      data: {
+        session: {
+          access_token: fakeJwt({ aal: "aal1" }),
+          refresh_token: "refresh-token",
+          expires_in: 3600,
+        },
+        user: { id: "direct-provider-user", email: "direct@example.test" },
+      },
+      error: null,
+    });
+
+    const response = await POST(makeRequest("direct@example.test"));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "This account is not enabled for My Custody Case.",
+    });
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(setSession).not.toHaveBeenCalled();
+    expect(upsertRecordsProfile).not.toHaveBeenCalled();
+  });
+
+  it("preserves login for an existing records profile after signup is disabled", async () => {
+    process.env.RECORDS_SIGNUPS_ENABLED = "false";
+    process.env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED = "false";
+    recordsProfileExists.mockResolvedValue(true);
+    signInWithPassword.mockResolvedValue({
+      data: {
+        session: {
+          access_token: fakeJwt({ aal: "aal1" }),
+          refresh_token: "refresh-token",
+          expires_in: 3600,
+        },
+        user: { id: "existing-user", email: "existing@example.test" },
+      },
+      error: null,
+    });
+
+    const response = await POST(makeRequest("existing@example.test"));
+
+    expect(response.status).toBe(200);
+    expect(setSession).toHaveBeenCalled();
+    expect(upsertRecordsProfile).toHaveBeenCalledWith({
+      userId: "existing-user",
+      email: "existing@example.test",
     });
   });
 });

@@ -46,6 +46,27 @@ export function verifyRecordsCsrf(request: NextRequest) {
   return { ok: true as const };
 }
 
+export function verifyRecordsTrustedJsonRequest(request: NextRequest) {
+  const origin = request.headers.get("origin");
+  if (!origin || !permittedOrigins(request).has(origin)) {
+    return { ok: false as const, error: "Request origin was not accepted." };
+  }
+
+  const mediaType = (request.headers.get("content-type") || "")
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  if (mediaType !== "application/json") {
+    return { ok: false as const, error: "JSON content type is required." };
+  }
+
+  const fetchSite = request.headers.get("sec-fetch-site")?.toLowerCase();
+  if (fetchSite === "cross-site") {
+    return { ok: false as const, error: "Cross-site requests are not accepted." };
+  }
+  return { ok: true as const };
+}
+
 export function recordsCsrfError() {
   return NextResponse.json(
     { error: "This request could not be verified. Refresh and try again." },

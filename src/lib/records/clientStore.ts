@@ -539,11 +539,15 @@ export async function signOutRecordsSession() {
   }
 
   try {
-    await fetch("/api/records/auth/logout", {
+    const response = await fetch("/api/records/auth/logout", {
       method: "POST",
       credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
     });
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error || "Server session revocation could not be confirmed.");
+    }
   } finally {
     notifyNativeSessionInvalidated();
   }

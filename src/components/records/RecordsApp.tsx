@@ -599,7 +599,11 @@ export default function RecordsApp() {
   }
 
   function logout() {
-    void signOutRecordsSession();
+    void signOutRecordsSession().catch(() => {
+      if (typeof window !== "undefined") {
+        window.location.replace("/records?auth=logout-warning");
+      }
+    });
     clearSession();
     setMfaResumeRequired(false);
     setSession(null);
@@ -999,6 +1003,10 @@ function LoginScreen({
         setMessage("Email confirmed. Sign in to continue.");
       } else if (authState === "confirm-error") {
         setError("Confirmation link is invalid or expired.");
+      } else if (authState === "logout-warning") {
+        setError(
+          "You were signed out on this device, but server sign-out could not be confirmed. Check your connection before signing in again."
+        );
       }
       return;
     }
@@ -2395,6 +2403,7 @@ function CalendarView({
                         data-calendar-day={day || undefined}
                         data-calendar-selected={day === selectedDay ? "true" : undefined}
                         data-calendar-weekend={day && isWeekend ? "true" : undefined}
+                        aria-hidden={!day ? true : undefined}
                         aria-label={day ? `Edit calendar day ${day}` : undefined}
                         onPointerDown={(event) => day && beginPaint(day, event)}
                         onPointerEnter={() => day && extendPaint(day)}
@@ -3631,15 +3640,15 @@ function NotesView({
         </div>
         <div className="space-y-3">
           {filteredNotes.map((note) => (
-            <div key={note.id} className="rounded-md border border-slate-200 bg-white p-4">
+            <div key={note.id} className="min-w-0 rounded-md border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <h3 className="font-semibold text-slate-950">{note.title}</h3>
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold text-slate-950 [overflow-wrap:anywhere]">{note.title}</h3>
                   <p className="mt-1 text-xs text-slate-500">
                     {note.noteDate} {note.noteTime || ""} - {labelNoteCategory(note.category)}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex max-w-full flex-wrap items-center gap-2">
                   <StatusPill label={note.includeInReports ? "report included" : "not selected"} />
                   <EditButton
                     ariaLabel={`Edit note ${note.title}`}
@@ -3657,7 +3666,7 @@ function NotesView({
                   />
                 </div>
               </div>
-              <p className="mt-3 text-sm leading-6 text-slate-600">{note.body}</p>
+              <p className="mt-3 text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">{note.body}</p>
               <TagList tags={note.tags} />
             </div>
           ))}
@@ -5476,7 +5485,7 @@ function EvidenceView({
                 <div key={item.id} className="grid gap-3 p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <h3 className="break-words text-sm font-semibold text-slate-950">
+                      <h3 className="break-words text-sm font-semibold text-slate-950 [overflow-wrap:anywhere]">
                         {item.originalFileName}
                       </h3>
                       <p className="mt-1 text-xs leading-5 text-slate-500">
@@ -5484,14 +5493,14 @@ function EvidenceView({
                         {Math.round(item.fileSize / 1024)} KB - {item.fileType}
                       </p>
                     </div>
-                    <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
                       <select
                         aria-label={`Review status for ${item.originalFileName}`}
                         value={item.reviewStatus || "needs_review"}
                         onChange={(event) =>
                           updateEvidenceReviewStatus(item, event.target.value as EvidenceReviewStatus)
                         }
-                        className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700"
+                        className="h-9 max-w-full rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-700"
                       >
                         {Object.entries(evidenceReviewStatusLabels).map(([value, label]) => (
                           <option key={value} value={value}>
@@ -5535,7 +5544,7 @@ function EvidenceView({
                     <StatusPill label={item.includeInReports ? "report included" : "not selected"} />
                   </div>
                   {item.description && editingEvidenceId !== item.id ? (
-                    <p className="text-sm leading-6 text-slate-600">{item.description}</p>
+                    <p className="text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">{item.description}</p>
                   ) : null}
                   {editingEvidenceId === item.id ? (
                     <form
@@ -7915,7 +7924,7 @@ function isWideReportField(header: string) {
 
 function StatusPill({ label }: { label: string }) {
   return (
-    <span className="inline-flex rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-600">
+    <span className="inline-flex max-w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-600 [overflow-wrap:anywhere]">
       {label}
     </span>
   );
@@ -7971,7 +7980,7 @@ function TagList({ tags }: { tags: string[] }) {
   return (
     <div className="mt-3 flex flex-wrap gap-1">
       {tags.map((tag) => (
-        <span key={tag} className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+        <span key={tag} className="max-w-full rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 [overflow-wrap:anywhere]">
           {tag}
         </span>
       ))}

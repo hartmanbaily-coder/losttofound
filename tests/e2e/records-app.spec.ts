@@ -386,7 +386,7 @@ test("mobile screenshot exhibit builder preserves order and generates a protecte
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("my_custody_case_exhibit_Exhibit-A.pdf");
   await builder.getByRole("button", { name: "Save PDF to Files" }).click();
-  await expect(builder.getByRole("status")).toContainText("Sign in to private cloud storage");
+  await expect(builder.getByRole("status")).toContainText("Sign in before saving a generated exhibit to Files");
   await page.locator("nav").getByRole("button", { name: "Attorney Access", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Attorney access", exact: true })).toBeVisible();
   const fitsViewport = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
@@ -651,6 +651,39 @@ test("mobile create flows stay visible across every record tab and reload with a
   await expect(page.getByTestId("workspace-header")).toContainText(matterName);
 });
 
+test("mobile notes and file actions contain long synthetic labels without horizontal scrolling", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/records");
+  await page.getByRole("button", { name: "Enter records workspace" }).click();
+
+  const longNoteTitle = `QA_${"x".repeat(130)}`;
+  await page.getByRole("button", { name: "Notes", exact: true }).click();
+  const noteForm = page.locator("#date-note-form");
+  await noteForm.getByLabel("Title").fill(longNoteTitle);
+  await noteForm.getByLabel("What happened?").fill(`QA_${"unbroken_body_".repeat(18)}`);
+  await noteForm.getByLabel("Tags").fill(`QA_${"t".repeat(35)}`);
+  await noteForm.getByRole("button", { name: "Save note" }).click();
+  await expect(page.getByRole("status")).toContainText("Date based note saved successfully");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
+
+  const longFileName = `QA-${"evidence-label-".repeat(14)}.txt`;
+  await page.locator("nav").getByRole("button", { name: /^Files/ }).click();
+  await page.locator("input[name=file]").setInputFiles({
+    name: longFileName,
+    mimeType: "text/plain",
+    buffer: Buffer.from("Synthetic mobile overflow regression file"),
+  });
+  await page.getByRole("button", { name: "Save file record" }).click();
+  await expect(page.getByRole("status")).toContainText("File metadata saved with allow list validation");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(375);
+
+  await page.getByRole("button", { name: `Delete file ${longFileName}` }).click();
+  await expect(page.getByRole("status")).toContainText("File metadata deleted");
+  await page.getByRole("button", { name: "Notes", exact: true }).click();
+  await page.getByRole("button", { name: `Delete note ${longNoteTitle}` }).click();
+  await expect(page.getByRole("status")).toContainText("Date based note deleted");
+});
+
 test("saved information records expose working edit and delete controls", async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto("/records");
@@ -843,6 +876,9 @@ test("mobile calendar, policy menu, and timeline labels remain usable", async ({
     const selectedDay = element.querySelector<HTMLElement>('[data-calendar-selected="true"]');
     const weekendCells = element.querySelectorAll<HTMLElement>('[data-calendar-weekend="true"]');
     const weekendShading = element.querySelectorAll<HTMLElement>('[data-testid="calendar-weekend-shading"]');
+    const exposedBlankCells = element.querySelectorAll<HTMLElement>(
+      'button:disabled:not([data-calendar-day]):not([aria-hidden="true"])'
+    );
     const scrollerRect = element.getBoundingClientRect();
     const selectedRect = selectedDay?.getBoundingClientRect();
     return {
@@ -859,6 +895,7 @@ test("mobile calendar, policy menu, and timeline labels remain usable", async ({
       selectedUsesOffsetHighlight: selectedDay?.classList.contains("ring-offset-1") || false,
       weekendCellCount: weekendCells.length,
       weekendShadingCount: weekendShading.length,
+      exposedBlankCellCount: exposedBlankCells.length,
     };
   });
   expect(calendarMetrics.scrollWidth).toBeLessThanOrEqual(calendarMetrics.clientWidth + 1);
@@ -870,6 +907,7 @@ test("mobile calendar, policy menu, and timeline labels remain usable", async ({
   expect(calendarMetrics.selectedUsesOffsetHighlight).toBe(false);
   expect(calendarMetrics.weekendCellCount).toBeGreaterThanOrEqual(8);
   expect(calendarMetrics.weekendShadingCount).toBe(calendarMetrics.weekendCellCount);
+  expect(calendarMetrics.exposedBlankCellCount).toBe(0);
   await expect(page.locator('[data-calendar-weekend-header="true"]')).toHaveCount(2);
   await expect(page.getByText("Weekend", { exact: true })).toBeVisible();
   const colorTools = page.getByTestId("calendar-color-tools");
