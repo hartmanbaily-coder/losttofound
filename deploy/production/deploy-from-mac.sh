@@ -33,6 +33,9 @@ repo_root="$(git rev-parse --show-toplevel)"
 
 rsync -az --delete \
   --exclude '.git/' \
+  --exclude '.agents/' \
+  --exclude '.codex/' \
+  --exclude '.mcp.json' \
   --exclude '.next/' \
   --exclude 'node_modules/' \
   --exclude 'ios/' \

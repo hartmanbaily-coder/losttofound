@@ -133,5 +133,8 @@ grep -q 'exit 2' "${script_dir}/smoke-test.sh"
 grep -q 'smoke_status.*-ne 2' "${script_dir}/deploy.sh"
 grep -q 'current-readiness' "${script_dir}/deploy.sh"
 grep -q 'customer readiness remains BLOCKED' "${script_dir}/deploy.sh"
+grep -q -- "--exclude '.mcp.json'" "${script_dir}/deploy-from-mac.sh"
+grep -q -- "--exclude '.codex/'" "${script_dir}/deploy-from-mac.sh"
+grep -q -- "--exclude '.agents/'" "${script_dir}/deploy-from-mac.sh"
 
 echo "Scanner health recovery tests passed."
