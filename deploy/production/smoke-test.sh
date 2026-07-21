@@ -88,6 +88,8 @@ fi
 login_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
   --request POST \
   --header 'Content-Type: application/json' \
+  --header "Origin: ${public_url%/}" \
+  --header 'Sec-Fetch-Site: same-origin' \
   --data '{"email":"deploy-probe","password":"not-a-real-password","adultConfirmed":true}' \
   http://127.0.0.1:8080/api/records/auth/login)"
 if [[ ${login_status} != "400" && ${login_status} != "401" ]]; then
