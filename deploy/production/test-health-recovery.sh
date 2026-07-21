@@ -124,6 +124,8 @@ fi
 grep -q 'ps -q cloudflared' "${script_dir}/smoke-test.sh"
 grep -q 'Registered tunnel connection' "${script_dir}/smoke-test.sh"
 grep -q 'LOSTTOFOUND_PUBLIC_URL:-https://losttofound.org' "${script_dir}/smoke-test.sh"
+grep -Fq -- '--header "Origin: ${public_url%/}"' "${script_dir}/smoke-test.sh"
+grep -Fq -- "--header 'Sec-Fetch-Site: same-origin'" "${script_dir}/smoke-test.sh"
 grep -q 'STARTER_RESOURCE_PROFILE: ${STARTER_RESOURCE_PROFILE:-true}' "${compose_source}"
 if grep -q 'customer-resource-profile' "${script_dir}/smoke-test.sh"; then
   echo "Starter capacity must not be an allowed deployment blocker." >&2
