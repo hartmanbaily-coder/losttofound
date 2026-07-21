@@ -386,7 +386,7 @@ test("mobile screenshot exhibit builder preserves order and generates a protecte
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("my_custody_case_exhibit_Exhibit-A.pdf");
   await builder.getByRole("button", { name: "Save PDF to Files" }).click();
-  await expect(builder.getByRole("status")).toContainText("Sign in to private cloud storage");
+  await expect(builder.getByRole("status")).toContainText("Sign in before saving a generated exhibit to Files");
   await page.locator("nav").getByRole("button", { name: "Attorney Access", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Attorney access", exact: true })).toBeVisible();
   const fitsViewport = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);

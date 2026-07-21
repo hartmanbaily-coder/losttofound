@@ -1,7 +1,7 @@
 {
 	admin localhost:2019
 	servers {
-		protocols h1 h2 h3
+		protocols h1
 	}
 }
 
@@ -21,16 +21,11 @@
 	handle {
 		reverse_proxy losttofound:3000 {
 			header_up Host {host}
-			header_up X-Forwarded-Host {host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-For {http.request.header.Cf-Connecting-Ip}
+			header_up X-Real-IP {http.request.header.Cf-Connecting-Ip}
 		}
 	}
-}
-
-losttofound.org, www.losttofound.org {
-	import losttofound_proxy
 }
 
 http://:8080 {

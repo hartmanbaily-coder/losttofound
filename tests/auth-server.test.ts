@@ -30,9 +30,18 @@ describe("records auth server helpers", () => {
   });
 
   it("keeps account creation behind an explicit gate", () => {
-    expect(isRecordsSignupEnabled({ RECORDS_SIGNUPS_ENABLED: "true" })).toBe(true);
-    expect(isRecordsSignupEnabled({ NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: "true" })).toBe(true);
-    expect(isRecordsSignupEnabled({ RECORDS_SIGNUPS_ENABLED: "false" })).toBe(false);
+    expect(isRecordsSignupEnabled({
+      RECORDS_SIGNUPS_ENABLED: "true",
+      NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: "true",
+    })).toBe(true);
+    expect(isRecordsSignupEnabled({
+      RECORDS_SIGNUPS_ENABLED: "true",
+      NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: "false",
+    })).toBe(false);
+    expect(isRecordsSignupEnabled({
+      RECORDS_SIGNUPS_ENABLED: "false",
+      NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED: "true",
+    })).toBe(false);
   });
 
   it("uses the configured strong-password minimum", () => {

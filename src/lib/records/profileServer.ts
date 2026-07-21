@@ -1,5 +1,17 @@
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 
+export async function recordsProfileExists(userId: string) {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("records_profiles")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.user_id === userId;
+}
+
 export async function upsertRecordsProfile(input: { userId: string; email: string }) {
   try {
     const supabase = createSupabaseAdminClient();

@@ -32,6 +32,19 @@ describe("attorney invitation acceptance", () => {
     vi.clearAllMocks();
     resetRateLimitStore();
     process.env.ATTORNEY_PORTAL_SECRET = "accept-route-secret-that-is-more-than-thirty-two-characters";
+    process.env.ATTORNEY_GUEST_FEATURE_ENABLED = "true";
+  });
+
+  it("does not convert a pending invitation into access after attorney invitations are disabled", async () => {
+    process.env.ATTORNEY_GUEST_FEATURE_ENABLED = "false";
+
+    const response = await POST(request(createAttorneyInvitationToken()));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Attorney guest access is not enabled for this account.",
+    });
+    expect(getAttorneyAuthContext).not.toHaveBeenCalled();
   });
 
   it("accepts once and rejects token replay on the next attempt", async () => {

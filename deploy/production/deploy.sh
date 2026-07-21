@@ -58,7 +58,12 @@ docker compose --env-file "${env_file}" -f "${compose_file}" build --pull lostto
 docker compose --env-file "${env_file}" -f "${compose_file}" up -d --remove-orphans
 docker compose --env-file "${env_file}" -f "${compose_file}" up -d --force-recreate caddy
 
-if ! "${script_dir}/smoke-test.sh"; then
+set +e
+"${script_dir}/smoke-test.sh"
+smoke_status=$?
+set -e
+
+if [[ ${smoke_status} -ne 0 && ${smoke_status} -ne 2 ]]; then
   echo "Deployment validation failed." >&2
   docker compose --env-file "${env_file}" -f "${compose_file}" logs --tail 200 >&2 || true
 
@@ -75,4 +80,10 @@ fi
 "${script_dir}/install-health-watchdog.sh"
 printf '%s\n' "${release_tag}" >"${state_dir}/current-release"
 docker image prune --force >/dev/null
-echo "My Custody Case release ${release_tag} deployed successfully."
+if [[ ${smoke_status} -eq 2 ]]; then
+  printf '%s\n' "blocked" >"${state_dir}/current-readiness"
+  echo "My Custody Case release ${release_tag} is running, but customer readiness remains BLOCKED." >&2
+else
+  printf '%s\n' "ready" >"${state_dir}/current-readiness"
+  echo "My Custody Case release ${release_tag} deployed successfully and is customer-ready."
+fi

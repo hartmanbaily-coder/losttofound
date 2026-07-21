@@ -2,6 +2,7 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseAuthClient } from "@/lib/supabaseClient";
 import {
+  isRecordsSignupEnabled,
   isSupabaseRecordsMode,
   recordsAppBaseUrl,
   setRecordsPasswordRecoveryCookie,
@@ -32,6 +33,16 @@ export async function GET(request: NextRequest) {
   );
 
   if (!tokenHash || !type || !allowedOtpTypes.has(type)) {
+    return NextResponse.redirect(errorRedirect);
+  }
+  if (type === "signup" && !isRecordsSignupEnabled()) {
+    await recordSecurityEvent({
+      type: "auth_signup_confirmation_blocked",
+      severity: "warning",
+      request,
+      status: 403,
+      detail: "Signup confirmation was rejected because account creation is disabled.",
+    });
     return NextResponse.redirect(errorRedirect);
   }
 

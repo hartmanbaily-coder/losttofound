@@ -599,7 +599,11 @@ export default function RecordsApp() {
   }
 
   function logout() {
-    void signOutRecordsSession();
+    void signOutRecordsSession().catch(() => {
+      if (typeof window !== "undefined") {
+        window.location.replace("/records?auth=logout-warning");
+      }
+    });
     clearSession();
     setMfaResumeRequired(false);
     setSession(null);
@@ -999,6 +1003,10 @@ function LoginScreen({
         setMessage("Email confirmed. Sign in to continue.");
       } else if (authState === "confirm-error") {
         setError("Confirmation link is invalid or expired.");
+      } else if (authState === "logout-warning") {
+        setError(
+          "You were signed out on this device, but server sign-out could not be confirmed. Check your connection before signing in again."
+        );
       }
       return;
     }

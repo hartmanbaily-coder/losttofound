@@ -18,6 +18,7 @@ import {
   isMissedExchangeTimelineEvent,
   isNoFaceTimeTimelineEvent,
   isPostCallFaceTimeNotice,
+  isReportIncludedTimelineEvent,
   isTimelineVisibleEvent,
   isWithinDateRange,
   labelEventType,
@@ -494,7 +495,9 @@ export function buildSectionExportPacket(
   const generatedAt = formatGeneratedAt();
   const disclaimer =
     "This export organizes user entered records. It is not legal advice; review with a qualified attorney before filing or sharing.";
-  const events = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent);
+  const events = buildCalendarEvents(dataset, userId, caseId, range)
+    .filter(isTimelineVisibleEvent)
+    .filter(isReportIncludedTimelineEvent);
   const exchangeRules = ownedCaseRecords(dataset.exchangeRules, userId, caseId);
   const expectedExchanges = generateExpectedExchangeEvents(exchangeRules, range);
   const exchangeLogs = ownedCaseRecords(dataset.exchangeLogs, userId, caseId).filter((log) =>
@@ -504,10 +507,10 @@ export function buildSectionExportPacket(
     isWithinDateRange(item.date, range)
   );
   const notes = ownedCaseRecords(dataset.dateNotes, userId, caseId).filter((note) =>
-    isWithinDateRange(note.noteDate, range)
+    note.includeInReports && isWithinDateRange(note.noteDate, range)
   );
   const evidence = ownedCaseRecords(dataset.evidenceItems, userId, caseId).filter((item) =>
-    isWithinDateRange(evidenceRecordDate(item), range)
+    item.includeInReports && isWithinDateRange(evidenceRecordDate(item), range)
   );
   const payments = ownedCaseRecords(dataset.childSupportPayments, userId, caseId).filter((payment) =>
     isWithinDateRange(payment.dueDate, range)
@@ -732,28 +735,20 @@ export function buildSectionExportPacket(
   }
 
   if (id === "notes") {
-    const included = notes.filter((note) => note.includeInReports).length;
     return {
       ...base,
       summaries: [
-        `${notes.length} date based note${notes.length === 1 ? "" : "s"} are recorded in this range. ${included} are marked for report inclusion.`,
+        `${notes.length} date based note${notes.length === 1 ? "" : "s"} marked for report inclusion are included in this packet.`,
         "Notes are grouped by category so counsel can separate communication, exchange, child item, safety, court, and support issues.",
       ],
       metrics: [
-        { label: "Notes", value: notes.length, detail: `${range.from} to ${range.to}` },
-        { label: "Included", value: included, detail: "Selected for reports" },
-        { label: "Not selected", value: notes.length - included, detail: "Stored for context" },
+        { label: "Included notes", value: notes.length, detail: `${range.from} to ${range.to}` },
       ],
       charts: [
         {
           title: "Notes by category",
           unit: "notes",
           rows: countBy(notes, (note) => labelNoteCategory(note.category)),
-        },
-        {
-          title: "Report inclusion status",
-          unit: "notes",
-          rows: countBy(notes, (note) => (note.includeInReports ? "Included in reports" : "Not selected")),
         },
       ],
       tables: [
@@ -950,7 +945,9 @@ export function buildReportRows(
   const matter = dataset.matters.find((item) => item.id === caseId && item.userId === userId);
   const userRoleLabel = matter?.userRoleLabel || "Me";
   const otherParentLabel = matter?.otherParentLabel || "Other parent";
-  const events = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent);
+  const events = buildCalendarEvents(dataset, userId, caseId, range)
+    .filter(isTimelineVisibleEvent)
+    .filter(isReportIncludedTimelineEvent);
   const noFaceTimeEvents = events.filter(isNoFaceTimeTimelineEvent);
   const filingEvents = events.filter(eventMatchesFilingLanguage);
   const issueEvents = events.filter(isIssueReportEvent);
@@ -1056,7 +1053,9 @@ export function buildReportPreview(
     .filter((item) => item.caseId === caseId && item.userId === userId)
     .filter((item) => isWithinDateRange(item.date, range));
   const evidence = dataset.evidenceItems.filter((item) => item.caseId === caseId && item.userId === userId);
-  const events = buildCalendarEvents(dataset, userId, caseId, range).filter(isTimelineVisibleEvent);
+  const events = buildCalendarEvents(dataset, userId, caseId, range)
+    .filter(isTimelineVisibleEvent)
+    .filter(isReportIncludedTimelineEvent);
   const noFaceTimeEvents = events.filter(isNoFaceTimeTimelineEvent);
   const postCallNoFaceTimeEvents = noFaceTimeEvents.filter(isPostCallFaceTimeNotice);
   const filingEvents = events.filter(eventMatchesFilingLanguage);

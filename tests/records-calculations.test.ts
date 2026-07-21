@@ -222,6 +222,53 @@ describe("privacy and safety helpers", () => {
     expect(summaryText).toContain("child support, and expense records");
   });
 
+  it("keeps owner records visible while omitting records excluded from reports", () => {
+    const dataset = createRecordsSeed();
+    const excludedNote = {
+      ...dataset.dateNotes[0],
+      id: "excluded-note",
+      noteDate: "2026-05-14",
+      title: "OWNER VISIBLE EXCLUDED NOTE",
+      body: "EXCLUDED NOTE BODY SENTINEL",
+      includeInReports: false,
+    };
+    const includedNote = {
+      ...excludedNote,
+      id: "included-note",
+      title: "INCLUDED NOTE",
+      body: "INCLUDED NOTE BODY SENTINEL",
+      includeInReports: true,
+    };
+    const excludedEvidence = {
+      ...dataset.evidenceItems[0],
+      id: "excluded-evidence",
+      evidenceDate: "2026-05-14",
+      originalFileName: "excluded-private-file.png",
+      description: "EXCLUDED FILE METADATA SENTINEL",
+      includeInReports: false,
+    };
+    dataset.dateNotes.push(excludedNote, includedNote);
+    dataset.evidenceItems.push(excludedEvidence);
+
+    const ownerEvents = buildCalendarEvents(dataset, demoUserId, demoCaseId, range);
+    expect(ownerEvents.map((event) => event.title)).toContain("OWNER VISIBLE EXCLUDED NOTE");
+
+    const exportedText = [
+      reportPreviewToCsv(
+        buildReportPreview(dataset, demoUserId, demoCaseId, range, "combined_attorney_summary")
+      ),
+      sectionExportToCsv(buildSectionExportPacket(dataset, demoUserId, demoCaseId, range, "calendar")),
+      sectionExportToCsv(buildSectionExportPacket(dataset, demoUserId, demoCaseId, range, "timeline")),
+      sectionExportToCsv(buildSectionExportPacket(dataset, demoUserId, demoCaseId, range, "notes")),
+      sectionExportToCsv(buildSectionExportPacket(dataset, demoUserId, demoCaseId, range, "evidence")),
+    ].join("\n");
+
+    expect(exportedText).toContain("INCLUDED NOTE BODY SENTINEL");
+    expect(exportedText).not.toContain("EXCLUDED NOTE BODY SENTINEL");
+    expect(exportedText).not.toContain("excluded-private-file.png");
+    expect(exportedText).not.toContain("EXCLUDED FILE METADATA SENTINEL");
+  });
+
   it("exports the combined court packet as clean, labeled sections", () => {
     const dataset = createRecordsSeed();
     const preview = buildReportPreview(dataset, demoUserId, demoCaseId, range, "combined_court_packet");

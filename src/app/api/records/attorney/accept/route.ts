@@ -10,6 +10,7 @@ import {
   clearAttorneyAcceptanceCookie,
   getAttorneyAuthContext,
 } from "@/lib/records/attorneyServer";
+import { checkAttorneyGuestEntitlement } from "@/lib/records/attorneyEntitlement";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordsCsrfError, verifyRecordsCsrf } from "@/lib/security/csrf";
 
@@ -24,6 +25,13 @@ export async function POST(request: NextRequest) {
   });
   if (rateLimit.limited) return rateLimitExceededResponse(rateLimit);
   if (!verifyRecordsCsrf(request).ok) return recordsCsrfError();
+  const entitlement = checkAttorneyGuestEntitlement("");
+  if (!entitlement.allowed) {
+    return NextResponse.json(
+      { error: entitlement.reason },
+      { status: 403, headers: { "Cache-Control": "no-store" } }
+    );
+  }
   const context = await getAttorneyAuthContext(request);
   if ("error" in context) return context.error;
   const userLimit = checkRateLimit(request, {

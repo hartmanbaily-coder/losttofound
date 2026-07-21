@@ -5,6 +5,7 @@ import { GET } from "@/app/auth/confirm/route";
 const verifyOtp = vi.hoisted(() => vi.fn());
 const setRecordsSessionCookies = vi.hoisted(() => vi.fn());
 const setRecordsPasswordRecoveryCookie = vi.hoisted(() => vi.fn());
+const isRecordsSignupEnabled = vi.hoisted(() => vi.fn());
 const upsertRecordsProfile = vi.hoisted(() => vi.fn());
 const recordSecurityEvent = vi.hoisted(() => vi.fn());
 
@@ -14,6 +15,7 @@ vi.mock("@/lib/supabaseClient", () => ({
 
 vi.mock("@/lib/records/authServer", () => ({
   isSupabaseRecordsMode: () => true,
+  isRecordsSignupEnabled,
   recordsAppBaseUrl: () => "https://losttofound.org",
   setRecordsPasswordRecoveryCookie,
   setRecordsSessionCookies,
@@ -32,6 +34,7 @@ const user = { id: "8c76755a-dc41-4cb6-a8ab-c031e2cb50c4", email: "user@example.
 describe("Supabase email callback", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    isRecordsSignupEnabled.mockReturnValue(true);
     verifyOtp.mockResolvedValue({ data: { session, user }, error: null });
   });
 
@@ -81,6 +84,23 @@ describe("Supabase email callback", () => {
       "https://losttofound.org/records?auth=confirm-error"
     );
     expect(verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it("does not confirm a new signup after account creation is disabled", async () => {
+    isRecordsSignupEnabled.mockReturnValue(false);
+
+    const response = await GET(
+      new NextRequest("https://losttofound.org/auth/confirm?token_hash=hash&type=signup")
+    );
+
+    expect(response.headers.get("location")).toBe(
+      "https://losttofound.org/records?auth=confirm-error"
+    );
+    expect(verifyOtp).not.toHaveBeenCalled();
+    expect(upsertRecordsProfile).not.toHaveBeenCalled();
+    expect(recordSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "auth_signup_confirmation_blocked", status: 403 })
+    );
   });
 
   it("does not create recovery cookies when token verification fails", async () => {

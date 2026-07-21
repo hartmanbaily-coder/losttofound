@@ -113,10 +113,25 @@ grep -q 'CLAMD_CONF_MaxQueue: "4"' "${compose_source}"
 grep -q 'mem_limit: ${CLAMAV_MEMORY_LIMIT:-2560m}' "${compose_source}"
 grep -q 'mem_limit: ${LOSTTOFOUND_MEMORY_LIMIT:-768m}' "${compose_source}"
 grep -q 'mem_limit: ${CADDY_MEMORY_LIMIT:-128m}' "${compose_source}"
+grep -q 'cloudflare/cloudflared:2026.7.2' "${compose_source}"
+grep -q 'CLOUDFLARED_TOKEN_FILE' "${compose_source}"
+grep -q 'TRUST_PROXY_HEADERS: "true"' "${compose_source}"
+if grep -Eq '"(80:80|443:443|443:443/udp)"' "${compose_source}"; then
+  echo "Production origin must not publish web ports directly." >&2
+  exit 1
+fi
+grep -q 'ps -q cloudflared' "${script_dir}/smoke-test.sh"
+grep -q 'Registered tunnel connection' "${script_dir}/smoke-test.sh"
+grep -q 'LOSTTOFOUND_PUBLIC_URL:-https://losttofound.org' "${script_dir}/smoke-test.sh"
 grep -q 'STARTER_RESOURCE_PROFILE: ${STARTER_RESOURCE_PROFILE:-true}' "${compose_source}"
 if grep -q 'customer-resource-profile' "${script_dir}/smoke-test.sh"; then
   echo "Starter capacity must not be an allowed deployment blocker." >&2
   exit 1
 fi
+grep -q 'node scripts/verify-supabase-auth-public-settings.mjs' "${script_dir}/smoke-test.sh"
+grep -q 'exit 2' "${script_dir}/smoke-test.sh"
+grep -q 'smoke_status.*-ne 2' "${script_dir}/deploy.sh"
+grep -q 'current-readiness' "${script_dir}/deploy.sh"
+grep -q 'customer readiness remains BLOCKED' "${script_dir}/deploy.sh"
 
 echo "Scanner health recovery tests passed."

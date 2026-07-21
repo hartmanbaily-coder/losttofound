@@ -358,6 +358,7 @@ export interface CalendarEvent {
   severity?: TimelineSeverity;
   sourceLabel?: string;
   relatedIds?: Id[];
+  includeInReports?: boolean;
 }
 
 export interface RecordsDataset {

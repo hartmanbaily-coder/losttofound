@@ -56,6 +56,8 @@ services:
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
+      # Safe because Caddy is reachable only from the tunnel network and host loopback.
+      TRUST_PROXY_HEADERS: "true"
       # Keep the starter-capacity warning visible until the host is upgraded.
       STARTER_RESOURCE_PROFILE: ${STARTER_RESOURCE_PROFILE:-true}
     env_file:
@@ -95,9 +97,6 @@ services:
       losttofound:
         condition: service_healthy
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
       - "127.0.0.1:8080:8080"
     networks:
       - edge
@@ -110,8 +109,6 @@ services:
       - /tmp:size=32m,mode=1777
     cap_drop:
       - ALL
-    cap_add:
-      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
     pids_limit: 128
@@ -123,6 +120,33 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    logging: *default-logging
+
+  cloudflared:
+    image: cloudflare/cloudflared:2026.7.2
+    restart: unless-stopped
+    depends_on:
+      caddy:
+        condition: service_healthy
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token-file
+      - /run/secrets/cloudflared-token
+    user: "65532:65532"
+    networks:
+      - edge
+    volumes:
+      - ${CLOUDFLARED_TOKEN_FILE:-/srv/losttofound/config/cloudflared/tunnel.token}:/run/secrets/cloudflared-token:ro
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: ${CLOUDFLARED_MEMORY_LIMIT:-128m}
+    cpus: 0.25
     logging: *default-logging
 
 networks:

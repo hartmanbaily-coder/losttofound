@@ -48,7 +48,10 @@ export function isRecordsMfaRequired(env: Record<string, string | undefined> = p
 }
 
 export function isRecordsSignupEnabled(env: Record<string, string | undefined> = process.env) {
-  return env.RECORDS_SIGNUPS_ENABLED === "true" || env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED === "true";
+  return (
+    env.RECORDS_SIGNUPS_ENABLED === "true" &&
+    env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED === "true"
+  );
 }
 
 export function recordsPasswordMinimumLength(env: Record<string, string | undefined> = process.env) {

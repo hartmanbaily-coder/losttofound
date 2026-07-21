@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseSessionClient } from "@/lib/supabaseClient";
 import {
+  isRecordsSignupEnabled,
   isSupabaseRecordsMode,
   setRecordsPasswordRecoveryCookie,
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
 import { demoCaseId } from "@/lib/records/seed";
-import { upsertRecordsProfile } from "@/lib/records/profileServer";
+import { recordsProfileExists, upsertRecordsProfile } from "@/lib/records/profileServer";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
@@ -55,6 +56,9 @@ export async function POST(request: NextRequest) {
     });
     const { data, error } = await authClient.auth.getUser();
     if (error || !data.user?.id) throw error || new Error("Recovery session user missing.");
+    if (!isRecordsSignupEnabled() && !(await recordsProfileExists(data.user.id))) {
+      throw new Error("Records profile is not approved while account creation is disabled.");
+    }
 
     await upsertRecordsProfile({ userId: data.user.id, email: data.user.email || "" });
     await recordSecurityEvent({
