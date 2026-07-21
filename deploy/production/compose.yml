@@ -109,6 +109,10 @@ services:
       - /tmp:size=32m,mode=1777
     cap_drop:
       - ALL
+    # The official Caddy binary carries this file capability even though only
+    # port 8080 is exposed; retaining it is required under no-new-privileges.
+    cap_add:
+      - NET_BIND_SERVICE
     security_opt:
       - no-new-privileges:true
     pids_limit: 128
