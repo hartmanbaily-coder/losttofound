@@ -10,6 +10,7 @@ import {
 } from "@/lib/records/authServer";
 import { demoCaseId } from "@/lib/records/seed";
 import { recordsProfileExists, upsertRecordsProfile } from "@/lib/records/profileServer";
+import { recordsCsrfError, verifyRecordsTrustedJsonRequest } from "@/lib/security/csrf";
 import { checkRateLimit, rateLimitClientAddress, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
@@ -207,6 +208,7 @@ async function mfaResponse(input: {
 
 async function handleLoginPost(request: NextRequest) {
   if (!isSupabaseRecordsMode()) return disabledResponse();
+  if (!verifyRecordsTrustedJsonRequest(request).ok) return recordsCsrfError();
 
   const rateLimit = checkRateLimit(request, {
     id: "records-auth-login",

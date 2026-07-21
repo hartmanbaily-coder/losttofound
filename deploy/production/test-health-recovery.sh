@@ -133,6 +133,7 @@ grep -q 'node scripts/verify-supabase-auth-public-settings.mjs' "${script_dir}/s
 grep -q 'verify-supabase-auth-public-settings.mjs' "${script_dir}/../../Dockerfile"
 grep -q 'exit 2' "${script_dir}/smoke-test.sh"
 grep -q 'smoke_status.*-ne 2' "${script_dir}/deploy.sh"
+grep -q 'down --remove-orphans' "${script_dir}/deploy.sh"
 grep -q 'current-readiness' "${script_dir}/deploy.sh"
 grep -q 'customer readiness remains BLOCKED' "${script_dir}/deploy.sh"
 grep -q -- "--exclude '.mcp.json'" "${script_dir}/deploy-from-mac.sh"

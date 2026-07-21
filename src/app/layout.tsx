@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "My Case",
+    title: "My Custody Case",
   },
   openGraph: {
     type: "website",
@@ -58,7 +58,6 @@ export default function RootLayout({
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: siteName,
-    alternateName: "Lost to Found",
     url: "https://losttofound.org/",
   };
 

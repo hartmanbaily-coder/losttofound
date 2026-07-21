@@ -41,6 +41,7 @@ function makeRequest(email: string) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Origin: "https://losttofound.org",
       "X-Forwarded-For": "192.0.2.10",
     },
     body: JSON.stringify({
@@ -98,6 +99,27 @@ describe("records login route", () => {
         type: "auth_login_failed",
       })
     );
+  });
+
+  it("rejects cross-origin simple requests before credentials reach Supabase", async () => {
+    const response = await POST(
+      new NextRequest("https://losttofound.org/api/records/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/plain",
+          Origin: "https://attacker.example",
+          "Sec-Fetch-Site": "cross-site",
+        },
+        body: JSON.stringify({
+          adultConfirmed: true,
+          email: "attacker@example.test",
+          password: "not-the-real-password",
+        }),
+      })
+    );
+
+    expect(response.status).toBe(403);
+    expect(signInWithPassword).not.toHaveBeenCalled();
   });
 
   it("tells a user when email confirmation is the actual blocker", async () => {

@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { resetRateLimitStore } from "@/lib/security/rateLimit";
 
 const getUser = vi.hoisted(() => vi.fn());
+const getClaims = vi.hoisted(() => vi.fn());
 const recordsProfileExists = vi.hoisted(() => vi.fn());
 const upsertRecordsProfile = vi.hoisted(() => vi.fn());
 const setRecordsSessionCookies = vi.hoisted(() => vi.fn());
@@ -10,6 +11,7 @@ const setRecordsPasswordRecoveryCookie = vi.hoisted(() => vi.fn());
 const recordSecurityEvent = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabaseClient", () => ({
+  createServerSupabaseAuthClient: () => ({ auth: { getClaims } }),
   createServerSupabaseSessionClient: async () => ({ auth: { getUser } }),
 }));
 
@@ -49,6 +51,16 @@ describe("records recovery session admission", () => {
       data: { user: { id: "provider-user", email: "user@example.test" } },
       error: null,
     });
+    getClaims.mockResolvedValue({
+      data: {
+        claims: {
+          amr: [{ method: "recovery" }],
+          session_id: "recovery-session-id",
+          sub: "provider-user",
+        },
+      },
+      error: null,
+    });
   });
 
   it("does not create an app profile for a provider-only identity while signup is disabled", async () => {
@@ -73,6 +85,29 @@ describe("records recovery session admission", () => {
       email: "user@example.test",
     });
     expect(setRecordsSessionCookies).toHaveBeenCalled();
-    expect(setRecordsPasswordRecoveryCookie).toHaveBeenCalled();
+    expect(setRecordsPasswordRecoveryCookie).toHaveBeenCalledWith(
+      response,
+      { userId: "provider-user", sessionId: "recovery-session-id" }
+    );
+  });
+
+  it("rejects an ordinary valid session that is not recovery-authenticated", async () => {
+    recordsProfileExists.mockResolvedValue(true);
+    getClaims.mockResolvedValue({
+      data: {
+        claims: {
+          amr: [{ method: "password" }],
+          session_id: "ordinary-session-id",
+          sub: "provider-user",
+        },
+      },
+      error: null,
+    });
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(401);
+    expect(setRecordsSessionCookies).not.toHaveBeenCalled();
+    expect(setRecordsPasswordRecoveryCookie).not.toHaveBeenCalled();
   });
 });

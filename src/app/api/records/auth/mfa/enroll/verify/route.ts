@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getRecordsSessionAuthClient,
+  isRecordsSignupEnabled,
   isSupabaseRecordsMode,
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
 import { cleanMfaCode, isValidMfaCode, sessionFromMfaVerify } from "@/lib/records/mfaServer";
-import { upsertRecordsProfile } from "@/lib/records/profileServer";
+import { recordsProfileExists, upsertRecordsProfile } from "@/lib/records/profileServer";
 import { demoCaseId } from "@/lib/records/seed";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
@@ -75,6 +76,21 @@ export async function POST(request: NextRequest) {
   }
 
   const session = sessionFromMfaVerify(verify.data);
+  if (!isRecordsSignupEnabled() && !(await recordsProfileExists(session.userId))) {
+    await authClient.auth.signOut({ scope: "local" });
+    await recordSecurityEvent({
+      type: "auth_login_unregistered_identity_blocked",
+      severity: "warning",
+      request,
+      userId: session.userId,
+      status: 403,
+      detail: "MFA enrollment verification was rejected because the records profile is not approved.",
+    });
+    return NextResponse.json(
+      { error: "This account is not enabled for My Custody Case." },
+      { status: 403, headers: { "Cache-Control": "no-store" } }
+    );
+  }
   await upsertRecordsProfile({ userId: session.userId, email: session.email });
   await recordSecurityEvent({
     type: "auth_mfa_enrollment_verified",

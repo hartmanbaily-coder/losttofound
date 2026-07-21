@@ -3,14 +3,16 @@ import { NextRequest } from "next/server";
 import { GET } from "@/app/auth/confirm/route";
 
 const verifyOtp = vi.hoisted(() => vi.fn());
+const getClaims = vi.hoisted(() => vi.fn());
 const setRecordsSessionCookies = vi.hoisted(() => vi.fn());
 const setRecordsPasswordRecoveryCookie = vi.hoisted(() => vi.fn());
 const isRecordsSignupEnabled = vi.hoisted(() => vi.fn());
 const upsertRecordsProfile = vi.hoisted(() => vi.fn());
+const recordsProfileExists = vi.hoisted(() => vi.fn());
 const recordSecurityEvent = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabaseClient", () => ({
-  createServerSupabaseAuthClient: () => ({ auth: { verifyOtp } }),
+  createServerSupabaseAuthClient: () => ({ auth: { getClaims, verifyOtp } }),
 }));
 
 vi.mock("@/lib/records/authServer", () => ({
@@ -21,7 +23,7 @@ vi.mock("@/lib/records/authServer", () => ({
   setRecordsSessionCookies,
 }));
 
-vi.mock("@/lib/records/profileServer", () => ({ upsertRecordsProfile }));
+vi.mock("@/lib/records/profileServer", () => ({ recordsProfileExists, upsertRecordsProfile }));
 vi.mock("@/lib/security/securityEvents", () => ({ recordSecurityEvent }));
 
 const session = {
@@ -36,6 +38,17 @@ describe("Supabase email callback", () => {
     vi.clearAllMocks();
     isRecordsSignupEnabled.mockReturnValue(true);
     verifyOtp.mockResolvedValue({ data: { session, user }, error: null });
+    recordsProfileExists.mockResolvedValue(true);
+    getClaims.mockResolvedValue({
+      data: {
+        claims: {
+          amr: [{ method: "recovery" }],
+          session_id: "recovery-session-id",
+          sub: user.id,
+        },
+      },
+      error: null,
+    });
   });
 
   it("confirms signup without creating a signed-in app session", async () => {
@@ -69,7 +82,10 @@ describe("Supabase email callback", () => {
       session,
       expect.any(String)
     );
-    expect(setRecordsPasswordRecoveryCookie).toHaveBeenCalledWith(response);
+    expect(setRecordsPasswordRecoveryCookie).toHaveBeenCalledWith(response, {
+      userId: user.id,
+      sessionId: "recovery-session-id",
+    });
     expect(recordSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: "auth_recovery_session_accepted", status: 307 })
     );
@@ -121,5 +137,28 @@ describe("Supabase email callback", () => {
     expect(recordSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: "auth_recovery_session_failed", status: 401 })
     );
+  });
+
+  it("rejects a callback whose verified access token is not recovery-authenticated", async () => {
+    getClaims.mockResolvedValue({
+      data: {
+        claims: {
+          amr: [{ method: "password" }],
+          session_id: "ordinary-session-id",
+          sub: user.id,
+        },
+      },
+      error: null,
+    });
+
+    const response = await GET(
+      new NextRequest("https://losttofound.org/auth/confirm?token_hash=hash&type=recovery")
+    );
+
+    expect(response.headers.get("location")).toBe(
+      "https://losttofound.org/records?auth=confirm-error"
+    );
+    expect(setRecordsSessionCookies).not.toHaveBeenCalled();
+    expect(setRecordsPasswordRecoveryCookie).not.toHaveBeenCalled();
   });
 });

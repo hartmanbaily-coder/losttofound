@@ -2,14 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabaseAdmin";
 import {
   clearRecordsSessionCookies,
-  getAccessTokenAal,
   getRecordsSessionAuthClient,
   hasRecordsPasswordRecoveryCookie,
-  isRecordsMfaRequired,
   isStrongRecordsPassword,
   isSupabaseRecordsMode,
-  mfaRequiredResponse,
-  recordsAccessCookieName,
   recordsPasswordMinimumLength,
 } from "@/lib/records/authServer";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
@@ -61,17 +57,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Open a valid password reset link before changing your password." }, { status: 401 });
   }
 
-  const accessToken = request.cookies.get(recordsAccessCookieName)?.value;
-  const mfaSatisfied = !isRecordsMfaRequired() || getAccessTokenAal(accessToken) === "aal2";
-  if (!mfaSatisfied && !hasRecordsPasswordRecoveryCookie(request)) {
+  const [user, verifiedClaims, currentSession] = await Promise.all([
+    authClient.auth.getUser(),
+    authClient.auth.getClaims(),
+    authClient.auth.getSession(),
+  ]);
+  const userId = user.data.user?.id;
+  const claims = verifiedClaims.data?.claims as {
+    session_id?: unknown;
+    sub?: unknown;
+  } | undefined;
+  const sessionId = typeof claims?.session_id === "string" ? claims.session_id : "";
+  const recoveryAuthorized = Boolean(
+    !user.error &&
+      !verifiedClaims.error &&
+      userId &&
+      claims?.sub === userId &&
+      sessionId &&
+      hasRecordsPasswordRecoveryCookie(request, { userId, sessionId })
+  );
+  if (!recoveryAuthorized) {
     await recordSecurityEvent({
       type: "auth_password_update_failed",
       severity: "warning",
       request,
+      userId,
       status: 403,
-      detail: "Password update blocked before MFA verification.",
+      detail: "Password update was blocked because verified recovery authorization was missing.",
     });
-    return mfaRequiredResponse();
+    return NextResponse.json(
+      { error: "Open a valid password reset link before changing your password." },
+      { status: 403, headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   if (isPwnedPasswordCheckEnabled()) {
@@ -103,10 +120,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const user = await authClient.auth.getUser();
-  const userId = user.data.user?.id;
   const update = await authClient.auth.updateUser({ password });
-  if (user.error || update.error || !userId) {
+  if (update.error || !userId) {
     await recordSecurityEvent({
       type: "auth_password_update_failed",
       severity: "warning",
@@ -125,21 +140,41 @@ export async function POST(request: NextRequest) {
     status: 200,
   });
 
-  const response = NextResponse.json(
-    {
-      ok: true,
-      message: "Password updated. Sign in again with your new password.",
-    },
-    { headers: { "Cache-Control": "no-store" } }
-  );
-
+  const accessToken = currentSession.data.session?.access_token;
+  let revocationFailed = !accessToken || Boolean(currentSession.error);
   if (accessToken) {
     try {
-      await createSupabaseAdminClient().auth.admin.signOut(accessToken, "local");
+      const revocation = await createSupabaseAdminClient().auth.admin.signOut(accessToken, "global");
+      revocationFailed = Boolean(revocation.error);
     } catch {
-      // Cookie clearing below is still required even if token revocation fails.
+      revocationFailed = true;
     }
   }
+  if (revocationFailed) {
+    await recordSecurityEvent({
+      type: "auth_password_session_revocation_failed",
+      severity: "high",
+      request,
+      userId,
+      status: 503,
+      detail: "Password changed, but global session revocation could not be confirmed.",
+    });
+  }
+
+  const response = NextResponse.json(
+    revocationFailed
+      ? {
+          error: "Password updated, but other sessions could not be confirmed signed out. Contact support before continuing.",
+        }
+      : {
+          ok: true,
+          message: "Password updated. Sign in again with your new password.",
+        },
+    {
+      status: revocationFailed ? 503 : 200,
+      headers: { "Cache-Control": "no-store" },
+    }
+  );
   clearRecordsSessionCookies(response);
   return response;
 }

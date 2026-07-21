@@ -73,6 +73,9 @@ if [[ ${smoke_status} -ne 0 && ${smoke_status} -ne 2 ]]; then
     docker compose --env-file "${env_file}" -f "${compose_file}" up -d --no-build --remove-orphans
     docker compose --env-file "${env_file}" -f "${compose_file}" up -d --force-recreate caddy
     "${script_dir}/smoke-test.sh" || true
+  else
+    echo "No previous release is available; stopping the failed first-deployment stack." >&2
+    docker compose --env-file "${env_file}" -f "${compose_file}" down --remove-orphans
   fi
   exit 1
 fi

@@ -19,6 +19,7 @@ export type SecurityEventType =
   | "auth_password_reset_failed"
   | "auth_password_updated"
   | "auth_password_update_failed"
+  | "auth_password_session_revocation_failed"
   | "auth_password_update_compromised_password_blocked"
   | "auth_password_safety_check_unavailable"
   | "auth_recovery_session_accepted"

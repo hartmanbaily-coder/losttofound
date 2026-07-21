@@ -4,11 +4,11 @@ This draft is a working submission packet. It should be reviewed before public s
 
 ## App Identity
 
-- App name: My Custody Case: Organizer
-- Display name: My Case
+- App name: My Custody Case
+- Display name: My Custody Case
 - Bundle ID: `io.lendori.losttofound`
 - Version: `0.1.0`
-- Build: `1`
+- Build: `12`
 - Minimum iOS version: `17.0`
 - Supported devices: iPhone and iPad
 - Signing team: `HQG9VJ8JK2`
