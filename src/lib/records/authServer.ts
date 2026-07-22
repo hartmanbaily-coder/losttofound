@@ -6,6 +6,7 @@ import {
   createServerSupabaseAuthClient,
   createServerSupabaseSessionClient,
 } from "@/lib/supabaseClient";
+import { recordsProfileIsAuthorized } from "./profileServer";
 import { demoCaseId } from "./seed";
 
 const secureCookies = process.env.NODE_ENV === "production";
@@ -257,6 +258,31 @@ function mfaSatisfied(accessToken: string | undefined) {
   return !isRecordsMfaRequired() || getAccessTokenAal(accessToken) === "aal2";
 }
 
+async function approvedRecordsProfile(userId: string, accessToken: string) {
+  try {
+    return await recordsProfileIsAuthorized(userId, accessToken);
+  } catch {
+    return null;
+  }
+}
+
+function unapprovedRecordsProfileResponse(profileApproved: boolean | null) {
+  if (profileApproved === null) {
+    return NextResponse.json(
+      { error: "Account authorization is temporarily unavailable." },
+      {
+        status: 503,
+        headers: { "Cache-Control": "no-store", "Retry-After": "60" },
+      }
+    );
+  }
+
+  return NextResponse.json(
+    { error: "This account is not enabled for My Custody Case." },
+    { status: 403, headers: { "Cache-Control": "no-store" } }
+  );
+}
+
 export async function getRecordsSessionAuthClient(request: NextRequest) {
   const accessToken = request.cookies.get(recordsAccessCookieName)?.value;
   const refreshToken = request.cookies.get(recordsRefreshCookieName)?.value;
@@ -294,6 +320,10 @@ export async function getRecordsAuthContext(request: NextRequest) {
   if (accessToken) {
     const { data, error } = await supabase.auth.getUser(accessToken);
     if (!error && data.user?.id) {
+      const profileApproved = await approvedRecordsProfile(data.user.id, accessToken);
+      if (profileApproved !== true) {
+        return { error: unapprovedRecordsProfileResponse(profileApproved) };
+      }
       if (!mfaSatisfied(accessToken)) return { error: mfaRequiredResponse() };
 
       return {
@@ -314,6 +344,10 @@ export async function getRecordsAuthContext(request: NextRequest) {
     const user = data.user || refreshed?.user;
 
     if (!error && refreshed?.access_token && user?.id) {
+      const profileApproved = await approvedRecordsProfile(user.id, refreshed.access_token);
+      if (profileApproved !== true) {
+        return { error: unapprovedRecordsProfileResponse(profileApproved) };
+      }
       if (!mfaSatisfied(refreshed.access_token)) return { error: mfaRequiredResponse() };
 
       return {

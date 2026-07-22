@@ -19,6 +19,7 @@ export type AttorneyOpaqueHandle = {
   id: string;
   subject: string;
   grantId?: string;
+  tokenHash?: string;
   expiresAt: number;
 };
 

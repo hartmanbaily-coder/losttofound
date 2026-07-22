@@ -19,6 +19,7 @@ const supabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/
 const publicKey = String(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
 const recordsSignupsEnabled = isEnabled(process.env.RECORDS_SIGNUPS_ENABLED);
 const publicRecordsSignupsEnabled = isEnabled(process.env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED);
+const attorneyGuestFeatureEnabled = isEnabled(process.env.ATTORNEY_GUEST_FEATURE_ENABLED);
 
 if (!isHttpsUrl(supabaseUrl)) {
   fail("Set NEXT_PUBLIC_SUPABASE_URL to the production https:// Supabase project URL.");
@@ -62,14 +63,18 @@ if (settings.mailer_autoconfirm === true) {
   fail("Supabase mailer_autoconfirm is enabled; production records should require email confirmation.");
 }
 
-if (!recordsSignupsEnabled && settings.disable_signup !== true) {
+const providerSignupRequired = recordsSignupsEnabled;
+
+if (!providerSignupRequired && settings.disable_signup !== true) {
   fail(
-    "App signups are disabled, but direct Supabase Auth signup is still enabled. Disable signup in Supabase Auth or deliberately enable the app signup gate."
+    "Public records account creation is disabled, but direct Supabase Auth signup is still enabled. Disable signup in Supabase Auth; server-admin attorney invitations do not require public provider signup."
   );
 }
 
-if (recordsSignupsEnabled && settings.disable_signup === true) {
-  fail("App signups are enabled, but Supabase Auth signup is disabled.");
+if (providerSignupRequired && settings.disable_signup === true) {
+  fail(
+    "App signups are enabled, but Supabase Auth signup is disabled."
+  );
 }
 
 console.log(
@@ -83,6 +88,7 @@ console.log(
       directSignupDisabled: settings.disable_signup === true,
       mailerAutoconfirmEnabled: settings.mailer_autoconfirm === true,
       recordsSignupsEnabled,
+      attorneyGuestFeatureEnabled,
     },
     null,
     2

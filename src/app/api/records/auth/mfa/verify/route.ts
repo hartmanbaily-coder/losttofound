@@ -3,6 +3,7 @@ import {
   getRecordsSessionAuthClient,
   isRecordsSignupEnabled,
   isSupabaseRecordsMode,
+  recordsAccessCookieName,
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
 import {
@@ -11,7 +12,7 @@ import {
   selectTotpFactorForVerification,
   sessionFromMfaVerify,
 } from "@/lib/records/mfaServer";
-import { recordsProfileExists, upsertRecordsProfile } from "@/lib/records/profileServer";
+import { recordsProfileIsAuthorized, upsertRecordsProfile } from "@/lib/records/profileServer";
 import { demoCaseId } from "@/lib/records/seed";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
@@ -79,7 +80,11 @@ export async function POST(request: NextRequest) {
   }
 
   const session = sessionFromMfaVerify(verify.data);
-  if (!isRecordsSignupEnabled() && !(await recordsProfileExists(session.userId))) {
+  const originatingAccessToken = request.cookies.get(recordsAccessCookieName)?.value || "";
+  if (
+    !isRecordsSignupEnabled() &&
+    !(await recordsProfileIsAuthorized(session.userId, originatingAccessToken))
+  ) {
     await authClient.auth.signOut({ scope: "local" });
     await recordSecurityEvent({
       type: "auth_login_unregistered_identity_blocked",

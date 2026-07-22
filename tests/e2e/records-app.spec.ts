@@ -5,7 +5,7 @@ function pad2(value: number) {
   return String(value).padStart(2, "0");
 }
 
-function localDateParts(date = new Date(), timeZone = "America/Anchorage") {
+function localDateParts(date = new Date(), timeZone = "UTC") {
   const parts = new Intl.DateTimeFormat("en-US", {
     day: "2-digit",
     month: "2-digit",
@@ -68,7 +68,7 @@ test("records login and report workflow", async ({ page }) => {
   await page.getByRole("button", { name: "Calendar", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Calendar", exact: true })).toBeVisible();
   await expect(page.getByText(`Monthly custody calendar: ${currentCalendar.monthLabel}`)).toBeVisible();
-  await expect(page.getByText("Case timezone: America/Anchorage")).toBeVisible();
+  await expect(page.getByText("Case timezone: UTC")).toBeVisible();
   await expect(page.getByLabel("Calendar month")).toHaveValue(currentCalendar.monthKey);
   await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(page.getByLabel("Calendar month")).toHaveValue(shiftMonthKey(currentCalendar.monthKey, 1));
@@ -417,7 +417,7 @@ test("attorney portal is a separate read-only mobile experience", async ({ page 
       childDisplayLabels: ["Child 1"],
       userRoleLabel: "Parent A",
       otherParentLabel: "Parent B",
-      timezone: "America/Anchorage",
+      timezone: "UTC",
       createdAt: now,
       updatedAt: now,
     }],
@@ -475,7 +475,7 @@ test("attorney portal is a separate read-only mobile experience", async ({ page 
           sharedAt: now,
         },
         updatedAt: now,
-        accessExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        accessExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         readOnly: true,
       }),
     });
@@ -505,6 +505,76 @@ test("attorney portal is a separate read-only mobile experience", async ({ page 
   await expect(page.getByRole("status")).toContainText("Read-only report preview generated");
   const fitsViewport = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   expect(fitsViewport).toBe(true);
+});
+
+test("a signed-in invited attorney is granted access automatically", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "l2f.records.session.v1",
+      JSON.stringify({
+        userId: "attorney-user",
+        caseId: "case-demo-parenting-plan",
+        email: "counsel@example.test",
+        authMode: "local",
+      })
+    );
+  });
+
+  let acceptanceCalls = 0;
+  await page.route("**/api/records/auth/csrf", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ token: "csrf" }),
+  }));
+  await page.route("**/api/records/attorney/accept/prepare", async (route) => {
+    expect(route.request().postDataJSON()).toEqual({ token: "private-invitation-token" });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true }),
+    });
+  });
+  await page.route("**/api/records/attorney/accept", async (route) => {
+    acceptanceCalls += 1;
+    expect(route.request().method()).toBe("POST");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        accessHandle: "new-opaque-access",
+        accessExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+    });
+  });
+  await page.route("**/api/records/attorney/portal", (route) => route.fulfill({
+    status: 503,
+    contentType: "application/json",
+    body: JSON.stringify({ error: "Portal fixture intentionally stopped after acceptance." }),
+  }));
+
+  await page.goto("/attorney/accept#token=private-invitation-token");
+  await page.waitForURL(/\/attorney$/);
+
+  expect(acceptanceCalls).toBe(1);
+  expect(await page.evaluate(() => window.sessionStorage.getItem("l2f.attorney.access")))
+    .toBe("new-opaque-access");
+});
+
+test("attorney email callback takes priority over an ambient signed-in session", async ({ page }) => {
+  await page.goto("/records");
+  await page.getByRole("button", { name: "Enter records workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  await page.goto(
+    "/records?auth=attorney-invite&next=%2Fattorney%2Faccept&invite=1&attorney_token=onboarding-token-long-enough#access_token=mailbox-access-token-long-enough&refresh_token=mailbox-refresh-token-long-enough&type=invite&expires_in=3600"
+  );
+
+  await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+  expect(page.url()).toContain("auth=attorney-invite");
+  expect(page.url()).toContain("attorney_token=onboarding-token-long-enough");
+  expect(page.url()).toContain("type=invite");
+  await expect(page).not.toHaveURL(/\/attorney\/accept$/);
 });
 
 test("mobile create flows stay visible across every record tab and reload with a stale case session", async ({ page }) => {
@@ -682,6 +752,66 @@ test("mobile notes and file actions contain long synthetic labels without horizo
   await page.getByRole("button", { name: "Notes", exact: true }).click();
   await page.getByRole("button", { name: `Delete note ${longNoteTitle}` }).click();
   await expect(page.getByRole("status")).toContainText("Date based note deleted");
+});
+
+test("iPhone record tabs keep data-entry controls inside their panels and notes readable", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/records");
+  await page.getByRole("button", { name: "Enter records workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  const tabs = [
+    "Dashboard",
+    "Calendar",
+    "Import",
+    "Timeline",
+    "Exchanges",
+    "Notes",
+    "Files",
+    "Screenshot PDFs",
+    "Child Support",
+    "Expenses",
+    "Reports",
+    "Attorney Access",
+    "Settings",
+  ];
+  const nav = page.locator("aside nav");
+
+  for (const tab of tabs) {
+    await nav.getByRole("button").filter({ hasText: tab }).click();
+    await expect(page.getByRole("heading", { name: tab, exact: true }).first()).toBeVisible();
+
+    const controlOverflow = await page.locator(".records-workspace-content .input:visible").evaluateAll((controls) =>
+      controls.flatMap((control) => {
+        const panel = control.closest("section");
+        if (!panel) return [];
+        const controlRect = control.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        return controlRect.left < panelRect.left - 1 || controlRect.right > panelRect.right + 1
+          ? [{
+              control: control.getAttribute("name") || control.getAttribute("aria-label") || control.tagName,
+              controlLeft: controlRect.left,
+              controlRight: controlRect.right,
+              panelLeft: panelRect.left,
+              panelRight: panelRect.right,
+            }]
+          : [];
+      })
+    );
+    expect(controlOverflow, `${tab} has a form control outside its panel`).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), `${tab} widens the page`).toBe(390);
+  }
+
+  await nav.getByRole("button").filter({ hasText: "Notes" }).click();
+  const noteCard = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Notes", exact: true, level: 2 }),
+  }).locator("div.rounded-md").filter({ hasText: "School pickup note" }).first();
+  const titleBox = await noteCard.getByRole("heading", { name: "School pickup note" }).boundingBox();
+  const editBox = await noteCard.getByRole("button", { name: "Edit note School pickup note" }).boundingBox();
+  expect(titleBox).not.toBeNull();
+  expect(editBox).not.toBeNull();
+  expect(editBox!.y).toBeGreaterThanOrEqual(titleBox!.y + titleBox!.height);
 });
 
 test("saved information records expose working edit and delete controls", async ({ page }) => {

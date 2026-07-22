@@ -10,7 +10,10 @@ Keep My Custody Case invite-only until launch review is complete:
 
 - `NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED=false`
 - `RECORDS_SIGNUPS_ENABLED=false`
-- Supabase Auth direct signup disabled
+- `ATTORNEY_GUEST_FEATURE_ENABLED=false`
+- Supabase Auth direct signup disabled while public app signup is disabled
+
+When Attorney Access is enabled, keep both public app signup flags and Supabase Auth direct signup disabled. First-time attorneys receive a server-admin invitation email only after the exact pending invitation URL and invited email match. The mailbox-verified session establishes the app profile; copied invite URLs cannot choose or pre-bind an account password.
 
 If public self-registration is later approved, enable it deliberately in both the app env and Supabase Auth, then review signup abuse controls, custom SMTP limits, App Store review account handling, and support coverage.
 
@@ -20,7 +23,7 @@ Open Supabase Dashboard for project `cieuilbpnwuvnrxrlczj`.
 
 1. Auth signups
    - Go to Authentication settings for email/password auth.
-   - Disable direct signup while app signups are disabled.
+   - Disable direct signup whenever public app signup is disabled, including when Attorney Access is enabled. Server-admin attorney invitations still work with direct signup disabled.
    - Keep email confirmations required.
    - Keep anonymous sign-ins disabled.
    - Keep phone auth disabled unless a separate phone-auth review is completed.
@@ -30,6 +33,7 @@ Open Supabase Dashboard for project `cieuilbpnwuvnrxrlczj`.
      NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_RKkpBRXSYI9XIGHjd39nvQ_fMvePdti \
      RECORDS_SIGNUPS_ENABLED=false \
      NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED=false \
+     ATTORNEY_GUEST_FEATURE_ENABLED=false \
      npm run verify:supabase-auth
      ```
 
@@ -38,6 +42,7 @@ Open Supabase Dashboard for project `cieuilbpnwuvnrxrlczj`.
    - Configure a production sender on the `losttofound.org` domain or an approved transactional email domain.
    - Disable provider link tracking for auth links if the provider offers it.
    - Send and receive a test confirmation/reset email using a synthetic account.
+   - Confirm the Invite user template retains `{{ .ConfirmationURL }}` so server-admin attorney invitations deliver the mailbox-verification link.
    - After verification, set Listhaus repo variable `LOSTTOFOUND_SUPABASE_CUSTOM_SMTP_ENABLED=true`.
 
 3. Redirect URLs
@@ -47,9 +52,10 @@ Open Supabase Dashboard for project `cieuilbpnwuvnrxrlczj`.
      - `https://losttofound.org/auth/confirm`
      - `https://losttofound.org/records`
      - `https://losttofound.org/records?auth=confirmed`
+     - `https://losttofound.org/records?auth=attorney-invite&next=%2Fattorney%2Faccept&invite=1`
      - `https://losttofound.org/records?auth=recovery`
    - Avoid broad production wildcards.
-   - Verify signup confirmation and password reset with synthetic accounts.
+   - Verify signup confirmation, attorney invitation email onboarding, and password reset with synthetic accounts.
    - After verification, set Listhaus repo variable `LOSTTOFOUND_SUPABASE_AUTH_REDIRECTS_VERIFIED_AT=YYYY-MM-DD`.
 
 4. Password security
@@ -69,7 +75,8 @@ Open Supabase Dashboard for project `cieuilbpnwuvnrxrlczj`.
 ## Required Before Marking Auth Ready
 
 - `npm run verify:supabase-auth` passes.
-- Synthetic signup or invite flow confirms through `/auth/confirm`.
+- Synthetic public signup confirms through `/auth/confirm` when enabled.
+- Synthetic attorney onboarding opens the mailbox link, establishes a password, completes MFA, and auto-accepts access.
 - Synthetic password reset lands on `/records?auth=recovery` and password update works.
 - Supabase leaked-password protection is enabled, or the tested app-level HIBP range check is enabled as the Free-plan compensating control.
 - `SUPABASE_AUTH_HARDENING_VERIFIED_AT` is set only after dashboard settings and advisors are checked.

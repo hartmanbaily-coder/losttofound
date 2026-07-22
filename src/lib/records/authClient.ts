@@ -2,6 +2,12 @@ export type RecordsAuthFragment =
   | { kind: "none" }
   | { kind: "confirmation" }
   | {
+      kind: "attorney_invite";
+      accessToken: string;
+      refreshToken: string;
+      expiresIn: string | null;
+    }
+  | {
       kind: "recovery";
       accessToken: string;
       refreshToken: string;
@@ -10,6 +16,7 @@ export type RecordsAuthFragment =
   | { kind: "error" };
 
 const confirmationTypes = new Set(["email", "signup"]);
+const attorneyInviteTypes = new Set(["invite", "magiclink"]);
 
 export function parseRecordsAuthFragment(
   rawHash: string,
@@ -24,6 +31,18 @@ export function parseRecordsAuthFragment(
   if (!accessToken || !refreshToken) return { kind: "error" };
 
   const type = hash.get("type")?.toLowerCase() || "";
+  if (
+    authState === "attorney-invite" &&
+    (attorneyInviteTypes.has(type) || !type)
+  ) {
+    return {
+      kind: "attorney_invite",
+      accessToken,
+      refreshToken,
+      expiresIn: hash.get("expires_in"),
+    };
+  }
+
   if (type === "recovery" || (!type && authState === "recovery")) {
     return {
       kind: "recovery",

@@ -7,6 +7,7 @@ import {
   demoCaseId,
   demoUserId,
 } from "./seed";
+import { defaultRecordsTimezone, safeRecordsTimezone } from "./dateRanges";
 import type { AuditAction, RecordsDataset } from "./types";
 
 const storageKey = "l2f.records.dataset.v1";
@@ -50,6 +51,15 @@ export const recordsStorageMode: RecordsStorageMode =
 
 function cloneDataset(dataset: RecordsDataset): RecordsDataset {
   return JSON.parse(JSON.stringify(dataset)) as RecordsDataset;
+}
+
+function browserRecordsTimezone() {
+  if (typeof window === "undefined") return defaultRecordsTimezone;
+  try {
+    return safeRecordsTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  } catch {
+    return defaultRecordsTimezone;
+  }
 }
 
 function normalizeDataset(dataset: Partial<RecordsDataset>, fallback: RecordsDataset): RecordsDataset {
@@ -158,7 +168,11 @@ async function readRemoteDataset(session: RecordsSession) {
     throw new Error(body.error || `Records dataset load failed with ${response.status}.`);
   }
 
-  const emptyDataset = createEmptyRecordsDatasetForUser(session.userId, session.email);
+  const emptyDataset = createEmptyRecordsDatasetForUser(
+    session.userId,
+    session.email,
+    browserRecordsTimezone()
+  );
   if (body.dataset) return normalizeDataset(body.dataset, emptyDataset);
 
   const initial = emptyDataset;
@@ -277,7 +291,11 @@ export function useRecordsStore() {
       dataset.users.find((user) => user.userId !== demoUserId) || dataset.users[0];
     const next =
       recordsStorageMode === "supabase" && currentProfile
-        ? createEmptyRecordsDatasetForUser(currentProfile.userId, currentProfile.email)
+        ? createEmptyRecordsDatasetForUser(
+            currentProfile.userId,
+            currentProfile.email,
+            currentProfile.timezone || browserRecordsTimezone()
+          )
         : createRecordsSeed();
     setCurrentDataset(next);
     void persistDataset(next)
@@ -364,13 +382,36 @@ export async function signInRecordsSession(
 export async function signUpRecordsAccount(
   email: string,
   password: string,
-  adultConfirmed: boolean
+  adultConfirmed: boolean,
+  invitedAttorney = false
 ): Promise<RecordsAuthMessage> {
-  const response = await fetch("/api/records/auth/signup", {
+  const endpoint = invitedAttorney
+    ? "/api/records/attorney/accept/signup"
+    : "/api/records/auth/signup";
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+
+  if (invitedAttorney) {
+    const csrfResponse = await fetch("/api/records/auth/csrf", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    const csrfBody = (await csrfResponse.json().catch(() => ({}))) as {
+      token?: string;
+      error?: string;
+    };
+    if (!csrfResponse.ok || !csrfBody.token) {
+      throw new Error(csrfBody.error || "Unable to prepare a secure request.");
+    }
+    headers["X-L2F-CSRF"] = csrfBody.token;
+  }
+
+  const response = await fetch(endpoint, {
     method: "POST",
     credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password, adultConfirmed }),
+    headers,
+    body: JSON.stringify(
+      invitedAttorney ? { email, adultConfirmed } : { email, password, adultConfirmed }
+    ),
   });
 
   const body = (await response.json().catch(() => ({}))) as {
@@ -386,7 +427,58 @@ export async function signUpRecordsAccount(
 
   return {
     ok: body.ok === true,
-    message: body.message || "Check your email to confirm the account before signing in.",
+    message:
+      body.message ||
+      (invitedAttorney
+        ? "Open the secure account link sent to the invited email."
+        : "Check your email to confirm the account before signing in."),
+  };
+}
+
+export async function acceptAttorneyInviteSession(input: {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn?: string | number | null;
+  onboardingToken: string;
+}) {
+  const csrfResponse = await fetch("/api/records/auth/csrf", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  const csrfBody = (await csrfResponse.json().catch(() => ({}))) as {
+    token?: string;
+    error?: string;
+  };
+  if (!csrfResponse.ok || !csrfBody.token) {
+    throw new Error(csrfBody.error || "Unable to prepare secure attorney onboarding.");
+  }
+
+  const response = await fetch("/api/records/attorney/accept/session", {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      "X-L2F-CSRF": csrfBody.token,
+    },
+    body: JSON.stringify(input),
+  });
+  const body = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
+    passwordSetupRequired?: boolean;
+    mfaRequired?: boolean;
+    mfaEnrollmentRequired?: boolean;
+    enrollment?: RecordsMfaEnrollment;
+    error?: string;
+  };
+  if (!response.ok || body.ok !== true) {
+    throw new Error(body.error || `Attorney account link failed with ${response.status}.`);
+  }
+  return {
+    passwordSetupRequired: body.passwordSetupRequired === true,
+    mfaRequired: body.mfaRequired === true,
+    mfaEnrollmentRequired: body.mfaEnrollmentRequired === true,
+    enrollment: body.enrollment,
   };
 }
 

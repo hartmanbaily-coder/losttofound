@@ -183,7 +183,7 @@ function syntheticDataset(ownerUserId, evidenceItems = []) {
         id: ownerUserId,
         email: "synthetic-isolation@example.invalid",
         displayName: "Synthetic Isolation User",
-        timezone: "America/Anchorage",
+        timezone: "UTC",
         createdAt: now,
         updatedAt: now,
       },

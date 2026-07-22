@@ -12,6 +12,10 @@ import {
 import { checkAttorneyGuestEntitlement } from "@/lib/records/attorneyEntitlement";
 import { recordAttorneyAccessEvent } from "@/lib/records/attorneyAccess";
 import {
+  attorneyInvitationDurationDays,
+  attorneyInvitationDurationMs,
+} from "@/lib/records/attorneyPolicy";
+import {
   attorneyInvitationDeliveryMode,
   getAttorneyAuthContext,
   ownerCaseExists,
@@ -231,7 +235,7 @@ export async function POST(request: NextRequest) {
 
   const token = createAttorneyInvitationToken();
   const protectedEmail = protectAttorneyEmail(email);
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + attorneyInvitationDurationMs).toISOString();
   const { data, error } = await context.supabase
     .from("records_attorney_invitations")
     .insert({
@@ -268,7 +272,7 @@ export async function POST(request: NextRequest) {
       delivery,
       warning:
         delivery === "owner_share"
-          ? "Share this private link only with the intended attorney. The link expires in seven days and becomes unusable after acceptance."
+          ? `Share this private link only with the intended attorney. The link expires in ${attorneyInvitationDurationDays} days and becomes unusable after acceptance.`
           : "Development delivery only. Do not send this link from a production environment.",
     },
     { status: 201, headers: { "Cache-Control": "no-store" } }

@@ -23,7 +23,10 @@ vi.mock("@/lib/records/authServer", () => ({
   setRecordsSessionCookies,
 }));
 
-vi.mock("@/lib/records/profileServer", () => ({ recordsProfileExists, upsertRecordsProfile }));
+vi.mock("@/lib/records/profileServer", () => ({
+  recordsProfileIsAuthorized: recordsProfileExists,
+  upsertRecordsProfile,
+}));
 vi.mock("@/lib/security/securityEvents", () => ({ recordSecurityEvent }));
 
 const session = {
@@ -104,6 +107,7 @@ describe("Supabase email callback", () => {
 
   it("does not confirm a new signup after account creation is disabled", async () => {
     isRecordsSignupEnabled.mockReturnValue(false);
+    recordsProfileExists.mockResolvedValue(false);
 
     const response = await GET(
       new NextRequest("https://losttofound.org/auth/confirm?token_hash=hash&type=signup")
@@ -112,7 +116,7 @@ describe("Supabase email callback", () => {
     expect(response.headers.get("location")).toBe(
       "https://losttofound.org/records?auth=confirm-error"
     );
-    expect(verifyOtp).not.toHaveBeenCalled();
+    expect(verifyOtp).toHaveBeenCalled();
     expect(upsertRecordsProfile).not.toHaveBeenCalled();
     expect(recordSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: "auth_signup_confirmation_blocked", status: 403 })
@@ -137,6 +141,22 @@ describe("Supabase email callback", () => {
     expect(recordSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: "auth_recovery_session_failed", status: 401 })
     );
+  });
+
+  it("rejects a stale recovery JWT when account creation is disabled", async () => {
+    isRecordsSignupEnabled.mockReturnValue(false);
+    recordsProfileExists.mockResolvedValue(false);
+
+    const response = await GET(
+      new NextRequest("https://losttofound.org/auth/confirm?token_hash=hash&type=recovery")
+    );
+
+    expect(response.headers.get("location")).toBe(
+      "https://losttofound.org/records?auth=confirm-error"
+    );
+    expect(recordsProfileExists).toHaveBeenCalledWith(user.id, session.access_token);
+    expect(setRecordsSessionCookies).not.toHaveBeenCalled();
+    expect(setRecordsPasswordRecoveryCookie).not.toHaveBeenCalled();
   });
 
   it("rejects a callback whose verified access token is not recovery-authenticated", async () => {

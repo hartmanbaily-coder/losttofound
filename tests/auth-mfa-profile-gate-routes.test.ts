@@ -23,11 +23,12 @@ vi.mock("@/lib/records/authServer", () => ({
   getRecordsSessionAuthClient: async () => authClient,
   isRecordsSignupEnabled: () => false,
   isSupabaseRecordsMode: () => true,
+  recordsAccessCookieName: "l2f-records-access",
   setRecordsSessionCookies,
 }));
 
 vi.mock("@/lib/records/profileServer", () => ({
-  recordsProfileExists,
+  recordsProfileIsAuthorized: recordsProfileExists,
   upsertRecordsProfile,
 }));
 

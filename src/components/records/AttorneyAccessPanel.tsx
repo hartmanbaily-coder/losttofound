@@ -1,9 +1,13 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import QRCode from "react-qr-code";
 import { attorneyMutation } from "@/lib/records/attorneyClient";
+import {
+  attorneyAccessDurationDays,
+  attorneyInvitationDurationDays,
+  maxBrowserTimeoutMs,
+} from "@/lib/records/attorneyPolicy";
 
 type Invitation = {
   handle: string;
@@ -83,7 +87,10 @@ export default function AttorneyAccessPanel({
       .filter((value) => value > Date.now())
       .sort((left, right) => left - right)[0];
     if (!nextExpiry) return;
-    const timer = window.setTimeout(() => void load(), Math.max(0, nextExpiry - Date.now()) + 250);
+    const timer = window.setTimeout(
+      () => void load(),
+      Math.min(Math.max(0, nextExpiry - Date.now()) + 250, maxBrowserTimeoutMs)
+    );
     return () => window.clearTimeout(timer);
   }, [load, state?.grants]);
 
@@ -97,7 +104,7 @@ export default function AttorneyAccessPanel({
     try {
       const result = await attorneyMutation("/api/records/attorney/invitations", { email, caseId });
       setInvitationUrl(String(result.invitationUrl || ""));
-      setMessage("Invitation created. Share the private link with the intended attorney. Acceptance starts seven days of read-only access.");
+      setMessage(`Invitation created. Share the private link with the intended attorney. Acceptance starts ${attorneyAccessDurationDays} days of read-only access.`);
       form.reset();
       await load();
     } catch (error) {
@@ -117,7 +124,7 @@ export default function AttorneyAccessPanel({
         caseId: invitation.caseId,
       });
       setInvitationUrl(String(result.invitationUrl || ""));
-      setMessage("A new seven-day invitation was created. The prior access remains expired.");
+      setMessage(`A new invitation was created. Acceptance starts a new ${attorneyAccessDurationDays}-day access period. The prior access remains expired.`);
       await load();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to create a new invitation.");
@@ -164,7 +171,7 @@ export default function AttorneyAccessPanel({
     try {
       await navigator.share({
         title: "My Custody Case attorney access",
-        text: "Private seven day read-only access invitation. Open this link using the attorney account that was invited.",
+        text: `Private ${attorneyAccessDurationDays}-day read-only access invitation. Open this link using the attorney account that was invited.`,
         url: invitationUrl,
       });
       setMessage("Invitation share sheet opened.");
@@ -191,15 +198,14 @@ export default function AttorneyAccessPanel({
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="attorney-access-heading">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div>
         <div>
           <h2 id="attorney-access-heading" className="font-semibold text-slate-950">Attorney read-only access</h2>
           <p className="mt-1 text-sm leading-6 text-slate-600">
-            One invited adult attorney account can view this case and download reports and evidence for seven days after accepting.
+            One invited adult attorney account can view this case and download reports and evidence for {attorneyAccessDurationDays} days after accepting.
             This does not establish representation or attorney-client privilege.
           </p>
         </div>
-        <Link href="/attorney" className="btn-secondary">Shared With Me</Link>
       </div>
 
       <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-950">
@@ -237,7 +243,7 @@ export default function AttorneyAccessPanel({
         <div className="mt-3 rounded-md border border-teal-200 bg-teal-50 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-teal-900">Private invitation link</p>
           <p className="mt-1 text-xs leading-5 text-teal-950">
-            This link is shown only for sharing now. It expires in seven days and becomes unusable after acceptance.
+            This link is shown only for sharing now. It expires in {attorneyInvitationDurationDays} days and becomes unusable after acceptance. Accepted access lasts {attorneyAccessDurationDays} days.
           </p>
           <div className="mt-3 grid gap-3 sm:grid-cols-[132px_1fr] sm:items-center">
             <div className="w-fit rounded-md border border-teal-200 bg-white p-2" aria-label="Attorney invitation QR code">
@@ -280,7 +286,7 @@ export default function AttorneyAccessPanel({
                   <button type="button" className="btn-secondary" disabled={busy === invitation.handle} onClick={() => void invitationAction(invitation, "resend")}>Replace with new link</button>
                 ) : null}
                 {invitation.status === "accepted" && invitation.accessExpiresAt && !invitation.accessActive ? (
-                  <button type="button" className="btn-secondary" disabled={busy === invitation.handle || !newInvitationsEnabled || Boolean(pending)} onClick={() => void reinvite(invitation)}>Invite again for 7 days</button>
+                  <button type="button" className="btn-secondary" disabled={busy === invitation.handle || !newInvitationsEnabled || Boolean(pending)} onClick={() => void reinvite(invitation)}>Invite again for {attorneyAccessDurationDays} days</button>
                 ) : null}
                 {(invitation.status === "pending" || (invitation.status === "accepted" && invitation.accessActive)) ? (
                   <button type="button" className="btn-secondary text-red-700" disabled={busy === invitation.handle} onClick={() => void invitationAction(invitation, "revoke")}>Revoke access</button>

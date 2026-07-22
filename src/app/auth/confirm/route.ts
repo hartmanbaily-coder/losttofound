@@ -9,7 +9,7 @@ import {
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
 import { demoCaseId } from "@/lib/records/seed";
-import { recordsProfileExists, upsertRecordsProfile } from "@/lib/records/profileServer";
+import { recordsProfileIsAuthorized, upsertRecordsProfile } from "@/lib/records/profileServer";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
 export const dynamic = "force-dynamic";
@@ -35,17 +35,6 @@ export async function GET(request: NextRequest) {
   if (!tokenHash || !type || !allowedOtpTypes.has(type)) {
     return NextResponse.redirect(errorRedirect);
   }
-  if (type === "signup" && !isRecordsSignupEnabled()) {
-    await recordSecurityEvent({
-      type: "auth_signup_confirmation_blocked",
-      severity: "warning",
-      request,
-      status: 403,
-      detail: "Signup confirmation was rejected because account creation is disabled.",
-    });
-    return NextResponse.redirect(errorRedirect);
-  }
-
   const supabase = createServerSupabaseAuthClient();
   const { data, error } = await supabase.auth.verifyOtp({
     token_hash: tokenHash,
@@ -60,6 +49,36 @@ export async function GET(request: NextRequest) {
       status: 401,
     });
     return NextResponse.redirect(errorRedirect);
+  }
+
+  if (!isRecovery && !isRecordsSignupEnabled()) {
+    try {
+      const existingProfile = await recordsProfileIsAuthorized(
+        data.user.id,
+        data.session.access_token
+      );
+      if (!existingProfile) {
+        await recordSecurityEvent({
+          type: "auth_signup_confirmation_blocked",
+          severity: "warning",
+          request,
+          userId: data.user.id,
+          status: 403,
+          detail: "Signup confirmation lacked an approved records profile.",
+        });
+        return NextResponse.redirect(errorRedirect);
+      }
+    } catch {
+      await recordSecurityEvent({
+        type: "auth_signup_confirmation_blocked",
+        severity: "high",
+        request,
+        userId: data.user.id,
+        status: 503,
+        detail: "Signup confirmation approval could not be verified.",
+      });
+      return NextResponse.redirect(errorRedirect);
+    }
   }
 
   let recoverySessionId = "";
@@ -77,7 +96,10 @@ export async function GET(request: NextRequest) {
       !recoveryMethod ||
       !recoverySessionId ||
       claims?.sub !== data.user.id ||
-      (!isRecordsSignupEnabled() && !(await recordsProfileExists(data.user.id)))
+      (
+        !isRecordsSignupEnabled() &&
+        !(await recordsProfileIsAuthorized(data.user.id, data.session.access_token))
+      )
     ) {
       await recordSecurityEvent({
         type: "auth_recovery_session_failed",

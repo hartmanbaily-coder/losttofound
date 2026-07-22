@@ -8,7 +8,9 @@ import {
 import {
   attorneyAcceptanceCookieName,
   clearAttorneyAcceptanceCookie,
+  clearAttorneyMailboxProofCookie,
   getAttorneyAuthContext,
+  getAttorneyMailboxProofInvitationId,
 } from "@/lib/records/attorneyServer";
 import { checkAttorneyGuestEntitlement } from "@/lib/records/attorneyEntitlement";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
@@ -49,6 +51,16 @@ export async function POST(request: NextRequest) {
       { status: 404, headers: { "Cache-Control": "no-store" } }
     );
   }
+  const mailboxProofInvitationId = getAttorneyMailboxProofInvitationId(request, {
+    userId: context.userId,
+    token,
+  });
+  if (!mailboxProofInvitationId) {
+    return NextResponse.json(
+      { error: "Open the secure email link for this invitation before accepting access." },
+      { status: 403, headers: { "Cache-Control": "no-store" } }
+    );
+  }
 
   const { data, error } = await context.supabase.rpc("accept_records_attorney_invitation", {
     p_token_hash: hashAttorneyInvitationToken(token),
@@ -57,11 +69,10 @@ export async function POST(request: NextRequest) {
   });
   const row = Array.isArray(data) ? data[0] : null;
   if (error || !row?.grant_id) {
-    const response = NextResponse.json(
+    return NextResponse.json(
       { error: "Invitation is invalid, expired, already used, or belongs to another account." },
       { status: 404, headers: { "Cache-Control": "no-store" } }
     );
-    return clearAttorneyAcceptanceCookie(response);
   }
 
   const response = NextResponse.json(
@@ -77,5 +88,6 @@ export async function POST(request: NextRequest) {
     },
     { headers: { "Cache-Control": "no-store" } }
   );
+  clearAttorneyMailboxProofCookie(response);
   return clearAttorneyAcceptanceCookie(response);
 }
