@@ -94,6 +94,8 @@ jobs:
             headers: {
               "Content-Type": "application/json",
               Accept: "application/json",
+              Origin: baseUrl,
+              "Sec-Fetch-Site": "same-origin",
             },
             body: JSON.stringify({
               email: "deploy-monitor@example.invalid",
@@ -145,6 +147,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          gh label create live-monitor \
+            --color "B60205" \
+            --description "Automated production availability monitor" \
+            --force
+
           existing_issue="$(gh issue list --state open --label live-monitor --json number --jq '.[0].number // empty')"
           if [ -n "$existing_issue" ]; then
             gh issue comment "$existing_issue" --body "Live monitor failed again: ${RUN_URL}"
