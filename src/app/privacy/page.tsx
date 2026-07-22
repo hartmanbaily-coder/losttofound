@@ -39,7 +39,7 @@ const sections: PolicySection[] = [
     body: [
       "We keep records while your account is active unless you delete them sooner.",
       "Deleted information is removed from active systems. Limited copies may remain temporarily in backups or when retention is required by law.",
-      "You can request complete account deletion from the Account Deletion page. We aim to complete verified requests within 30 days and will confirm when processing is complete.",
+      "A signed-in user can permanently delete the account, active records, and private evidence files immediately from the Account Deletion page without waiting for approval.",
     ],
   },
   {
@@ -69,7 +69,7 @@ export default function PrivacyPage() {
       <section className="rounded-lg border border-slate-200 bg-white p-6 text-sm leading-6 text-slate-600">
         <h2 className="text-base font-semibold text-slate-950">Privacy Requests</h2>
         <p className="mt-2">
-          Start a complete account deletion request from{" "}
+          Permanently delete a signed-in account from{" "}
           <Link href={accountDeletionPath} className="font-semibold text-emerald-700 underline underline-offset-2">
             Delete Account
           </Link>

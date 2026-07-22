@@ -102,14 +102,14 @@ struct SupportView: View {
                 NavigationLink {
                     AccountDeletionScreen()
                 } label: {
-                    Label("Request account deletion", systemImage: "person.crop.circle.badge.xmark")
+                    Label("Delete account", systemImage: "person.crop.circle.badge.xmark")
                 }
 
                 Link(destination: URL(string: "https://losttofound.org/privacy")!) {
                     Label("Privacy and deletion policy", systemImage: "doc.text.magnifyingglass")
                 }
 
-                Text("The deletion request opens inside the app so your account can be verified. Support can also help with data export, correction, privacy questions, and recovery. Do not include sensitive case details unless support asks for them.")
+                Text("Self-service deletion opens inside the app so your signed-in account can be verified and deleted immediately after confirmation. Support can also help with data export, correction, privacy questions, and recovery. Do not include sensitive case details unless support asks for them.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

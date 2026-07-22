@@ -76,6 +76,9 @@ describe("signup compromised-password guard", () => {
     const response = await POST(request());
 
     expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      message: expect.stringContaining("separately set up an authenticator"),
+    });
     expect(signUp).toHaveBeenCalledWith(
       expect.objectContaining({ email: "new-user@example.test", password: "Long-Password!42" })
     );

@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { deleteRecordsEvidenceForUser } from "@/lib/records/accountDeletion";
 import {
   clearRecordsSessionCookies,
   getRecordsAuthContext,
@@ -7,34 +7,40 @@ import {
   recordsAccessCookieName,
 } from "@/lib/records/authServer";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
+import { recordsCsrfError, verifyRecordsCsrf } from "@/lib/security/csrf";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
-import { invalidateAllAttorneyAccessForOwner } from "@/lib/records/attorneyAccess";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-async function readRequestBody(request: NextRequest): Promise<{ confirm?: unknown }> {
+async function readRequestBody(request: NextRequest): Promise<{ confirmation?: unknown }> {
   try {
-    return (await request.json()) as { confirm?: unknown };
+    return (await request.json()) as { confirmation?: unknown };
   } catch {
     return {};
   }
 }
 
+function deletionError(message: string, status = 503) {
+  return NextResponse.json(
+    { error: message },
+    { status, headers: { "Cache-Control": "no-store" } }
+  );
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  if (!verifyRecordsCsrf(request).ok) return recordsCsrfError();
+
   if (!isSupabaseRecordsMode()) {
-    return NextResponse.json(
-      {
-        error: "Cloud records account deletion is not enabled.",
-        detail: "Sign in to the production records workspace before submitting account deletion.",
-      },
-      { status: 501 }
+    return deletionError(
+      "Cloud records account deletion is not enabled. Sign in to the production records workspace first.",
+      501
     );
   }
 
   const initialRateLimit = checkRateLimit(request, {
-    id: "records-account-deletion-request",
-    limit: 12,
+    id: "records-account-delete",
+    limit: 6,
     windowMs: 60 * 60 * 1000,
   });
   if (initialRateLimit.limited) return rateLimitExceededResponse(initialRateLimit);
@@ -43,12 +49,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if ("error" in context) {
     return (
       context.error ||
-      NextResponse.json({ error: "Sign in before requesting account deletion." }, { status: 401 })
+      deletionError("Sign in and complete authenticator verification before deleting your account.", 401)
     );
   }
 
   const userRateLimit = checkRateLimit(request, {
-    id: "records-account-deletion-request-user",
+    id: "records-account-delete-user",
     key: context.userId,
     limit: 3,
     windowMs: 24 * 60 * 60 * 1000,
@@ -56,131 +62,96 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (userRateLimit.limited) return rateLimitExceededResponse(userRateLimit);
 
   const body = await readRequestBody(request);
-  if (body.confirm !== true) {
-    return NextResponse.json(
-      { error: "Confirm that you want to start complete account deletion." },
-      { status: 400 }
+  if (body.confirmation !== "DELETE") {
+    return deletionError(
+      "Confirm permanent deletion before continuing.",
+      400
     );
   }
 
-  const requestId = randomUUID();
-  const requestedAt = new Date().toISOString();
-  const { error } = await context.supabase.from("records_audit_logs").insert({
-    user_id: context.userId,
-    case_id: null,
-    entity_type: "account",
-    entity_id: requestId,
-    action: "deletion_requested",
-    metadata_summary:
-      "Authenticated user initiated complete account deletion from the account deletion page.",
-    created_at: requestedAt,
-  });
-
-  if (error) {
-    await recordSecurityEvent({
-      type: "account_deletion_request_failed",
-      severity: "high",
-      request,
-      userId: context.userId,
-      status: 500,
-      detail: "Unable to record account deletion request.",
-    });
-    return NextResponse.json(
-      { error: "Unable to record the account deletion request. Contact support." },
-      { status: 500 }
-    );
-  }
-
-  const attorneyInvalidation = await invalidateAllAttorneyAccessForOwner({
+  const storageDeletion = await deleteRecordsEvidenceForUser({
     supabase: context.supabase,
-    ownerUserId: context.userId,
-    reason: "account_deletion_requested",
-  });
-
-  const accessToken =
-    context.refreshedSession?.access_token ||
-    request.cookies.get(recordsAccessCookieName)?.value;
-
-  try {
-    if (!accessToken) {
-      throw new Error("Authenticated deletion request did not include an access token.");
-    }
-
-    const { error: signOutError } = await context.supabase.auth.admin.signOut(
-      accessToken,
-      "global"
-    );
-    if (signOutError) throw signOutError;
-  } catch {
-    await recordSecurityEvent({
-      type: "account_deletion_session_revocation_failed",
-      severity: "high",
-      request,
-      userId: context.userId,
-      status: 503,
-      detail:
-        "Deletion request was recorded, but server-side refresh-session revocation could not be confirmed.",
-    });
-
-    const response = NextResponse.json(
-      {
-        error:
-          "Your deletion request was recorded, but session revocation could not be confirmed. Contact support and do not sign in again unless support asks you to.",
-        requestId,
-        requestedAt,
-        clearLocalSession: true,
-      },
-      { status: 503, headers: { "Cache-Control": "no-store" } }
-    );
-    clearRecordsSessionCookies(response);
-    return response;
-  }
-
-  await recordSecurityEvent({
-    type: "account_deletion_requested",
-    severity: "warning",
-    request,
     userId: context.userId,
-    status: 202,
-    detail:
-      "Authenticated user initiated complete account deletion and server-side refresh sessions were revoked.",
   });
-
-  if (!attorneyInvalidation.ok) {
+  if (!storageDeletion.ok) {
     await recordSecurityEvent({
-      type: "account_deletion_request_failed",
+      type: "account_deletion_storage_cleanup_failed",
       severity: "critical",
       request,
       userId: context.userId,
       status: 503,
-      detail: "Deletion request recorded and sessions revoked, but attorney access revocation failed.",
+      detail: "Immediate account deletion stopped because evidence cleanup could not be confirmed.",
     });
-    const response = NextResponse.json(
-      {
-        error:
-          "Your deletion request was recorded and sessions were revoked, but shared attorney access could not be confirmed as revoked. Contact support immediately.",
-        requestId,
-        requestedAt,
-        clearLocalSession: true,
-      },
-      { status: 503, headers: { "Cache-Control": "no-store" } }
+    return deletionError(
+      "Your account was not deleted because all private files could not be removed. Try again or contact support."
+    );
+  }
+
+  const accessToken =
+    context.refreshedSession?.access_token ||
+    request.cookies.get(recordsAccessCookieName)?.value;
+  if (!accessToken) {
+    return deletionError("Your secure session could not be verified. Sign in again and retry.", 401);
+  }
+
+  const { error: signOutError } = await context.supabase.auth.admin.signOut(
+    accessToken,
+    "global"
+  );
+  if (signOutError) {
+    await recordSecurityEvent({
+      type: "account_deletion_session_revocation_failed",
+      severity: "critical",
+      request,
+      userId: context.userId,
+      status: 503,
+      detail: "Immediate account deletion stopped because session revocation could not be confirmed.",
+    });
+    return deletionError(
+      "Your account was not deleted because active sessions could not be closed. Try again or contact support."
+    );
+  }
+
+  const { error: deleteUserError } = await context.supabase.auth.admin.deleteUser(
+    context.userId,
+    false
+  );
+  if (deleteUserError) {
+    await recordSecurityEvent({
+      type: "account_deletion_failed",
+      severity: "critical",
+      request,
+      userId: context.userId,
+      status: 502,
+      detail: "Evidence and sessions were removed, but the Auth user deletion failed.",
+    });
+    const response = deletionError(
+      "Your files and active sessions were removed, but the account could not be fully deleted. Sign in again to retry or contact support.",
+      502
     );
     clearRecordsSessionCookies(response);
     return response;
   }
 
+  const deletedAt = new Date().toISOString();
+  await recordSecurityEvent({
+    type: "account_deletion_completed",
+    severity: "info",
+    request,
+    userId: context.userId,
+    status: 200,
+    detail: `Immediate deletion completed; ${storageDeletion.deletedObjects} evidence objects removed.`,
+  });
+
   const response = NextResponse.json(
     {
       ok: true,
-      requestId,
-      requestedAt,
+      deletedAt,
       clearLocalSession: true,
-      message:
-        "Your request was received and you have been signed out. We aim to complete verified deletion requests within 30 days and will email you when processing is complete.",
+      message: "Your account and active My Custody Case records were permanently deleted.",
     },
-    { status: 202, headers: { "Cache-Control": "no-store" } }
+    { headers: { "Cache-Control": "no-store" } }
   );
-
   clearRecordsSessionCookies(response);
   return response;
 }

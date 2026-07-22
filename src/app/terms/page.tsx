@@ -46,7 +46,7 @@ const sections: PolicySection[] = [
     body: [
       "The service may be temporarily unavailable for maintenance, security, or provider outages.",
       "We may limit or end access for misuse, security risk, or violation of these terms.",
-      "You can export records and request account deletion. Limited information may be retained when required by law.",
+      "You can export records and permanently delete your signed-in account through the self-service deletion page. Limited information may be retained when required by law.",
     ],
   },
   {

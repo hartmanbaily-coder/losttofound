@@ -47,12 +47,26 @@ describe("customer facing copy", () => {
     expect(site).not.toContain("securityEmail");
   });
 
-  it("states the deletion completion target", () => {
+  it("states that signed-in account deletion is immediate and self-service", () => {
     const deletionPage = readFileSync(
       resolve(process.cwd(), "src/app/account/delete/page.tsx"),
       "utf8"
     );
-    expect(deletionPage).toContain("within 30 days");
-    expect(deletionPage).toContain("email you when processing is complete");
+    const deletionControl = readFileSync(
+      resolve(process.cwd(), "src/app/account/delete/AccountDeletionRequest.tsx"),
+      "utf8"
+    );
+    expect(deletionPage).toContain("deleted immediately");
+    expect(deletionControl).toContain("self-service deletion, not a request for approval");
+    expect(deletionControl).toContain("Permanently delete my account");
+  });
+
+  it("distinguishes email ownership confirmation from authenticator MFA", () => {
+    const recordsApp = readFileSync(
+      resolve(process.cwd(), "src/components/records/RecordsApp.tsx"),
+      "utf8"
+    );
+    expect(recordsApp).toContain("Email confirmation proves you control the account address");
+    expect(recordsApp).toContain("separate second factor");
   });
 });

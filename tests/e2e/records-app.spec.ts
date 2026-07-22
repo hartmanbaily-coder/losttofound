@@ -880,11 +880,44 @@ test("records account recovery and deletion paths are reachable", async ({ page 
   await expect(privacyDeletion).toBeVisible();
   await expect(privacyDeletion).toHaveAttribute("href", "/privacy");
 
+  const deletionCsrf = "synthetic-deletion-csrf";
+  let deletionRequest: { confirmation?: string } | null = null;
+  let deletionCsrfHeader = "";
+  await page.route("**/api/records/auth/session", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      status: 200,
+      body: JSON.stringify({ session: { email: "synthetic-reviewer@example.test" } }),
+    })
+  );
+  await page.route("**/api/records/auth/csrf", (route) =>
+    route.fulfill({
+      contentType: "application/json",
+      headers: { "Set-Cookie": `l2f-records-csrf=${deletionCsrf}; Path=/; SameSite=Strict` },
+      status: 200,
+      body: JSON.stringify({ token: deletionCsrf }),
+    })
+  );
+  await page.route("**/api/records/account/deletion-request", async (route) => {
+    deletionRequest = route.request().postDataJSON() as { confirmation?: string };
+    deletionCsrfHeader = route.request().headers()["x-l2f-csrf"] || "";
+    await route.fulfill({
+      contentType: "application/json",
+      status: 200,
+      body: JSON.stringify({
+        ok: true,
+        clearLocalSession: true,
+        deletedAt: "2026-07-22T12:00:00.000Z",
+        message: "Your account and active My Custody Case records were permanently deleted.",
+      }),
+    });
+  });
+
   await accountDeletion.click();
   await expect(page).toHaveURL(/\/account\/delete$/);
-  await expect(page.getByRole("heading", { name: "Delete Account" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Request account deletion" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Request account deletion" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Delete Account", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Permanently delete account" })).toBeVisible();
+  await expect(page.getByText("Signed in as synthetic-reviewer@example.test.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Email support instead" })).toHaveAttribute(
     "href",
     "mailto:support@lendori.io?subject=My%20Custody%20Case%20account%20deletion%20request"
@@ -893,7 +926,16 @@ test("records account recovery and deletion paths are reachable", async ({ page 
     "href",
     "mailto:support@lendori.io?subject=My%20Custody%20Case%20account%20deletion%20request"
   );
-  await expect(page.getByText("What happens next")).toBeVisible();
+  await expect(page.getByText("What happens when you confirm")).toBeVisible();
+  const permanentDelete = page.getByRole("button", { name: "Permanently delete my account" });
+  await expect(permanentDelete).toBeDisabled();
+  await page.getByRole("checkbox").check();
+  await expect(permanentDelete).toBeEnabled();
+  await permanentDelete.click();
+  await expect(page.getByRole("heading", { name: "Account deleted" })).toBeVisible();
+  await expect(page.getByText("Your account and active My Custody Case records were permanently deleted.")).toBeVisible();
+  expect(deletionRequest).toEqual({ confirmation: "DELETE" });
+  expect(deletionCsrfHeader).toBe(deletionCsrf);
 
   await page.goto("/records");
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();

@@ -121,7 +121,8 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(
     {
       ok: true,
-      message: "Check your email to confirm the account before signing in.",
+      message:
+        "Step 1 of 2: check your email to confirm that you own the address. After you sign in, you will separately set up an authenticator as the second security factor.",
     },
     { headers: { "Cache-Control": "no-store" } }
   );

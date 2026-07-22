@@ -1079,7 +1079,7 @@ function LoginScreen({
     if (fragment.kind === "confirmation") {
       window.history.replaceState(null, "", confirmationPath);
       setMode("login");
-      setMessage("Email confirmed. Sign in to continue.");
+      setMessage("Email ownership confirmed. Sign in to complete the separate authenticator security step.");
       return;
     }
 
@@ -1095,7 +1095,7 @@ function LoginScreen({
         setMode("update_password");
         setMessage("Choose a new password to finish account recovery.");
       } else if (authState === "confirmed") {
-        setMessage("Email confirmed. Sign in to continue.");
+        setMessage("Email ownership confirmed. Sign in to complete the separate authenticator security step.");
       } else if (authState === "confirm-error") {
         setError("Confirmation link is invalid or expired.");
       } else if (authState === "logout-warning") {
@@ -1398,6 +1398,12 @@ function LoginScreen({
             {invitedAttorneySignup ? (
               <p className="mt-4 rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm leading-6 text-teal-950">
                 Use the exact email address named in the attorney invitation. We will email a secure link so the mailbox owner—not someone holding a copied invite URL—establishes the account. Open it, then set a password and complete authenticator verification.
+              </p>
+            ) : null}
+
+            {mfaMode ? (
+              <p className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-700">
+                Email confirmation proves you control the account address. This authenticator code is a separate second factor that protects custody records if the password or email account is compromised.
               </p>
             ) : null}
 
