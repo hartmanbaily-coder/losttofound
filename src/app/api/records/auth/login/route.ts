@@ -9,7 +9,7 @@ import {
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
 import { demoCaseId } from "@/lib/records/seed";
-import { recordsProfileExists, upsertRecordsProfile } from "@/lib/records/profileServer";
+import { recordsProfileIsAuthorized, upsertRecordsProfile } from "@/lib/records/profileServer";
 import { recordsCsrfError, verifyRecordsTrustedJsonRequest } from "@/lib/security/csrf";
 import { checkRateLimit, rateLimitClientAddress, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
@@ -259,7 +259,10 @@ async function handleLoginPost(request: NextRequest) {
 
   failedLogins.delete(key);
 
-  if (!isRecordsSignupEnabled() && !(await recordsProfileExists(data.user.id))) {
+  if (
+    !isRecordsSignupEnabled() &&
+    !(await recordsProfileIsAuthorized(data.user.id, data.session.access_token))
+  ) {
     await supabase.auth.signOut({ scope: "local" });
     await recordSecurityEvent({
       type: "auth_login_unregistered_identity_blocked",
@@ -267,7 +270,7 @@ async function handleLoginPost(request: NextRequest) {
       request,
       userId: data.user.id,
       status: 403,
-      detail: "Supabase identity has no approved records profile while account creation is disabled.",
+      detail: "Supabase identity has no approved records profile.",
     });
     return NextResponse.json(
       { error: "This account is not enabled for My Custody Case." },

@@ -25,6 +25,26 @@ describe("records auth URL fragments", () => {
     ).toEqual({ kind: "confirmation" });
   });
 
+  it("accepts invite and magic-link sessions only on attorney onboarding callbacks", () => {
+    expect(
+      parseRecordsAuthFragment(
+        "#access_token=access-value&refresh_token=refresh-value&type=invite&expires_in=3600",
+        "attorney-invite"
+      )
+    ).toEqual({
+      kind: "attorney_invite",
+      accessToken: "access-value",
+      refreshToken: "refresh-value",
+      expiresIn: "3600",
+    });
+    expect(
+      parseRecordsAuthFragment(
+        "#access_token=access-value&refresh_token=refresh-value&type=magiclink",
+        "attorney-invite"
+      )
+    ).toMatchObject({ kind: "attorney_invite" });
+  });
+
   it("rejects incomplete and unknown token fragments", () => {
     expect(parseRecordsAuthFragment("#access_token=access-value&type=recovery", "recovery")).toEqual({
       kind: "error",

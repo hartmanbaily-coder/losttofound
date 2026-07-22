@@ -1,8 +1,8 @@
 # Supabase Live Verification
 
-Verification date: 2026-07-09 America/Anchorage
+Verification date: 2026-07-09
 
-Latest advisor refresh: 2026-07-08 America/Anchorage
+Latest advisor refresh: 2026-07-08
 
 Production project: `cieuilbpnwuvnrxrlczj`
 
@@ -16,7 +16,7 @@ Staging/mixed-use project: `adhnoiicwfvppzenwcgv`
 
 Staging/mixed-use project URL: `https://adhnoiicwfvppzenwcgv.supabase.co`
 
-Status from Supabase connector: `ACTIVE_HEALTHY` as of 2026-07-09 America/Anchorage
+Status from Supabase connector: `ACTIVE_HEALTHY` as of 2026-07-09
 
 Production database: Postgres 17, region `us-west-1`
 
@@ -38,7 +38,7 @@ Verified through Supabase SQL inspection on production project `cieuilbpnwuvnrxr
 - Applied cleanup migration: `20260628050702_remove_retired_grant_database_artifacts`.
 - Applied evidence policy hardening migration: `20260708195205_remove_records_evidence_direct_storage_policies`.
 
-Latest read-only SQL recheck: 2026-07-09 America/Anchorage. The production
+Latest read-only SQL recheck: 2026-07-09. The production
 project was `ACTIVE_HEALTHY`, all exposed records/storage tables had RLS
 enabled, no direct browser-role table grants existed on `public`, no public
 schema functions existed, and the `records-evidence` bucket remained private
@@ -47,7 +47,7 @@ with the expected size and MIME limits.
 ## Retired Non-Records Artifacts
 
 A temporary grant-operations prototype was removed from the application source on
-2026-06-24 America/Anchorage. The retired `grant_*` tables, grant helper
+2026-06-24. The retired `grant_*` tables, grant helper
 functions, and grant Storage policies were removed from production by migration
 `20260628050702_remove_retired_grant_database_artifacts`. The empty private
 `grant-documents` bucket was removed through the Supabase Storage API on
@@ -82,7 +82,7 @@ Before production records launch, verify in the Supabase dashboard and reflect t
 
 - `SUPABASE_MFA_POLICY=required`
 - `RECORDS_ENFORCE_MFA=true`
-- When `RECORDS_SIGNUPS_ENABLED=false`, Supabase Auth direct signup must also be disabled so users cannot bypass the app signup gate by calling Supabase Auth directly.
+- When public signup is disabled, Supabase Auth direct signup must also be disabled, including when Attorney Access is enabled. First-time attorneys are created through a server-admin invitation email, and the app requires fresh mailbox proof plus the exact pending invitation before creating a records profile or session.
 - `SUPABASE_LEAKED_PASSWORD_PROTECTION_ENABLED=true`
 - `SUPABASE_PASSWORD_MIN_LENGTH=12` or higher
 - `SUPABASE_PASSWORD_REAUTH_ENABLED=true`
@@ -91,12 +91,12 @@ Before production records launch, verify in the Supabase dashboard and reflect t
 
 The app now includes a Supabase TOTP MFA login/enrollment flow and production AAL2 enforcement. The Supabase dashboard settings above still need live confirmation before accepting real records.
 
-Public Auth settings check on 2026-07-09 showed email auth enabled, anonymous users disabled, phone auth disabled, and email autoconfirm disabled. It also showed `disable_signup=false` while the app-level records signup gate is disabled. For invite-only/App Store-test-account mode, disable direct Supabase signup in the Auth dashboard or intentionally enable and document public self-registration before clearing Auth hardening.
+Public Auth settings check on 2026-07-09 showed email auth enabled, anonymous users disabled, phone auth disabled, and email autoconfirm disabled. It also showed `disable_signup=false` while the app-level records signup gate was disabled. Disable provider signup before clearing Auth hardening; Attorney Access now uses server-admin invitation emails and does not require direct signup.
 
 ## Two-User Isolation Verification
 
-Live status: passed against `https://losttofound.org` on 2026-06-28
-America/Anchorage through the GitHub Actions `Verify Live Isolation` workflow.
+Live status: passed against `https://losttofound.org` on 2026-06-28 through
+the GitHub Actions `Verify Live Isolation` workflow.
 The workflow created two synthetic confirmed Supabase Auth users, enrolled MFA,
 verified User B could not load, download, or delete User A evidence, verified
 User A could download and delete the same evidence, and cleaned up the synthetic

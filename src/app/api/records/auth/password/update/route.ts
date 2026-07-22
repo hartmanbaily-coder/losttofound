@@ -8,6 +8,18 @@ import {
   isSupabaseRecordsMode,
   recordsPasswordMinimumLength,
 } from "@/lib/records/authServer";
+import {
+  attorneyAcceptanceCookieName,
+  clearAttorneyPasswordSetupCookie,
+  getAttorneyPasswordSetupInvitationId,
+} from "@/lib/records/attorneyServer";
+import {
+  attorneyEmailHash,
+  createAttorneyInvitationToken,
+  hashAttorneyInvitationToken,
+  isAttorneyInvitationToken,
+} from "@/lib/records/attorneyCrypto";
+import { recordsCredentialVersionClaim } from "@/lib/records/profileServer";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import {
   checkPwnedPassword,
@@ -132,19 +144,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unable to update password from this session." }, { status: 400 });
   }
 
-  await recordSecurityEvent({
-    type: "auth_password_updated",
-    severity: "info",
-    request,
-    userId,
-    status: 200,
-  });
-
+  const attorneyInvitationId = getAttorneyPasswordSetupInvitationId(request, userId);
+  const admin = createSupabaseAdminClient();
   const accessToken = currentSession.data.session?.access_token;
   let revocationFailed = !accessToken || Boolean(currentSession.error);
   if (accessToken) {
     try {
-      const revocation = await createSupabaseAdminClient().auth.admin.signOut(accessToken, "global");
+      const revocation = await admin.auth.admin.signOut(accessToken, "global");
       revocationFailed = Boolean(revocation.error);
     } catch {
       revocationFailed = true;
@@ -159,22 +165,88 @@ export async function POST(request: NextRequest) {
       status: 503,
       detail: "Password changed, but global session revocation could not be confirmed.",
     });
+    const response = NextResponse.json(
+      {
+        error: attorneyInvitationId
+          ? "Password saved, but prior sessions could not be confirmed signed out. Reopen attorney invitation setup and request a fresh secure email link."
+          : "Password updated, but other sessions could not be confirmed signed out. Contact support before continuing.",
+      },
+      {
+        status: 503,
+        headers: { "Cache-Control": "no-store", "Retry-After": "1" },
+      }
+    );
+    clearRecordsSessionCookies(response);
+    if (attorneyInvitationId) clearAttorneyPasswordSetupCookie(response);
+    return response;
   }
 
-  const response = NextResponse.json(
-    revocationFailed
-      ? {
-          error: "Password updated, but other sessions could not be confirmed signed out. Contact support before continuing.",
-        }
-      : {
-          ok: true,
-          message: "Password updated. Sign in again with your new password.",
+  if (attorneyInvitationId) {
+    const onboardingToken = request.cookies.get(attorneyAcceptanceCookieName)?.value || "";
+    const userEmail = user.data.user?.email || "";
+    const credentialVersion = createAttorneyInvitationToken();
+    const existingAppMetadata = user.data.user?.app_metadata || {};
+    let metadataUpdated = false;
+    try {
+      const metadataUpdate = await admin.auth.admin.updateUserById(userId, {
+        app_metadata: {
+          ...existingAppMetadata,
+          [recordsCredentialVersionClaim]: credentialVersion,
         },
-    {
-      status: revocationFailed ? 503 : 200,
-      headers: { "Cache-Control": "no-store" },
+      });
+      metadataUpdated = !metadataUpdate.error;
+    } catch {
+      metadataUpdated = false;
     }
+    let finalized: { data: unknown; error: unknown } = { data: false, error: null };
+    if (metadataUpdated && isAttorneyInvitationToken(onboardingToken) && userEmail) {
+      try {
+        finalized = await admin.rpc("complete_records_attorney_password_setup", {
+          p_invitation_id: attorneyInvitationId,
+          p_onboarding_token_hash: hashAttorneyInvitationToken(onboardingToken),
+          p_attorney_user_id: userId,
+          p_invited_email_hash: attorneyEmailHash(userEmail),
+          p_email: userEmail,
+          p_credential_version: credentialVersion,
+        });
+      } catch (error) {
+        finalized = { data: false, error };
+      }
+    }
+    if (finalized.error || finalized.data !== true) {
+      await recordSecurityEvent({
+        type: "auth_password_update_failed",
+        severity: "high",
+        request,
+        userId,
+        status: 503,
+        detail: "Password changed and prior sessions were revoked, but invited-attorney onboarding was not finalized.",
+      });
+      const response = NextResponse.json(
+        {
+          error: "Password saved and prior sessions signed out, but attorney setup did not finish. Reopen attorney invitation setup and request a fresh secure email link.",
+        },
+        { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "1" } }
+      );
+      clearRecordsSessionCookies(response);
+      clearAttorneyPasswordSetupCookie(response);
+      return response;
+    }
+  }
+
+  await recordSecurityEvent({
+    type: "auth_password_updated",
+    severity: "info",
+    request,
+    userId,
+    status: 200,
+  });
+
+  const response = NextResponse.json(
+    { ok: true, message: "Password updated. Sign in again with your new password." },
+    { status: 200, headers: { "Cache-Control": "no-store" } }
   );
   clearRecordsSessionCookies(response);
+  if (attorneyInvitationId) clearAttorneyPasswordSetupCookie(response);
   return response;
 }

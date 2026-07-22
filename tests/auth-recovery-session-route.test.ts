@@ -23,7 +23,7 @@ vi.mock("@/lib/records/authServer", () => ({
 }));
 
 vi.mock("@/lib/records/profileServer", () => ({
-  recordsProfileExists,
+  recordsProfileIsAuthorized: recordsProfileExists,
   upsertRecordsProfile,
 }));
 

@@ -1,6 +1,6 @@
 # Production Launch Rehearsal
 
-Rehearsal date: 2026-06-28 America/Anchorage
+Rehearsal date: 2026-06-28
 
 ## Decision
 

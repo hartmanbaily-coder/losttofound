@@ -52,7 +52,7 @@ export function createRecordsSeed(): RecordsDataset {
         userId: demoUserId,
         displayName: "Parent A",
         email: "parent-a@example.test",
-        timezone: "America/Anchorage",
+        timezone: "UTC",
         createdAt: now,
         updatedAt: now,
       },
@@ -61,7 +61,7 @@ export function createRecordsSeed(): RecordsDataset {
         userId: "user-demo-parent-b",
         displayName: "Parent B",
         email: "parent-b@example.test",
-        timezone: "America/Anchorage",
+        timezone: "UTC",
         createdAt: now,
         updatedAt: now,
       },
@@ -79,7 +79,7 @@ export function createRecordsSeed(): RecordsDataset {
         userRoleLabel: "Parent A",
         otherParentLabel: "Parent B",
         defaultExchangeLocation: "Community center entrance",
-        timezone: "America/Anchorage",
+        timezone: "UTC",
         notes: "Synthetic demo matter using privacy minded labels.",
         createdAt: now,
         updatedAt: now,
@@ -91,7 +91,7 @@ export function createRecordsSeed(): RecordsDataset {
         childDisplayLabels: ["Child 1"],
         userRoleLabel: "Parent B",
         otherParentLabel: "Parent A",
-        timezone: "America/Anchorage",
+        timezone: "UTC",
         createdAt: now,
         updatedAt: now,
       },
@@ -443,7 +443,11 @@ export function createRecordsSeed(): RecordsDataset {
   };
 }
 
-export function createEmptyRecordsDatasetForUser(userId: string, email: string): RecordsDataset {
+export function createEmptyRecordsDatasetForUser(
+  userId: string,
+  email: string,
+  timezone = "UTC"
+): RecordsDataset {
   const createdAt = new Date().toISOString();
   const displayName = email.split("@")[0]?.replace(/[._-]+/g, " ") || "Records user";
 
@@ -454,7 +458,7 @@ export function createEmptyRecordsDatasetForUser(userId: string, email: string):
         userId,
         displayName,
         email,
-        timezone: "America/Anchorage",
+        timezone,
         createdAt,
         updatedAt: createdAt,
       },

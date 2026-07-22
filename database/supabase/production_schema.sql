@@ -16,6 +16,8 @@ create table if not exists public.records_profiles (
   email text not null,
   display_name text,
   timezone text not null default 'UTC',
+  credential_version text
+    check (credential_version is null or char_length(credential_version) = 43),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -544,6 +546,11 @@ create table if not exists public.records_attorney_invitations (
   invited_email_nonce text not null,
   invited_email_tag text not null,
   token_hash text not null unique check (char_length(token_hash) = 64),
+  onboarding_token_hash text
+    check (onboarding_token_hash is null or char_length(onboarding_token_hash) = 64),
+  onboarding_expires_at timestamptz,
+  onboarding_password_required boolean not null default false,
+  onboarding_password_established_at timestamptz,
   status text not null default 'pending'
     check (status in ('pending', 'accepted', 'revoked', 'expired', 'replaced')),
   created_at timestamptz not null default now(),
@@ -599,6 +606,9 @@ create index if not exists records_attorney_invitations_owner_created_idx
   on public.records_attorney_invitations(owner_user_id, created_at desc);
 create index if not exists records_attorney_invitations_token_idx
   on public.records_attorney_invitations(token_hash);
+create unique index if not exists records_attorney_invitations_onboarding_token_idx
+  on public.records_attorney_invitations(onboarding_token_hash)
+  where onboarding_token_hash is not null;
 create index if not exists records_attorney_grants_attorney_idx
   on public.records_attorney_grants(attorney_user_id, expires_at desc);
 create index if not exists records_attorney_grants_owner_idx
@@ -632,6 +642,121 @@ grant select, insert, update, delete on
   public.records_attorney_access_events
 to service_role;
 grant usage, select on sequence public.records_attorney_access_events_id_seq to service_role;
+
+create or replace function public.complete_records_attorney_onboarding(
+  p_invitation_id uuid,
+  p_onboarding_token_hash text,
+  p_acceptance_token_hash text,
+  p_attorney_user_id uuid,
+  p_invited_email_hash text,
+  p_email text,
+  p_password_setup_required boolean
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if p_password_setup_required then
+    update public.records_attorney_invitations
+    set onboarding_password_required = true
+    where id = p_invitation_id
+      and status = 'pending'
+      and expires_at > now()
+      and onboarding_token_hash = p_onboarding_token_hash
+      and onboarding_expires_at > now()
+      and invited_email_hash = p_invited_email_hash;
+  else
+    update public.records_attorney_invitations
+    set token_hash = p_acceptance_token_hash,
+      onboarding_token_hash = null,
+      onboarding_expires_at = null,
+      onboarding_password_required = false
+    where id = p_invitation_id
+      and status = 'pending'
+      and expires_at > now()
+      and onboarding_token_hash = p_onboarding_token_hash
+      and onboarding_expires_at > now()
+      and invited_email_hash = p_invited_email_hash;
+  end if;
+
+  if not found then
+    return false;
+  end if;
+
+  -- A new identity is not approved for application login until its password has
+  -- been replaced. Existing approved identities use the immediate branch.
+  if not p_password_setup_required then
+    insert into public.records_profiles (user_id, email, updated_at)
+    values (p_attorney_user_id, lower(trim(p_email)), now())
+    on conflict (user_id) do update
+    set email = excluded.email, updated_at = excluded.updated_at;
+  end if;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.complete_records_attorney_onboarding(
+  uuid, text, text, uuid, text, text, boolean
+) from public, anon, authenticated;
+grant execute on function public.complete_records_attorney_onboarding(
+  uuid, text, text, uuid, text, text, boolean
+) to service_role;
+
+create or replace function public.complete_records_attorney_password_setup(
+  p_invitation_id uuid,
+  p_onboarding_token_hash text,
+  p_attorney_user_id uuid,
+  p_invited_email_hash text,
+  p_email text,
+  p_credential_version text
+)
+returns boolean
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+begin
+  if p_credential_version is null or char_length(p_credential_version) <> 43 then
+    return false;
+  end if;
+
+  update public.records_attorney_invitations
+  set token_hash = onboarding_token_hash,
+    onboarding_token_hash = null,
+    onboarding_expires_at = null,
+    onboarding_password_required = false,
+    onboarding_password_established_at = now()
+  where id = p_invitation_id
+    and status = 'pending'
+    and expires_at > now()
+    and onboarding_token_hash = p_onboarding_token_hash
+    and onboarding_expires_at > now()
+    and onboarding_password_required = true
+    and invited_email_hash = p_invited_email_hash;
+
+  if not found then
+    return false;
+  end if;
+
+  insert into public.records_profiles (user_id, email, credential_version, updated_at)
+  values (p_attorney_user_id, lower(trim(p_email)), p_credential_version, now())
+  on conflict (user_id) do update
+  set
+    email = excluded.email,
+    credential_version = excluded.credential_version,
+    updated_at = excluded.updated_at;
+
+  return true;
+end;
+$$;
+
+revoke all on function public.complete_records_attorney_password_setup(uuid, text, uuid, text, text, text)
+from public, anon, authenticated;
+grant execute on function public.complete_records_attorney_password_setup(uuid, text, uuid, text, text, text)
+to service_role;
 
 create or replace function public.accept_records_attorney_invitation(
   p_token_hash text,
@@ -685,7 +810,7 @@ begin
   )
   select expired_grants.owner_user_id, expired_grants.case_id,
     expired_grants.invitation_id, expired_grants.id, 'access_expired',
-    jsonb_build_object('reason', 'seven_day_access_ended')
+    jsonb_build_object('reason', 'access_period_ended')
   from expired_grants;
 
   if exists (
@@ -703,7 +828,7 @@ begin
   ) values (
     invitation.owner_user_id, p_attorney_user_id, invitation.id,
     invitation.case_key, invitation.case_id, 'read_only',
-    now(), now() + interval '7 days'
+    now(), now() + interval '30 days'
   ) returning * into created_grant;
 
   update public.records_attorney_invitations

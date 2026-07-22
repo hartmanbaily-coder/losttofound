@@ -22,7 +22,7 @@ vi.mock("@/lib/supabaseClient", () => ({
 }));
 
 vi.mock("@/lib/records/profileServer", () => ({
-  recordsProfileExists,
+  recordsProfileIsAuthorized: recordsProfileExists,
   upsertRecordsProfile,
 }));
 
@@ -36,13 +36,14 @@ function fakeJwt(payload: Record<string, unknown>) {
   return `${encode({ alg: "none" })}.${encode(payload)}.signature`;
 }
 
-function makeRequest(email: string) {
+function makeRequest(email: string, invitationToken = "") {
   return new NextRequest("https://losttofound.org/api/records/auth/login", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Origin: "https://losttofound.org",
       "X-Forwarded-For": "192.0.2.10",
+      ...(invitationToken ? { Cookie: `l2f-attorney-invite=${invitationToken}` } : {}),
     },
     body: JSON.stringify({
       adultConfirmed: true,
@@ -201,5 +202,29 @@ describe("records login route", () => {
       userId: "existing-user",
       email: "existing@example.test",
     });
+  });
+
+  it("does not let a pending invitation bypass profile approval at password login", async () => {
+    process.env.RECORDS_SIGNUPS_ENABLED = "false";
+    process.env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED = "false";
+    recordsProfileExists.mockResolvedValue(false);
+    signInWithPassword.mockResolvedValue({
+      data: {
+        session: {
+          access_token: fakeJwt({ aal: "aal1" }),
+          refresh_token: "refresh-token",
+          expires_in: 3600,
+        },
+        user: { id: "invited-user", email: "counsel@example.test" },
+      },
+      error: null,
+    });
+
+    const response = await POST(makeRequest("counsel@example.test", "valid-invite-token"));
+
+    expect(response.status).toBe(403);
+    expect(upsertRecordsProfile).not.toHaveBeenCalled();
+    expect(signOut).toHaveBeenCalledWith({ scope: "local" });
+    expect(setSession).not.toHaveBeenCalled();
   });
 });

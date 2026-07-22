@@ -10,7 +10,7 @@ import {
   setRecordsSessionCookies,
 } from "@/lib/records/authServer";
 import { demoCaseId } from "@/lib/records/seed";
-import { recordsProfileExists, upsertRecordsProfile } from "@/lib/records/profileServer";
+import { recordsProfileIsAuthorized, upsertRecordsProfile } from "@/lib/records/profileServer";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     if (error || !data.user?.id || data.user.id !== subject) {
       throw error || new Error("Recovery session user does not match the verified token.");
     }
-    if (!isRecordsSignupEnabled() && !(await recordsProfileExists(data.user.id))) {
+    if (!isRecordsSignupEnabled() && !(await recordsProfileIsAuthorized(data.user.id, accessToken))) {
       throw new Error("Records profile is not approved while account creation is disabled.");
     }
 

@@ -6,6 +6,7 @@ import {
   openAttorneyHandle,
 } from "@/lib/records/attorneyCrypto";
 import { recordAttorneyAccessEvent } from "@/lib/records/attorneyAccess";
+import { attorneyInvitationDurationMs } from "@/lib/records/attorneyPolicy";
 import {
   attorneyInvitationDeliveryMode,
   getAttorneyAuthContext,
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Only pending or expired invitations can be resent." }, { status: 409 });
   }
   const token = createAttorneyInvitationToken();
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + attorneyInvitationDurationMs).toISOString();
   const { data: replacementId, error } = await context.supabase.rpc(
     "replace_records_attorney_invitation",
     {

@@ -179,11 +179,11 @@ Complete within five business days:
 
 Current operational contacts:
 
-- Incident commander: Baily Hartman, reachable through `security@losttofound.org`
-- Engineering lead: Baily Hartman
-- Supabase owner: Baily Hartman
-- Hosting/CDN owner: Baily Hartman (Hetzner and Cloudflare)
-- DNS/domain owner: Baily Hartman (Cloudflare)
+- Incident commander: assigned on-call operator, reachable through `security@losttofound.org`
+- Engineering lead: assigned engineering operator
+- Supabase owner: assigned database operator
+- Hosting/CDN owner: assigned infrastructure operator (Hetzner and Cloudflare)
+- DNS/domain owner: assigned domain operator (Cloudflare)
 - Malware scanner: self-hosted ClamAV on the dedicated LostToFound host
 - Monitoring sources: Hetzner/Docker platform logs, Cloudflare, and the scheduled GitHub `live-monitor` workflow
 - Security contact email: `security@losttofound.org`, routed through Cloudflare Email Routing to the verified operator mailbox

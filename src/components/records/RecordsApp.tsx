@@ -34,6 +34,7 @@ import {
   timeOfDayPositionPercent,
 } from "@/lib/records/calculations";
 import {
+  acceptAttorneyInviteSession,
   acceptRecordsRecoverySession,
   clearFailedLoginAttempts,
   clearSession,
@@ -173,6 +174,21 @@ type LoginScreenMode =
   | "resend_confirmation"
   | "reset"
   | "update_password";
+
+function pendingAttorneyNextPath() {
+  if (typeof window === "undefined") return null;
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next === "/attorney" || next === "/attorney/accept" ? next : null;
+}
+
+function hasExplicitAttorneyInviteCallback() {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("auth") !== "attorney-invite" || !params.get("attorney_token")) {
+    return false;
+  }
+  return parseRecordsAuthFragment(window.location.hash, "attorney-invite").kind === "attorney_invite";
+}
 
 const defaultRangePreset: DateRangePreset = "currentMonth";
 
@@ -418,6 +434,11 @@ export default function RecordsApp() {
     const timeout = window.setTimeout(() => {
       async function loadSession() {
         try {
+          if (hasExplicitAttorneyInviteCallback()) {
+            setSession(null);
+            setMfaResumeRequired(false);
+            return;
+          }
           const state = await readRecordsSession().catch(() => ({ status: "signed_out" as const }));
           if (state.status === "mfa_required") {
             setMfaResumeRequired(true);
@@ -425,6 +446,11 @@ export default function RecordsApp() {
           }
           if (state.status === "signed_in") {
             setMfaResumeRequired(false);
+            const next = pendingAttorneyNextPath();
+            if (next) {
+              window.location.replace(next);
+              return;
+            }
             setSession(state.session);
             setSelectedCaseId(state.session.caseId);
             setSelectedDay(formatLocalDate(new Date(), defaultRecordsTimezone));
@@ -574,8 +600,8 @@ export default function RecordsApp() {
 
     setSession(nextSession);
     if (typeof window !== "undefined") {
-      const next = new URLSearchParams(window.location.search).get("next");
-      if (next === "/attorney" || next === "/attorney/accept") {
+      const next = pendingAttorneyNextPath();
+      if (next) {
         window.location.replace(next);
       }
     }
@@ -956,10 +982,23 @@ function LoginScreen({
   const [mfaSubmitting, setMfaSubmitting] = useState(false);
   const [recoveryHydrating, setRecoveryHydrating] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [invitedAttorneySignup, setInvitedAttorneySignup] = useState(false);
   const recoveryHandledRef = useRef(false);
   const minimumPasswordLength = 12;
-  const signupsEnabled =
+  const publicSignupsEnabled =
     recordsStorageMode === "supabase" && process.env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED === "true";
+  const signupsEnabled = publicSignupsEnabled || invitedAttorneySignup;
+
+  useEffect(() => {
+    if (recordsStorageMode !== "supabase" || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const isInvitedAttorney =
+      params.get("next") === "/attorney/accept" && params.get("invite") === "1";
+    setInvitedAttorneySignup(isInvitedAttorney);
+    if (isInvitedAttorney && params.get("mode") === "signup") {
+      setMode("signup");
+    }
+  }, [recordsStorageMode]);
 
   useEffect(() => {
     if (!mfaResumeRequired || typeof window === "undefined") return;
@@ -979,17 +1018,73 @@ function LoginScreen({
 
     const params = new URLSearchParams(window.location.search);
     const authState = params.get("auth");
+    const attorneyOnboardingToken = params.get("attorney_token") || "";
     const fragment = parseRecordsAuthFragment(window.location.hash, authState);
+    const preserveAttorneyInvite =
+      params.get("next") === "/attorney/accept" && params.get("invite") === "1";
+    const confirmationPath = preserveAttorneyInvite
+      ? "/records?auth=confirmed&next=%2Fattorney%2Faccept&invite=1"
+      : "/records?auth=confirmed";
+    const confirmationErrorPath = preserveAttorneyInvite
+      ? "/records?auth=confirm-error&next=%2Fattorney%2Faccept&invite=1"
+      : "/records?auth=confirm-error";
+
+    if (fragment.kind === "attorney_invite") {
+      if (recoveryHandledRef.current) return;
+      recoveryHandledRef.current = true;
+      window.history.replaceState(
+        null,
+        "",
+        "/records?next=%2Fattorney%2Faccept&invite=1"
+      );
+      setRecoveryHydrating(true);
+      setError("");
+      setMessage("Verifying control of the invited email…");
+
+      void acceptAttorneyInviteSession({
+        accessToken: fragment.accessToken,
+        refreshToken: fragment.refreshToken,
+        expiresIn: fragment.expiresIn,
+        onboardingToken: attorneyOnboardingToken,
+      })
+        .then((result) => {
+          if (result.passwordSetupRequired) {
+            setInvitedAttorneySignup(true);
+            setMode("update_password");
+            setMessage("Invited email verified. Choose the account password before continuing.");
+            return;
+          }
+          if (result.mfaEnrollmentRequired && result.enrollment) {
+            setMfaEnrollment(result.enrollment);
+            setMfaMode("enroll");
+            setMessage("Invited email verified. Set up your authenticator to continue.");
+            return;
+          }
+          setMfaEnrollment(null);
+          setMfaMode("verify");
+          setMessage("Invited email verified. Enter the current code from your authenticator app.");
+        })
+        .catch((inviteError: unknown) => {
+          setMode("login");
+          setError(
+            inviteError instanceof Error
+              ? inviteError.message
+              : "Attorney account link is invalid or expired."
+          );
+        })
+        .finally(() => setRecoveryHydrating(false));
+      return;
+    }
 
     if (fragment.kind === "confirmation") {
-      window.history.replaceState(null, "", "/records?auth=confirmed");
+      window.history.replaceState(null, "", confirmationPath);
       setMode("login");
       setMessage("Email confirmed. Sign in to continue.");
       return;
     }
 
     if (fragment.kind === "error") {
-      window.history.replaceState(null, "", "/records?auth=confirm-error");
+      window.history.replaceState(null, "", confirmationErrorPath);
       setMode("login");
       setError("Confirmation link is invalid or expired.");
       return;
@@ -1090,11 +1185,19 @@ function LoginScreen({
     const confirmPassword = String(formData.get("confirmPassword") || "");
     const adultConfirmed = formData.get("adult") === "on";
 
-    if (!adultConfirmed || !email.includes("@") || password.length < minimumPasswordLength) {
-      setError(`Enter an email, confirm adult use, and use at least ${minimumPasswordLength} characters.`);
+    if (
+      !adultConfirmed ||
+      !email.includes("@") ||
+      (!invitedAttorneySignup && password.length < minimumPasswordLength)
+    ) {
+      setError(
+        invitedAttorneySignup
+          ? "Enter the invited email and confirm adult use."
+          : `Enter an email, confirm adult use, and use at least ${minimumPasswordLength} characters.`
+      );
       return;
     }
-    if (password !== confirmPassword) {
+    if (!invitedAttorneySignup && password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
@@ -1103,9 +1206,14 @@ function LoginScreen({
     setError("");
     setMessage("");
     try {
-      const result = await signUpRecordsAccount(email, password, adultConfirmed);
+      const result = await signUpRecordsAccount(
+        email,
+        password,
+        adultConfirmed,
+        invitedAttorneySignup
+      );
       setMessage(result.message);
-      setMode("login");
+      if (!invitedAttorneySignup) setMode("login");
     } catch (signupError) {
       setError(signupError instanceof Error ? signupError.message : "Account creation failed.");
     } finally {
@@ -1183,7 +1291,13 @@ function LoginScreen({
     setMessage("");
     try {
       const result = await updateRecordsPassword(password);
-      window.history.replaceState(null, "", "/records");
+      window.history.replaceState(
+        null,
+        "",
+        invitedAttorneySignup
+          ? "/records?next=%2Fattorney%2Faccept&invite=1"
+          : "/records"
+      );
       clearSession();
       setMessage(result.message);
       setMode("login");
@@ -1222,7 +1336,7 @@ function LoginScreen({
       ? "Set up authenticator"
       : "Verify authenticator"
     : mode === "signup"
-      ? "Create account"
+      ? invitedAttorneySignup ? "Verify invited attorney email" : "Create account"
       : mode === "resend_confirmation"
         ? "Resend confirmation"
       : mode === "reset"
@@ -1280,6 +1394,12 @@ function LoginScreen({
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Organize your custody data into clear records so you can understand patterns, work toward your desired outcomes, and protect yourself with better documentation.
             </p>
+
+            {invitedAttorneySignup ? (
+              <p className="mt-4 rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm leading-6 text-teal-950">
+                Use the exact email address named in the attorney invitation. We will email a secure link so the mailbox owner—not someone holding a copied invite URL—establishes the account. Open it, then set a password and complete authenticator verification.
+              </p>
+            ) : null}
 
             {message && (
               <div className="mt-4 rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-900">
@@ -1419,21 +1539,27 @@ function LoginScreen({
                     spellCheck={false}
                   />
                 </Field>
-                <Field label="Password">
-                  <input name="password" type="password" className="input" autoComplete="new-password" />
-                </Field>
-                <Field label="Confirm password">
-                  <input
-                    name="confirmPassword"
-                    type="password"
-                    className="input"
-                    autoComplete="new-password"
-                  />
-                </Field>
+                {!invitedAttorneySignup ? (
+                  <>
+                    <Field label="Password">
+                      <input name="password" type="password" className="input" autoComplete="new-password" />
+                    </Field>
+                    <Field label="Confirm password">
+                      <input
+                        name="confirmPassword"
+                        type="password"
+                        className="input"
+                        autoComplete="new-password"
+                      />
+                    </Field>
+                  </>
+                ) : null}
                 <label className="flex items-start gap-2 text-sm leading-5 text-slate-700">
                   <input name="adult" type="checkbox" defaultChecked className="mt-1" />
                   <span>
-                    I am an adult user and will use privacy minded labels for sensitive records.
+                    {invitedAttorneySignup
+                      ? "I am the adult attorney invited to this read-only case."
+                      : "I am an adult user and will use privacy minded labels for sensitive records."}
                   </span>
                 </label>
                 {error && <p className="text-sm font-medium text-red-700">{error}</p>}
@@ -1442,7 +1568,9 @@ function LoginScreen({
                   disabled={submitting}
                   className="min-h-11 w-full rounded-md bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800"
                 >
-                  {submitting ? "Creating..." : "Create account"}
+                  {submitting
+                    ? invitedAttorneySignup ? "Sending..." : "Creating..."
+                    : invitedAttorneySignup ? "Email secure account link" : "Create account"}
                 </button>
                 <button
                   type="button"
@@ -1561,13 +1689,15 @@ function LoginScreen({
                     </button>
                     {signupsEnabled && (
                       <>
-                        <button
-                          type="button"
-                          onClick={() => switchMode("resend_confirmation")}
-                          className="font-semibold text-teal-700 hover:text-teal-900"
-                        >
-                          Resend confirmation
-                        </button>
+                        {publicSignupsEnabled ? (
+                          <button
+                            type="button"
+                            onClick={() => switchMode("resend_confirmation")}
+                            className="font-semibold text-teal-700 hover:text-teal-900"
+                          >
+                            Resend confirmation
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => switchMode("signup")}
@@ -1646,7 +1776,7 @@ function DashboardView({
         >
           <span className="text-sm font-semibold text-slate-950">Share with an attorney</span>
           <span className="mt-1 block text-xs leading-5 text-slate-600">
-            Create or revoke seven day read-only access and review access history.
+            Create or revoke 30-day read-only access and review access history.
           </span>
         </button>
       </section>
@@ -3053,7 +3183,7 @@ function ExchangesView({
             id="exchange-rule-form"
             key={editingRule?.id || "new-exchange-rule"}
             onSubmit={saveRule}
-            className="grid gap-3"
+            className="grid min-w-0 gap-3"
           >
             <Field label="Rule name">
               <input name="ruleName" className="input" defaultValue={editingRule?.ruleName || "Friday evening exchange"} />
@@ -3111,7 +3241,7 @@ function ExchangesView({
         </Panel>
 
         <Panel title="Log actual exchange outcome" action="Factual record">
-          <form onSubmit={addExchangeLog} className="grid gap-3">
+          <form onSubmit={addExchangeLog} className="grid min-w-0 gap-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Scheduled exchange date">
                 <input name="orderedDate" type="date" className="input" defaultValue="2026-06-12" />
@@ -3215,7 +3345,7 @@ function ExchangesView({
               <form
                 key={`${editingExchange.id}-${editingExchange.updatedAt}`}
                 onSubmit={updateExchangeLog}
-                className="grid gap-3"
+                className="grid min-w-0 gap-3"
               >
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field label="Scheduled exchange date">
@@ -3548,7 +3678,7 @@ function NotesView({
   const filteredNotes = filter === "all" ? notes : notes.filter((note) => note.category === filter);
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-[420px_1fr]">
       <div className="min-w-0 space-y-4">
         <Panel title={editingNote ? "Edit date based note" : "Add date based note"} action="Factual wording">
           <form
@@ -3641,14 +3771,14 @@ function NotesView({
         <div className="space-y-3">
           {filteredNotes.map((note) => (
             <div key={note.id} className="min-w-0 rounded-md border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
                 <div className="min-w-0 flex-1">
                   <h3 className="font-semibold text-slate-950 [overflow-wrap:anywhere]">{note.title}</h3>
                   <p className="mt-1 text-xs text-slate-500">
                     {note.noteDate} {note.noteTime || ""} - {labelNoteCategory(note.category)}
                   </p>
                 </div>
-                <div className="flex max-w-full flex-wrap items-center gap-2">
+                <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:justify-end">
                   <StatusPill label={note.includeInReports ? "report included" : "not selected"} />
                   <EditButton
                     ariaLabel={`Edit note ${note.title}`}
@@ -6645,7 +6775,7 @@ function SettingsView({
       userRoleLabel: text(formData, "userRoleLabel"),
       otherParentLabel: text(formData, "otherParentLabel"),
       defaultExchangeLocation: text(formData, "defaultExchangeLocation"),
-      timezone: text(formData, "timezone") || profile?.timezone || "America/Anchorage",
+      timezone: text(formData, "timezone") || profile?.timezone || defaultRecordsTimezone,
       notes: text(formData, "notes"),
     });
     if (!parsed.success) return flash(parsed.error.issues[0]?.message || "Check the custody matter form.");
@@ -7192,12 +7322,6 @@ function WorkspaceHeader({
           </div>
 
           <div className="grid grid-cols-2 gap-2 lg:contents">
-            <Link
-              href="/attorney"
-              className="h-10 rounded-md border border-slate-200 bg-white px-4 py-2.5 text-center text-sm font-semibold text-slate-700 transition hover:border-teal-500 hover:text-slate-950"
-            >
-              Shared With Me
-            </Link>
             <button
               type="button"
               onClick={onExport}
@@ -7298,10 +7422,10 @@ function Panel({
   className?: string;
 }) {
   return (
-    <section className={`min-w-0 rounded-lg border border-slate-200/90 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${className}`}>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-slate-950">{title}</h2>
-        {action && <span className="text-xs font-medium text-slate-500">{action}</span>}
+    <section className={`min-w-0 rounded-lg border border-slate-200/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5 ${className}`}>
+      <div className="mb-4 flex min-w-0 flex-wrap items-start justify-between gap-2">
+        <h2 className="min-w-0 text-base font-semibold text-slate-950 [overflow-wrap:anywhere]">{title}</h2>
+        {action && <span className="min-w-0 max-w-full text-xs font-medium text-slate-500 [overflow-wrap:anywhere]">{action}</span>}
       </div>
       {children}
     </section>
@@ -7310,8 +7434,8 @@ function Panel({
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="grid gap-1.5 text-sm font-medium text-slate-700">
-      <span>{label}</span>
+    <label className="grid min-w-0 max-w-full gap-1.5 text-sm font-medium text-slate-700 [&>*]:min-w-0 [&>*]:max-w-full">
+      <span className="[overflow-wrap:anywhere]">{label}</span>
       {children}
     </label>
   );
@@ -7821,7 +7945,7 @@ function Table({
   if (headers.length === 0 || rows.length === 0) return <Empty label="No rows to show." />;
 
   return (
-    <div className="overflow-x-auto rounded-md border border-slate-200">
+    <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-slate-200">
       <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
           <tr>

@@ -2,7 +2,7 @@ import type { DateRange } from "./types";
 import { addDays, toUtcDate } from "./calculations";
 
 export type DateRangePreset = "currentMonth" | "last30" | "last90" | "priorMonth" | "ytd";
-export const defaultRecordsTimezone = "America/Anchorage";
+export const defaultRecordsTimezone = "UTC";
 
 function pad2(value: number) {
   return String(value).padStart(2, "0");

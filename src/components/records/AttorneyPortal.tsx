@@ -26,6 +26,8 @@ import {
   type ReportPreview,
 } from "@/lib/records/reports";
 import type { DateRange, ReportType } from "@/lib/records/types";
+import { formatLocalDate } from "@/lib/records/dateRanges";
+import { maxBrowserTimeoutMs } from "@/lib/records/attorneyPolicy";
 
 type PortalView = "Overview" | "Timeline" | "Calendar" | "Exchanges" | "Notes" | "Files" | "Child Support" | "Expenses" | "Reports";
 const portalViews: PortalView[] = ["Overview", "Timeline", "Calendar", "Exchanges", "Notes", "Files", "Child Support", "Expenses", "Reports"];
@@ -48,7 +50,7 @@ function initialRange(projection: SharedCaseProjection): DateRange {
     ...projection.dataset.expenseItems.map((record) => record.expenseDate),
     ...projection.dataset.custodyDayAssignments.map((record) => record.date),
   ].filter(Boolean).sort();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatLocalDate(new Date(), projection.dataset.matters[0]?.timezone);
   return { from: dates[0] || today, to: dates.at(-1) || today };
 }
 
@@ -131,14 +133,24 @@ export default function AttorneyPortal() {
       window.sessionStorage.removeItem("l2f.attorney.access");
       setPortal(null);
       setMatters([]);
-      setMessage("This seven-day access period has ended. Ask the record owner to send a new invitation.");
+      setMessage("This 30-day access period has ended. Ask the record owner to send a new invitation.");
     };
-    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-      endAccess();
-      return;
-    }
-    const timer = window.setTimeout(endAccess, expiresAt - Date.now() + 250);
-    return () => window.clearTimeout(timer);
+    let timer: number | undefined;
+    const checkExpiry = () => {
+      const remaining = expiresAt - Date.now();
+      if (!Number.isFinite(expiresAt) || remaining <= 0) {
+        endAccess();
+        return;
+      }
+      timer = window.setTimeout(
+        checkExpiry,
+        Math.min(remaining + 250, maxBrowserTimeoutMs)
+      );
+    };
+    checkExpiry();
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [portal]);
 
   const dataset = portal?.projection.dataset;

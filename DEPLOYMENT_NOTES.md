@@ -104,7 +104,7 @@ Production for `losttofound.org` runs on a dedicated Ubuntu host under the non-r
 
 Use this deploy path for My Custody Case changes:
 
-1. Commit and push the My Custody Case change to `hartmanbaily-coder/losttofound` `main`.
+1. Commit and push the My Custody Case change to the `main` branch of the configured GitHub repository.
 2. Confirm that the `Validate My Custody Case` workflow passes lint, typecheck, unit tests, secret scanning, production env template validation, dependency audit, and build.
 3. From a trusted administrator Mac with the pinned SSH host key at `~/.ssh/losttofound_known_hosts`, run `deploy/production/deploy-from-mac.sh <host> <validated-commit-sha>`.
 4. The remote deploy builds a release-tagged image, starts the isolated stack, verifies readiness, verifies clean/EICAR malware scanning, verifies security headers, and rolls back to the prior image if validation fails.

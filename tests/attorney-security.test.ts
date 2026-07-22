@@ -144,6 +144,59 @@ describe("attorney migration controls", () => {
     expect(sql).toContain("revoke_records_attorney_invitation");
     expect(sql).toContain("revocation_reason = 'owner_revoked'");
     expect(sql).toContain("set status = 'replaced', replaced_at = now()");
+
+    const durationMigration = await readFile(
+      new URL(
+        "../supabase/migrations/20260721215319_extend_attorney_access_to_30_days.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+    expect(durationMigration).toContain("now() + interval '30 days'");
+    expect(durationMigration).not.toContain("update public.records_attorney_grants\nset expires_at");
+    expect(durationMigration).toContain("for update");
+    expect(durationMigration).toContain("invitation.status <> 'pending'");
+    expect(durationMigration).toContain("invitation.expires_at <= now()");
+    expect(durationMigration).toContain(
+      "invitation.invited_email_hash <> p_invited_email_hash"
+    );
+    expect(durationMigration).toContain("invitation.owner_user_id = p_attorney_user_id");
+    expect(durationMigration).toContain("expires_at > now()");
+    expect(durationMigration).toContain("revoked_at is null");
+    expect(durationMigration).toContain("left_at is null");
+    expect(durationMigration).toContain("permission_scope");
+    expect(durationMigration).toContain("'read_only'");
+    expect(durationMigration).toContain("security definer");
+    expect(durationMigration).toContain("revoke all on function");
+    expect(durationMigration).toContain("from public, anon, authenticated");
+    expect(durationMigration).toContain("to service_role");
+    expect(durationMigration).toContain("onboarding_token_hash");
+    expect(durationMigration).toContain("onboarding_expires_at > now()");
+    expect(durationMigration).toContain("onboarding_password_required");
+    expect(durationMigration).toContain("onboarding_password_established_at");
+    expect(durationMigration).toContain("credential_version");
+    expect(durationMigration).toContain("complete_records_attorney_onboarding");
+    expect(durationMigration).toContain("complete_records_attorney_password_setup");
+    expect(durationMigration).toContain("insert into public.records_profiles");
+    expect(durationMigration).toContain("on conflict (user_id) do update");
+    expect(durationMigration).toMatch(
+      /if not p_password_setup_required then\s+insert into public\.records_profiles/
+    );
+    expect(durationMigration).toMatch(
+      /complete_records_attorney_password_setup\([\s\S]*?if not found then[\s\S]*?insert into public\.records_profiles/
+    );
+    expect(durationMigration).toContain(
+      "complete_records_attorney_password_setup(uuid, text, uuid, text, text, text)"
+    );
+    expect(durationMigration).toContain(
+      "revoke all on function public.complete_records_attorney_onboarding"
+    );
+
+    const productionSchema = await readFile(
+      new URL("../database/supabase/production_schema.sql", import.meta.url),
+      "utf8"
+    );
+    expect(productionSchema).toContain("now(), now() + interval '30 days'");
   });
 
   it("keeps the attorney portal and all protected APIs out of service-worker caches", async () => {
