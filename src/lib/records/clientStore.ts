@@ -431,7 +431,7 @@ export async function signUpRecordsAccount(
       body.message ||
       (invitedAttorney
         ? "Open the secure account link sent to the invited email."
-        : "Check your email to confirm the account before signing in."),
+        : "Step 1 of 2: check your email to confirm that you own the address. After you sign in, you will separately set up an authenticator as the second security factor."),
   };
 }
 

@@ -68,7 +68,7 @@ Review flow:
 2. Unlock with the review device's Face ID, Touch ID, or passcode. The app uses Apple's LocalAuthentication framework and does not receive or store biometric data.
 3. Open the Records tab and sign in with the review account below.
 4. Review the Policies tab for native privacy, terms, security, AI data use, subprocessors, accessibility, and contact links.
-5. Review the Support tab for support contact, account/data help, and the in-app account deletion request entry point. The deletion entry point opens `https://losttofound.org/account/delete`, where a signed-in records user can submit an authenticated complete-account deletion request.
+5. Review the Support tab for support contact, account/data help, and the in-app self-service account deletion entry point. The deletion entry point opens `https://losttofound.org/account/delete`, where a signed-in records user can permanently delete the account after explicit confirmation.
 
 Provide Apple Review with a dedicated test account before submission:
 
@@ -77,7 +77,7 @@ Provide Apple Review with a dedicated test account before submission:
 - MFA status: `[disable for review account or provide review instructions]`
 - Test data: synthetic only
 
-Account deletion path for review: Support tab -> Account and Data -> Request account deletion -> `https://losttofound.org/account/delete`. The direct deletion page lets a signed-in records user press "Submit account deletion request" to create a server-side authenticated deletion request, and also explains complete-account deletion, request timing, backup aging, legal/security retention, and support verification. The public Privacy Policy also documents retention, deletion, backup aging, and support requests.
+Account deletion path for review: Support tab -> Account and Data -> Delete account -> `https://losttofound.org/account/delete`. The direct deletion page lets a signed-in records user confirm the irreversible consequences and press "Permanently delete my account." The server removes private evidence files, revokes sessions, deletes the Auth account and cascaded active records, and reports completion without an approval queue. The public Privacy Policy also documents backup aging and legally required retention.
 
 Current native build snapshot:
 
@@ -154,7 +154,7 @@ Do not use real custody, child, court, message, phone, address, or evidence data
 - TestFlight build installed on a real iPhone.
 - App Review test account created with synthetic data.
 - App Review notes include review-device unlock instructions and login/MFA instructions.
-- Account deletion request path tested in the native Support tab and at `https://losttofound.org/account/delete`.
+- Self-service account deletion tested in the native Support tab and at `https://losttofound.org/account/delete`.
 - Privacy Policy, Terms, Security, AI Data Use, Accessibility, and Contact pages live.
 - No production secrets committed.
 - No real user data in screenshots or demo account.

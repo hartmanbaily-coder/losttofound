@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { getRecordsCsrfToken } from "@/lib/records/attorneyClient";
 import { notifyNativeSessionInvalidated } from "@/lib/records/clientStore";
 import { accountDeletionMailto } from "@/lib/site";
 
@@ -11,7 +12,7 @@ type SessionStatus = "checking" | "authenticated" | "unauthenticated" | "unavail
 type RequestState =
   | { status: "idle" }
   | { status: "submitting" }
-  | { status: "success"; requestId: string; requestedAt: string; message: string }
+  | { status: "success"; deletedAt: string; message: string }
   | { status: "error"; message: string };
 
 export function AccountDeletionRequest() {
@@ -56,44 +57,43 @@ export function AccountDeletionRequest() {
 
     setRequestState({ status: "submitting" });
     try {
+      const csrf = await getRecordsCsrfToken();
       const response = await fetch("/api/records/account/deletion-request", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-L2F-CSRF": csrf },
         credentials: "same-origin",
-        body: JSON.stringify({ confirm: true }),
+        body: JSON.stringify({ confirmation: "DELETE" }),
       });
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
         message?: string;
-        requestId?: string;
-        requestedAt?: string;
+        deletedAt?: string;
         clearLocalSession?: boolean;
       };
 
-      if (body.clearLocalSession === true || (response.ok && body.requestId)) {
+      if (body.clearLocalSession === true || (response.ok && body.deletedAt)) {
         notifyNativeSessionInvalidated();
       }
 
-      if (!response.ok || !body.requestId) {
+      if (!response.ok || !body.deletedAt) {
         setRequestState({
           status: "error",
           message:
             body.error ||
-            "Unable to submit the account deletion request. Sign in again or contact support.",
+            "Unable to delete the account. Sign in again or contact support.",
         });
         return;
       }
 
       setRequestState({
         status: "success",
-        requestId: body.requestId,
-        requestedAt: body.requestedAt || new Date().toISOString(),
-        message: body.message || "Account deletion request received.",
+        deletedAt: body.deletedAt,
+        message: body.message || "Your account was permanently deleted.",
       });
     } catch {
       setRequestState({
         status: "error",
-        message: "Unable to submit the account deletion request. Check your connection and try again.",
+        message: "Unable to delete the account. Check your connection and try again.",
       });
     }
   }
@@ -101,12 +101,30 @@ export function AccountDeletionRequest() {
   const canSubmit =
     sessionStatus === "authenticated" && confirmed && requestState.status !== "submitting";
 
+  if (requestState.status === "success") {
+    return (
+      <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-sm leading-6 text-emerald-900 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+        <h2 className="text-base font-semibold">Account deleted</h2>
+        <p className="mt-3">{requestState.message}</p>
+        <p className="mt-2 text-xs">
+          Completed {new Date(requestState.deletedAt).toLocaleString()}.
+        </p>
+        <Link
+          href="/"
+          className="mt-4 inline-flex min-h-11 items-center justify-center rounded-md border border-emerald-300 bg-white px-4 text-sm font-semibold text-emerald-900 transition hover:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+        >
+          Return to home page
+        </Link>
+      </section>
+    );
+  }
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <h2 className="text-base font-semibold text-slate-950">Request account deletion</h2>
+      <h2 className="text-base font-semibold text-slate-950">Permanently delete account</h2>
       <p className="mt-3">
-        Submit the request while signed in. You will be signed out immediately, and we aim to
-        complete verified deletion requests within 30 days.
+        This is self-service deletion, not a request for approval. After you confirm, your account,
+        active records, and private evidence files will be deleted immediately and you will be signed out.
       </p>
 
       <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -119,8 +137,8 @@ export function AccountDeletionRequest() {
         )}
         {sessionStatus === "unauthenticated" && (
           <p>
-            Sign in to the records workspace first, then return to this page to submit the account
-            deletion request.
+            Sign in and complete authenticator verification first, then return to this page to delete
+            the account.
           </p>
         )}
         {sessionStatus === "unavailable" && (
@@ -140,7 +158,8 @@ export function AccountDeletionRequest() {
         />
         <span>
           I understand this will permanently delete my account and associated My Custody Case
-          records, except information that must be retained by law.
+          records. This cannot be undone. Limited copies may remain temporarily in backups or when
+          retention is required by law.
         </span>
       </label>
 
@@ -149,9 +168,9 @@ export function AccountDeletionRequest() {
           type="button"
           onClick={submitDeletionRequest}
           disabled={!canSubmit}
-          className="inline-flex min-h-11 items-center justify-center rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
+          className="inline-flex min-h-11 items-center justify-center rounded-md bg-rose-700 px-4 text-sm font-semibold text-white transition hover:bg-rose-800 focus:outline-none focus:ring-2 focus:ring-rose-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
         >
-          {requestState.status === "submitting" ? "Submitting..." : "Request account deletion"}
+          {requestState.status === "submitting" ? "Deleting account..." : "Permanently delete my account"}
         </button>
         <Link
           href="/records"
@@ -166,14 +185,6 @@ export function AccountDeletionRequest() {
           Email support instead
         </a>
       </div>
-
-      {requestState.status === "success" && (
-        <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
-          <p className="font-semibold">Account deletion request submitted.</p>
-          <p className="mt-1">{requestState.message}</p>
-          <p className="mt-2 text-xs">Save this request number: {requestState.requestId}</p>
-        </div>
-      )}
 
       {requestState.status === "error" && (
         <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-rose-900">

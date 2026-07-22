@@ -13,17 +13,17 @@ const sections: PolicySection[] = [
     ],
   },
   {
-    title: "Before you request deletion",
+    title: "Before you delete the account",
     body: [
-      "Export any records and download any files you need before submitting the request.",
-      "Account deletion cannot be undone after processing is complete.",
+      "Export any records and download any files you need before confirming deletion.",
+      "Account deletion cannot be undone.",
     ],
   },
   {
-    title: "What happens next",
+    title: "What happens when you confirm",
     body: [
-      "Submitting a request signs you out and ends active Attorney Access.",
-      "We may verify your identity. We aim to complete verified deletion requests within 30 days and will email you when processing is complete.",
+      "The signed-in account, active records, private evidence files, and Attorney Access are deleted immediately, and you are signed out.",
+      "Limited copies may remain temporarily in backups or when retention is required by law.",
     ],
   },
 ];
@@ -40,10 +40,10 @@ export default function AccountDeletePage() {
       <section className="rounded-xl border border-slate-200 bg-white p-5 text-sm leading-6 text-slate-600 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
         <h2 className="text-base font-semibold text-slate-950">Cannot sign in?</h2>
         <p className="mt-3">
-          If you cannot sign in, send the request from the email address connected to the account.
+          Self-service deletion requires a verified sign-in. If you cannot sign in, contact support from the email address connected to the account.
           Use a short message such as
           <span className="font-medium text-slate-800"> Please delete my account for My Custody Case.</span>{" "}
-          Support will follow up if verification or additional confirmation is required.
+          Support will help restore access or verify an assisted deletion.
         </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <a

@@ -167,7 +167,7 @@ create table if not exists public.records_child_support_payments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   case_id uuid not null references public.records_matters(id) on delete cascade,
-  child_support_order_id uuid not null references public.records_child_support_orders(id) on delete restrict,
+  child_support_order_id uuid not null references public.records_child_support_orders(id) on delete cascade,
   due_date date not null,
   amount_due numeric(12,2) not null check (amount_due >= 0),
   amount_paid numeric(12,2) not null check (amount_paid >= 0),

@@ -7,14 +7,14 @@ The native code now mitigates the locally fixable findings from the production-r
 - Export files are removed when sharing finishes or when the share sheet cannot be presented.
 - A web logout or rejected server session tells the native shell to clear its WebKit session cookies and Keychain cookie backup immediately.
 - The app synchronizes WebKit cookie state before background locking.
-- The account-deletion request opens inside the app's shared, app-bound WebKit session instead of switching to a separate browser cookie context.
+- Self-service account deletion opens inside the app's shared, app-bound WebKit session instead of switching to a separate browser cookie context.
 - Native unit tests cover cookie allow-listing and expiration, export limits and filename sanitization, navigation isolation, and export-file cleanup.
 
 These safeguards reduce stale-session and temporary-file risk. They do not replace backend revocation or real-device verification.
 
 ## Automated verification status
 
-On 2026-07-16, Xcode 26.6 discovered and ran the shared `LostToFound` test plan on an iPhone 17 Pro simulator. All 6 `NativeSecurityPolicyTests` passed with 0 failures. The shared scheme now references `LostToFound.xctestplan`, so Product > Test and command-line test runs use the same test target instead of relying on Xcode's automatically generated test list.
+On 2026-07-22, Xcode 26.6 discovered and ran the shared `LostToFound` test plan on an iPhone 17 Pro simulator. All 6 `NativeSecurityPolicyTests` passed with 0 failures. The shared scheme references `LostToFound.xctestplan`, so Product > Test and command-line test runs use the same test target instead of relying on Xcode's automatically generated test list.
 
 Re-run with an available iPhone simulator before each public release:
 
@@ -41,15 +41,13 @@ Use a synthetic production test account. Record the build number, device model, 
 
 ### Account deletion
 
-1. Sign in and open **Support > Account and Data > Request account deletion**.
+1. Sign in and open **Support > Account and Data > Delete account**.
 2. Confirm the deletion page recognizes the signed-in account inside the app.
-3. Submit the deletion request with a synthetic account.
-4. Confirm the app signs out immediately and the backend reports that refresh sessions were revoked.
-5. Complete the approved backend deletion process, including permanent account removal or legally required retention handling.
-6. Force quit and relaunch the app.
-7. Confirm the deleted account cannot access records and its previous credentials cannot create a valid session.
-
-The current public control creates an authenticated deletion request; it does not itself prove that the operational deletion process has finished. Do not mark this case passed until the backend account deletion and session revocation are complete.
+3. Check the irreversible-deletion confirmation and press **Permanently delete my account** for a synthetic account.
+4. Confirm the page reports that deletion completed and the app invalidates its saved session.
+5. Force quit and relaunch the app.
+6. Confirm the deleted account cannot access records and its previous credentials cannot create a valid session.
+7. Confirm the synthetic account's active database rows and evidence-storage prefix no longer exist.
 
 ### Remote invalidation
 

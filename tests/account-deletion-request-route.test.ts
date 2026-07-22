@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { resetRateLimitStore } from "@/lib/security/rateLimit";
+import { recordsCsrfCookieName } from "@/lib/security/csrf";
 import { POST } from "@/app/api/records/account/deletion-request/route";
 
+const userId = "11111111-1111-4111-8111-111111111111";
 const getRecordsAuthContext = vi.hoisted(() => vi.fn());
 const recordSecurityEvent = vi.hoisted(() => vi.fn());
-const insertAuditLog = vi.hoisted(() => vi.fn());
 const revokeSessions = vi.hoisted(() => vi.fn());
+const deleteUser = vi.hoisted(() => vi.fn());
 const clearRecordsSessionCookies = vi.hoisted(() => vi.fn());
-const invalidateAllAttorneyAccessForOwner = vi.hoisted(() => vi.fn());
+const deleteRecordsEvidenceForUser = vi.hoisted(() => vi.fn());
+const csrf = "account-deletion-csrf-token";
 
 vi.mock("@/lib/records/authServer", () => ({
   clearRecordsSessionCookies,
@@ -21,129 +24,153 @@ vi.mock("@/lib/security/securityEvents", () => ({
   recordSecurityEvent,
 }));
 
-vi.mock("@/lib/records/attorneyAccess", () => ({
-  invalidateAllAttorneyAccessForOwner,
+vi.mock("@/lib/records/accountDeletion", () => ({
+  deleteRecordsEvidenceForUser,
 }));
 
-function makeRequest(body: unknown) {
+function makeRequest(
+  body: unknown,
+  input: { origin?: string; csrfHeader?: string; csrfCookie?: string } = {}
+) {
   return new NextRequest("https://losttofound.org/api/records/account/deletion-request", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Cookie: "l2f-records-access=test-access-token",
+      Origin: input.origin || "https://losttofound.org",
+      Cookie: `l2f-records-access=test-access-token; ${recordsCsrfCookieName}=${input.csrfCookie || csrf}`,
+      "X-L2F-CSRF": input.csrfHeader || csrf,
     },
     body: JSON.stringify(body),
   });
 }
 
-describe("records account deletion request route", () => {
+describe("records immediate account deletion route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetRateLimitStore();
-    insertAuditLog.mockResolvedValue({ error: null });
+    deleteRecordsEvidenceForUser.mockResolvedValue({ ok: true, deletedObjects: 2 });
     revokeSessions.mockResolvedValue({ error: null });
-    invalidateAllAttorneyAccessForOwner.mockResolvedValue({ ok: true });
+    deleteUser.mockResolvedValue({ error: null });
     getRecordsAuthContext.mockResolvedValue({
       supabase: {
         auth: {
           admin: {
             signOut: revokeSessions,
+            deleteUser,
           },
         },
-        from: (table: string) => {
-          expect(table).toBe("records_audit_logs");
-          return { insert: insertAuditLog };
-        },
       },
-      userId: "11111111-1111-4111-8111-111111111111",
+      userId,
       email: "reviewer@example.test",
       caseId: "demo-case",
     });
   });
 
-  it("records a server-side account deletion request for the authenticated user", async () => {
-    const response = await POST(makeRequest({ confirm: true }));
+  it("permanently deletes evidence, sessions, Auth identity, and cascaded account data", async () => {
+    const response = await POST(makeRequest({ confirmation: "DELETE" }));
     const body = await response.json();
 
-    expect(response.status).toBe(202);
+    expect(response.status).toBe(200);
     expect(body).toMatchObject({
       ok: true,
-      message: expect.stringContaining("within 30 days"),
+      clearLocalSession: true,
+      deletedAt: expect.any(String),
+      message: expect.stringContaining("permanently deleted"),
     });
-    expect(body.requestId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
-    );
-    expect(insertAuditLog).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "deletion_requested",
-        case_id: null,
-        entity_type: "account",
-        metadata_summary: expect.stringContaining("complete account deletion"),
-        user_id: "11111111-1111-4111-8111-111111111111",
-      })
-    );
-    expect(recordSecurityEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        severity: "warning",
-        status: 202,
-        type: "account_deletion_requested",
-        userId: "11111111-1111-4111-8111-111111111111",
-      })
+    expect(deleteRecordsEvidenceForUser).toHaveBeenCalledWith(
+      expect.objectContaining({ userId })
     );
     expect(revokeSessions).toHaveBeenCalledWith("test-access-token", "global");
-    expect(clearRecordsSessionCookies).toHaveBeenCalledWith(response);
-    expect(body.clearLocalSession).toBe(true);
-  });
-
-  it("clears the local session and reports an error if server revocation cannot be confirmed", async () => {
-    revokeSessions.mockResolvedValue({ error: new Error("revocation unavailable") });
-
-    const response = await POST(makeRequest({ confirm: true }));
-    const body = await response.json();
-
-    expect(response.status).toBe(503);
-    expect(body).toMatchObject({
-      clearLocalSession: true,
-      error: expect.stringContaining("session revocation could not be confirmed"),
-      requestId: expect.any(String),
-    });
-    expect(insertAuditLog).toHaveBeenCalledOnce();
-    expect(clearRecordsSessionCookies).toHaveBeenCalledWith(response);
+    expect(deleteUser).toHaveBeenCalledWith(userId, false);
     expect(recordSecurityEvent).toHaveBeenCalledWith(
       expect.objectContaining({
-        severity: "high",
-        status: 503,
-        type: "account_deletion_session_revocation_failed",
+        severity: "info",
+        status: 200,
+        type: "account_deletion_completed",
+        userId,
       })
     );
+    expect(clearRecordsSessionCookies).toHaveBeenCalledWith(response);
   });
 
-  it("requires explicit confirmation before recording a request", async () => {
-    const response = await POST(makeRequest({ confirm: false }));
+  it("stops before deleting the identity when private evidence cleanup fails", async () => {
+    deleteRecordsEvidenceForUser.mockResolvedValue({ ok: false, error: "cleanup failed" });
+
+    const response = await POST(makeRequest({ confirmation: "DELETE" }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining("private files could not be removed"),
+    });
+    expect(revokeSessions).not.toHaveBeenCalled();
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("does not delete the user unless global session revocation succeeds", async () => {
+    revokeSessions.mockResolvedValue({ error: new Error("revocation unavailable") });
+
+    const response = await POST(makeRequest({ confirmation: "DELETE" }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining("active sessions could not be closed"),
+    });
+    expect(deleteUser).not.toHaveBeenCalled();
+    expect(clearRecordsSessionCookies).not.toHaveBeenCalled();
+  });
+
+  it("clears local cookies and reports a partial provider failure if Auth deletion fails", async () => {
+    deleteUser.mockResolvedValue({ error: new Error("delete unavailable") });
+
+    const response = await POST(makeRequest({ confirmation: "DELETE" }));
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toMatchObject({
+      error: expect.stringContaining("could not be fully deleted"),
+    });
+    expect(clearRecordsSessionCookies).toHaveBeenCalledWith(response);
+  });
+
+  it("requires an exact irreversible-deletion confirmation", async () => {
+    const response = await POST(makeRequest({ confirmation: "delete" }));
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({
-      error: "Confirm that you want to start complete account deletion.",
+      error: "Confirm permanent deletion before continuing.",
     });
-    expect(insertAuditLog).not.toHaveBeenCalled();
-    expect(recordSecurityEvent).not.toHaveBeenCalled();
-    expect(revokeSessions).not.toHaveBeenCalled();
-    expect(clearRecordsSessionCookies).not.toHaveBeenCalled();
+    expect(deleteRecordsEvidenceForUser).not.toHaveBeenCalled();
+    expect(deleteUser).not.toHaveBeenCalled();
   });
 
-  it("requires an authenticated records session", async () => {
-    getRecordsAuthContext.mockResolvedValue(
-      { error: NextResponse.json({ error: "Sign in before accessing records." }, { status: 401 }) }
+  it("requires an authenticated AAL2 records session", async () => {
+    getRecordsAuthContext.mockResolvedValue({
+      error: NextResponse.json({ error: "Multi factor verification required." }, { status: 403 }),
+    });
+
+    const response = await POST(makeRequest({ confirmation: "DELETE" }));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Multi factor verification required.",
+    });
+    expect(deleteRecordsEvidenceForUser).not.toHaveBeenCalled();
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("rejects a cross-origin request before touching the account", async () => {
+    const response = await POST(
+      makeRequest(
+        { confirmation: "DELETE" },
+        { origin: "https://attacker.example" }
+      )
     );
 
-    const response = await POST(makeRequest({ confirm: true }));
-
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({
-      error: "Sign in before accessing records.",
+      error: "This request could not be verified. Refresh and try again.",
     });
-    expect(insertAuditLog).not.toHaveBeenCalled();
-    expect(revokeSessions).not.toHaveBeenCalled();
-    expect(clearRecordsSessionCookies).not.toHaveBeenCalled();
+    expect(getRecordsAuthContext).not.toHaveBeenCalled();
+    expect(deleteRecordsEvidenceForUser).not.toHaveBeenCalled();
+    expect(deleteUser).not.toHaveBeenCalled();
   });
 });
