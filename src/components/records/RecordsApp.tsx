@@ -7634,7 +7634,7 @@ function isWideReportField(header: string) {
 
 function StatusPill({ label }: { label: string }) {
   return (
-    <span className="inline-flex max-w-full rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-semibold text-slate-600 [overflow-wrap:anywhere]">
+    <span className="inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold leading-5 text-slate-600">
       {label}
     </span>
   );

@@ -284,25 +284,58 @@ export default function ExhibitBuilder({
           </label>
           <div className="grid gap-2 text-sm text-slate-700">
             <label className="flex items-start gap-2">
-              <input type="checkbox" checked={includeCoverPage} onChange={(event) => { setIncludeCoverPage(event.target.checked); invalidateOutput(); }} />
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-teal-700"
+                checked={includeCoverPage}
+                onChange={(event) => { setIncludeCoverPage(event.target.checked); invalidateOutput(); }}
+              />
               Include a neutral cover page.
             </label>
             <label className="flex items-start gap-2">
-              <input type="checkbox" checked={includePageNumbers} onChange={(event) => { setIncludePageNumbers(event.target.checked); invalidateOutput(); }} />
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-teal-700"
+                checked={includePageNumbers}
+                onChange={(event) => { setIncludePageNumbers(event.target.checked); invalidateOutput(); }}
+              />
               Add Page X of Y numbering, including the cover page.
             </label>
             <label className="flex items-start gap-2">
-              <input type="checkbox" checked={includeInReports} onChange={(event) => setIncludeInReports(event.target.checked)} />
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-teal-700"
+                checked={includeInReports}
+                onChange={(event) => setIncludeInReports(event.target.checked)}
+              />
               Include the saved PDF in report file indexes.
             </label>
             <label className="flex items-start gap-2">
-              <input type="checkbox" checked={saveOriginals} onChange={(event) => setSaveOriginals(event.target.checked)} />
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 accent-teal-700"
+                checked={saveOriginals}
+                onChange={(event) => setSaveOriginals(event.target.checked)}
+              />
               When saving, preserve every selected screenshot as a separate original evidence item.
             </label>
           </div>
           <button type="button" className="btn-primary w-full" disabled={Boolean(busy) || sources.length === 0} onClick={() => void generate()}>
-            {busy === "generate" ? "Generating PDF..." : "Generate PDF"}
+            {busy === "generate" ? "Generating PDF..." : generated ? "Regenerate PDF" : "Generate PDF"}
           </button>
+          {message ? (
+            <p
+              role="status"
+              aria-live="polite"
+              className={`rounded-md border p-3 text-sm leading-6 ${
+                generated && message.startsWith("PDF generated with")
+                  ? "border-teal-200 bg-teal-50 font-medium text-teal-950"
+                  : "border-slate-200 bg-slate-50 text-slate-700"
+              }`}
+            >
+              {message}
+            </p>
+          ) : null}
           {generated ? (
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
               <button type="button" className="btn-secondary" disabled={Boolean(busy)} onClick={() => void share()}>
@@ -312,11 +345,6 @@ export default function ExhibitBuilder({
                 {busy === "save" ? "Saving and reloading..." : "Save PDF to Files"}
               </button>
             </div>
-          ) : null}
-          {message ? (
-            <p role="status" aria-live="polite" className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
-              {message}
-            </p>
           ) : null}
         </div>
 

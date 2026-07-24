@@ -394,8 +394,23 @@ test("mobile screenshot exhibit builder preserves order and generates a protecte
   await expect(builder.getByText("1. second.png")).toBeVisible();
   await expect(builder.getByText("2. first.png")).toBeVisible();
   await builder.getByLabel("Exhibit label").fill("Exhibit A");
+  const builderCheckboxes = builder.locator('input[type="checkbox"]');
+  await expect(builderCheckboxes).toHaveCount(4);
+  const checkboxSizes = await builderCheckboxes.evaluateAll((checkboxes) =>
+    checkboxes.map((checkbox) => {
+      const rect = checkbox.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    })
+  );
+  expect(checkboxSizes).toEqual([
+    { width: 16, height: 16 },
+    { width: 16, height: 16 },
+    { width: 16, height: 16 },
+    { width: 16, height: 16 },
+  ]);
   await builder.getByRole("button", { name: "Generate PDF" }).click();
   await expect(builder.getByRole("status")).toContainText("PDF generated with 3 pages");
+  await expect(builder.getByRole("button", { name: "Regenerate PDF" })).toBeVisible();
   const downloadPromise = page.waitForEvent("download");
   await builder.getByRole("button", { name: "Download or share PDF" }).click();
   const download = await downloadPromise;
@@ -406,6 +421,37 @@ test("mobile screenshot exhibit builder preserves order and generates a protecte
   await expect(page.getByRole("heading", { name: "Attorney access", exact: true })).toBeVisible();
   const fitsViewport = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   expect(fitsViewport).toBe(true);
+});
+
+test("mobile exchange status indicators have readable horizontal spacing", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/records");
+  await page.getByRole("button", { name: "Enter records workspace" }).click();
+  await page.getByRole("button", { name: "Exchanges", exact: true }).click();
+
+  const addExchangePanel = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Log actual exchange outcome" }),
+  });
+  await addExchangePanel.getByRole("button", { name: "Save exchange log" }).click();
+
+  const loggedExchangePanel = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Logged exchanges" }),
+  });
+  const completedLateStatus = loggedExchangePanel.getByText("completed late", { exact: true }).first();
+  await expect(completedLateStatus).toBeVisible();
+  const spacing = await completedLateStatus.evaluate((element) => {
+    const style = window.getComputedStyle(element);
+    return {
+      paddingLeft: style.paddingLeft,
+      paddingRight: style.paddingRight,
+      whiteSpace: style.whiteSpace,
+    };
+  });
+  expect(spacing).toEqual({
+    paddingLeft: "12px",
+    paddingRight: "12px",
+    whiteSpace: "nowrap",
+  });
 });
 
 test("attorney portal is a separate read-only mobile experience", async ({ page }) => {
