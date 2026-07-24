@@ -107,6 +107,31 @@ final class NativeSecurityPolicyTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testWorkspaceHistoryBridgeEnablesBackWhenWebKitDoesNot() async throws {
+        let webView = WKWebView(frame: .zero)
+        webView.loadHTMLString("<!doctype html><title>Records</title><main>Dashboard</main>", baseURL: nil)
+
+        for _ in 0 ..< 100 {
+            let readyState = try? await webView.evaluateJavaScript("document.readyState") as? String
+            if readyState == "complete" {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertFalse(webView.canGoBack)
+        _ = try await webView.evaluateJavaScript(
+            "history.pushState({ recordsView: 'Notes' }, '')"
+        )
+        XCTAssertFalse(webView.canGoBack)
+
+        let model = WebViewModel()
+        model.workspaceHistoryChanged(canGoBack: true, canGoForward: false)
+        XCTAssertTrue(model.canGoBack)
+        XCTAssertFalse(model.canGoForward)
+    }
+
     func testSensitiveExportStoreRemovesWrittenFiles() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("LostToFoundTests-\(UUID().uuidString)", isDirectory: true)

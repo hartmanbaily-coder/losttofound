@@ -41,6 +41,7 @@ import {
   createId,
   downloadBlobFile,
   downloadTextFile,
+  notifyNativeNavigationChanged,
   nowIso,
   parseTags,
   readRecordsSession,
@@ -107,6 +108,7 @@ import {
   exchangeLogSchema,
   exchangeRuleSchema,
   expenseItemSchema,
+  normalizeEvidenceFileType,
   timezoneSchema,
   validateEvidenceFile,
 } from "@/lib/records/validation";
@@ -129,6 +131,10 @@ import {
   saveScreenshotExhibitToFiles,
   type ExhibitSaveRequest,
 } from "@/lib/records/exhibitEvidence";
+import {
+  assertEvidenceItemAccess,
+  isEvidenceStoragePathOwnedByUser,
+} from "@/lib/records/evidenceStorage";
 
 const recordsPrivacyNote =
   "Records are private by default. Use labels such as Child 1 and Parent B instead of real names.";
@@ -150,6 +156,31 @@ const navItems = [
 ] as const;
 
 type ActiveView = (typeof navItems)[number];
+
+function activeViewFromHistoryState(state: unknown): ActiveView | null {
+  if (!state || typeof state !== "object" || !("recordsView" in state)) return null;
+  const candidate = (state as { recordsView?: unknown }).recordsView;
+  return typeof candidate === "string" && navItems.some((item) => item === candidate)
+    ? (candidate as ActiveView)
+    : null;
+}
+
+function historyIndexFromState(state: unknown) {
+  if (!state || typeof state !== "object" || !("recordsHistoryIndex" in state)) return null;
+  const candidate = (state as { recordsHistoryIndex?: unknown }).recordsHistoryIndex;
+  return typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate >= 0
+    ? candidate
+    : null;
+}
+
+function recordsHistoryState(view: ActiveView, index: number) {
+  const current = window.history.state;
+  return {
+    ...(current && typeof current === "object" ? current : {}),
+    recordsHistoryIndex: index,
+    recordsView: view,
+  };
+}
 
 const recordsTimezoneOptions = [
   "America/Anchorage",
@@ -311,61 +342,6 @@ const evidenceReviewStatusLabels: Record<EvidenceReviewStatus, string> = {
   rejected: "Rejected",
 };
 
-type ImportDraftKind = "note" | "exchange" | "custody_day" | "file";
-type ImportDraftConfidence = "high" | "medium" | "low";
-
-type ImportDraft = {
-  id: string;
-  kind: ImportDraftKind;
-  date: string;
-  time?: string;
-  title: string;
-  body: string;
-  category: NoteCategory;
-  tags: string[];
-  includeInReports: boolean;
-  confidence: ImportDraftConfidence;
-  sourceLabel: string;
-  selected: boolean;
-  orderedTime?: string;
-  actualTime?: string;
-  direction?: ExchangeDirection;
-  status?: ExchangeStatus;
-  caregiverLabel?: string;
-  color?: string;
-  file?: File;
-  fileType?: string;
-  fileSize?: number;
-};
-
-const importDraftKindLabels: Record<ImportDraftKind, string> = {
-  note: "Note",
-  exchange: "Exchange",
-  custody_day: "Calendar day",
-  file: "File",
-};
-
-type AiImportKind = "message_archive" | "pasted_notes" | "custody_calendar";
-type AiImportDraftPayload = {
-  kind: Exclude<ImportDraftKind, "file">;
-  date: string;
-  time: string | null;
-  title: string;
-  body: string;
-  category: NoteCategory;
-  tags: string[];
-  includeInReports: boolean;
-  confidence: ImportDraftConfidence;
-  orderedTime: string | null;
-  actualTime: string | null;
-  direction: ExchangeDirection | null;
-  status: ExchangeStatus | null;
-  caregiverLabel: string | null;
-  color: string | null;
-  sourceQuote: string;
-  reviewReason: string;
-};
-
 export default function RecordsApp() {
   const {
     dataset,
@@ -381,6 +357,9 @@ export default function RecordsApp() {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [mfaResumeRequired, setMfaResumeRequired] = useState(false);
   const [activeView, setActiveView] = useState<ActiveView>("Dashboard");
+  const activeViewRef = useRef<ActiveView>("Dashboard");
+  const historyIndexRef = useRef(0);
+  const historyMaxIndexRef = useRef(0);
   const [selectedCaseId, setSelectedCaseId] = useState(demoCaseId);
   const [range, setRange] = useState<DateRange>(() =>
     buildDateRangePreset(defaultRangePreset, new Date(), defaultRecordsTimezone)
@@ -423,12 +402,50 @@ export default function RecordsApp() {
   }, [selectedCase, selectedCaseId]);
 
   const openView = useCallback((view: ActiveView) => {
-    setActiveView(view);
+    if (activeViewRef.current !== view) {
+      const nextIndex = historyIndexRef.current + 1;
+      window.history.pushState(recordsHistoryState(view, nextIndex), "");
+      historyIndexRef.current = nextIndex;
+      historyMaxIndexRef.current = nextIndex;
+      activeViewRef.current = view;
+      setActiveView(view);
+      notifyNativeNavigationChanged({
+        canGoBack: true,
+        canGoForward: false,
+      });
+    }
     if (view === "Calendar") {
       setCalendarMonthKey(currentMonthKey(new Date(), caseTimezone));
       setSelectedDay(formatLocalDate(new Date(), caseTimezone));
     }
   }, [caseTimezone]);
+
+  useEffect(() => {
+    activeViewRef.current = "Dashboard";
+    historyIndexRef.current = 0;
+    historyMaxIndexRef.current = 0;
+    setActiveView("Dashboard");
+    window.history.replaceState(recordsHistoryState("Dashboard", 0), "");
+    notifyNativeNavigationChanged({
+      canGoBack: false,
+      canGoForward: false,
+    });
+
+    const handlePopState = (event: PopStateEvent) => {
+      const view = activeViewFromHistoryState(event.state) || "Dashboard";
+      const index = historyIndexFromState(event.state) || 0;
+      activeViewRef.current = view;
+      historyIndexRef.current = index;
+      setActiveView(view);
+      notifyNativeNavigationChanged({
+        canGoBack: index > 0,
+        canGoForward: index < historyMaxIndexRef.current,
+      });
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -663,7 +680,7 @@ export default function RecordsApp() {
   }
 
   return (
-    <div className="records-app-shell min-h-screen bg-[#f4f7f6] text-slate-950">
+    <div className="records-app-shell min-h-screen bg-gradient-to-br from-[#f8fbfa] via-[#eef5f2] to-[#f5f7f6] text-slate-950">
       <div className="records-app-grid grid min-h-screen lg:grid-cols-[288px_minmax(0,1fr)]">
         <aside className="overflow-hidden border-b border-slate-200 bg-white/95 lg:overflow-visible lg:border-b-0 lg:border-r lg:border-slate-200">
           <div className="flex flex-col p-4 lg:sticky lg:top-0 lg:h-screen">
@@ -722,6 +739,7 @@ export default function RecordsApp() {
             setRange={setRange}
             timezone={caseTimezone}
             onExport={() => openView("Reports")}
+            onOpenSettings={() => openView("Settings")}
             onLogout={logout}
           />
 
@@ -810,6 +828,7 @@ export default function RecordsApp() {
             )}
             {(activeView === "Files" || activeView === "Screenshot PDFs") && (
               <EvidenceView
+                mode={activeView === "Screenshot PDFs" ? "screenshots" : "files"}
                 updateDataset={updateDataset}
                 reloadDataset={reloadDataset}
                 userId={userId}
@@ -882,7 +901,7 @@ export default function RecordsApp() {
               />
             )}
           </div>
-          <PolicyFooter className="no-print" recordsNote={recordsPrivacyNote} />
+          <PolicyFooter compact className="no-print" recordsNote={recordsPrivacyNote} />
         </main>
       </div>
     </div>
@@ -2318,7 +2337,7 @@ function CalendarView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 max-w-full space-y-4">
       <Segmented
         value={mode}
         options={[
@@ -2479,8 +2498,8 @@ function CalendarView({
                 </span>
                 Scheduled exchange time
               </span>
-              <span className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-600">
-                <span className="h-4 w-4 rounded-sm border border-slate-200 bg-slate-100" />
+              <span className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-slate-50 px-2 py-1 text-slate-700">
+                <span className="h-4 w-4 rounded-sm border border-slate-300 bg-slate-200" />
                 Weekend
               </span>
             </div>
@@ -2497,7 +2516,7 @@ function CalendarView({
                       key={day}
                       data-calendar-weekend-header={index === 0 || index === 6 ? "true" : undefined}
                       className={`min-w-0 rounded-sm px-0.5 py-1 sm:px-2 ${
-                        index === 0 || index === 6 ? "bg-slate-100/80 text-slate-600" : ""
+                        index === 0 || index === 6 ? "bg-slate-200/80 text-slate-700" : ""
                       }`}
                     >
                       <span className="sm:hidden">{day.slice(0, 1)}</span>
@@ -2558,7 +2577,7 @@ function CalendarView({
                           day === selectedDay
                             ? "border-teal-700 ring-2 ring-inset ring-teal-600"
                             : isWeekend
-                              ? "border-slate-200 bg-slate-50 hover:border-teal-300"
+                              ? "border-slate-300 bg-slate-100 hover:border-teal-300"
                               : "border-slate-200 bg-white hover:border-teal-300"
                         } ${isPaintDraft ? "ring-2 ring-inset ring-amber-500" : ""} ${
                           day ? (multiDayPaintEnabled ? "cursor-crosshair" : "cursor-pointer") : ""
@@ -2570,7 +2589,7 @@ function CalendarView({
                               <span
                                 aria-hidden="true"
                                 data-testid="calendar-weekend-shading"
-                                className="pointer-events-none absolute inset-0 z-0 bg-slate-100/35"
+                                className="pointer-events-none absolute inset-0 z-0 bg-slate-200/45"
                               />
                             )}
                             {exchangeTimeMarkers.map(({ position, time }) => (
@@ -2682,7 +2701,6 @@ function CalendarView({
                     name="caregiverLabel"
                     className="input"
                     defaultValue={selectedAssignment?.caregiverLabel || "Parent A"}
-                    placeholder="Parent A, Parent B, Me, Other Parent"
                   />
                 </Field>
                 <Field label="Color">
@@ -3230,7 +3248,6 @@ function ExchangesView({
                 name="orderProvisionNotes"
                 className="input min-h-20"
                 defaultValue={editingRule?.orderProvisionNotes || ""}
-                placeholder="What the order says, without legal conclusions."
               />
             </Field>
             <div className="flex flex-wrap gap-2">
@@ -3315,11 +3332,10 @@ function ExchangesView({
               <textarea
                 name="notes"
                 className="input min-h-20"
-                placeholder="What happened? When? How does it compare to the order?"
               />
             </Field>
             <Field label="Tags">
-              <input name="tags" className="input" placeholder="late exchange, exchange" />
+              <input name="tags" className="input" />
             </Field>
             <Field label="Witnesses">
               <input name="witnesses" className="input" />
@@ -3724,13 +3740,13 @@ function NotesView({
               </select>
             </Field>
             <Field label="Title">
-              <input name="title" className="input" defaultValue={editingNote?.title || ""} placeholder="Short factual title" />
+              <input name="title" className="input" defaultValue={editingNote?.title || ""} />
             </Field>
             <Field label="What happened?">
               <textarea name="body" className="input min-h-28" defaultValue={editingNote?.body || ""} />
             </Field>
             <Field label="Tags">
-              <input name="tags" className="input" defaultValue={editingNote?.tags.join(", ") || ""} placeholder="school, exchange" />
+              <input name="tags" className="input" defaultValue={editingNote?.tags.join(", ") || ""} />
             </Field>
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input name="includeInReports" type="checkbox" defaultChecked={editingNote?.includeInReports ?? true} />
@@ -3811,80 +3827,6 @@ function NotesView({
       </Panel>
     </div>
   );
-}
-
-function importSubmitterValue(event: FormEvent<HTMLFormElement>) {
-  const submitter = (event.nativeEvent as SubmitEvent).submitter;
-  return submitter instanceof HTMLButtonElement ? submitter.value : "";
-}
-
-async function requestAiImportDrafts({
-  content,
-  sourceLabel,
-  defaultYear,
-  defaultOrderedTime,
-  importKind,
-}: {
-  content: string;
-  sourceLabel: string;
-  defaultYear?: number;
-  defaultOrderedTime?: string;
-  importKind: AiImportKind;
-}) {
-  const response = await fetch("/api/records/import/assist", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      content,
-      sourceLabel,
-      importKind,
-      ...(defaultYear ? { defaultYear } : {}),
-      ...(defaultOrderedTime ? { defaultOrderedTime } : {}),
-    }),
-  });
-
-  const parsed = (await response.json().catch(() => ({}))) as {
-    drafts?: AiImportDraftPayload[];
-    error?: string;
-    detail?: string;
-  };
-
-  if (!response.ok) {
-    throw new Error([parsed.error, parsed.detail].filter(Boolean).join(" ") || "AI import failed.");
-  }
-
-  return (parsed.drafts || []).map(aiPayloadToImportDraft);
-}
-
-function aiPayloadToImportDraft(draft: AiImportDraftPayload): ImportDraft {
-  const sourceDetail = [
-    draft.sourceQuote ? `Source quote: ${draft.sourceQuote}` : "",
-    draft.reviewReason ? `Review note: ${draft.reviewReason}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return {
-    id: createId("import-ai"),
-    kind: draft.kind,
-    date: draft.date,
-    time: draft.time || undefined,
-    title: draft.title,
-    body: sourceDetail ? `${draft.body}\n\n${sourceDetail}` : draft.body,
-    category: draft.category,
-    tags: Array.from(new Set([...draft.tags, "ai_assisted"])).slice(0, 12),
-    includeInReports: draft.includeInReports,
-    confidence: draft.confidence,
-    sourceLabel: "AI assist",
-    selected: true,
-    orderedTime: draft.orderedTime || undefined,
-    actualTime: draft.actualTime || undefined,
-    direction: draft.direction || undefined,
-    status: draft.status || undefined,
-    caregiverLabel: draft.caregiverLabel || undefined,
-    color: draft.color || undefined,
-  };
 }
 
 function oppositeScheduleParent(parent: ScheduleParentKey): ScheduleParentKey {
@@ -4015,7 +3957,7 @@ function buildScheduleSetupAssignments({
     const isExchangeDate = offset === 0 ? markStartAsExchange : owner !== previousOwner;
     const caregiverLabel = owner === "you" ? yourLabel : otherParentLabel;
     const setupNotes = [
-      `Generated from ${sourceLabel || "custody order setup"}.`,
+      `Generated from ${sourceLabel || "calendar schedule setup"}.`,
       `Pattern: ${presetLabel}.`,
       isExchangeDate ? `Transition marked at ${exchangeTime}${exchangeLocation ? ` at ${exchangeLocation}` : ""}.` : "",
       isExchangeDate && orderNotes ? orderNotes : "",
@@ -4061,30 +4003,16 @@ function ImportView({
   recordsStorageMode: "local" | "supabase";
   flash: (message: string) => void;
 }) {
-  const [drafts, setDrafts] = useState<ImportDraft[]>([]);
-  const [parsing, setParsing] = useState(false);
-  const [assistBusy, setAssistBusy] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [messageSaving, setMessageSaving] = useState(false);
   const [quickIssueSaving, setQuickIssueSaving] = useState(false);
   const [documentSaving, setDocumentSaving] = useState(false);
   const [setupSchedulePreset, setSetupSchedulePreset] =
     useState<ParentingSchedulePresetId>("three_four_four_three_flip");
-  const selectedCount = drafts.filter((draft) => draft.selected).length;
   const selectedSetupPreset =
     parentingSchedulePresets.find((preset) => preset.id === setupSchedulePreset) ||
     parentingSchedulePresets[0];
   const setupToday = formatLocalDate(new Date(), timezone);
   const setupDefaultEndDate = addDays(setupToday, 90);
-
-  function queueDrafts(nextDrafts: ImportDraft[], sourceLabel: string) {
-    if (nextDrafts.length === 0) {
-      flash(`No import ready records found in ${sourceLabel}.`);
-      return;
-    }
-
-    setDrafts((current) => [...nextDrafts, ...current]);
-    flash(`${nextDrafts.length} draft record${nextDrafts.length === 1 ? "" : "s"} queued.`);
-  }
 
   async function saveQuickIssue(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -4150,160 +4078,170 @@ function ImportView({
     }
   }
 
-  async function reviewMessageArchive(event: FormEvent<HTMLFormElement>) {
+  async function saveMessageArchive(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const useAiAssist = importSubmitterValue(event) === "ai";
     const formData = new FormData(form);
     const file = formData.get("archive");
     if (!(file instanceof File) || file.size === 0) {
-      flash("Choose a CSV, TXT, or HTML message export.");
+      flash("Choose a CSV, TXT, or HTML message file.");
       return;
     }
 
-    if (useAiAssist) setAssistBusy(true);
-    else setParsing(true);
+    setMessageSaving(true);
     try {
-      const content = await file.text();
-      const nextDrafts = useAiAssist
-        ? await requestAiImportDrafts({
-            content,
-            sourceLabel: file.name,
-            importKind: "message_archive",
-          })
-        : buildMessageImportDrafts({
-            content,
-            sourceLabel: file.name,
-            defaultYear: new Date().getFullYear(),
-            defaultOrderedTime: "17:00",
-          });
-      queueDrafts(
-        nextDrafts,
-        file.name
-      );
+      const saved = await saveImportedEvidenceFiles({
+        files: [file],
+        evidenceDate: text(formData, "evidenceDate") || setupToday,
+        description:
+          text(formData, "description") || `Imported message archive: ${file.name}`,
+        tags: ["message archive"],
+        includeInReports: formData.get("includeInReports") === "on",
+        auditSummary: "Message archive uploaded directly into the private file index.",
+      });
       form.reset();
+      flash(
+        recordsStorageMode === "supabase"
+          ? `${saved} message file${saved === 1 ? "" : "s"} uploaded to Files.`
+          : `${saved} message file record${saved === 1 ? "" : "s"} saved to Files.`
+      );
     } catch (error) {
-      flash(error instanceof Error ? error.message : "Message import failed.");
+      flash(error instanceof Error ? error.message : "Message upload failed.");
     } finally {
-      if (useAiAssist) setAssistBusy(false);
-      else setParsing(false);
+      setMessageSaving(false);
     }
   }
 
-  async function reviewPastedNotes(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const useAiAssist = importSubmitterValue(event) === "ai";
-    const formData = new FormData(form);
-    const content = text(formData, "notes");
-    if (!content) {
-      flash("Paste notes before reviewing.");
-      return;
+  async function verifyCloudEvidenceRecords(records: RecordsDataset["evidenceItems"]) {
+    if (recordsStorageMode !== "supabase") return;
+
+    const response = await fetch("/api/records/dataset?caseId=default", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    const parsed = (await response.json().catch(() => ({}))) as {
+      dataset?: Partial<RecordsDataset> | null;
+      error?: string;
+    };
+    const storedItems = parsed.dataset?.evidenceItems || [];
+    const allConfirmed = records.every((record) =>
+      storedItems.some(
+        (stored) =>
+          stored.id === record.id &&
+          stored.userId === userId &&
+          stored.caseId === caseId &&
+          stored.storagePath === record.storagePath
+      )
+    );
+
+    if (!response.ok || !allConfirmed) {
+      throw new Error(parsed.error || "The file uploaded, but its private storage record could not be confirmed.");
+    }
+  }
+
+  async function saveImportedEvidenceFiles(input: {
+    files: File[];
+    evidenceDate: string;
+    description: string;
+    tags: string[];
+    includeInReports: boolean;
+    auditSummary: string;
+  }) {
+    const evidenceRecords: RecordsDataset["evidenceItems"] = [];
+    const now = nowIso();
+
+    for (const file of input.files) {
+      const normalizedFileType = normalizeEvidenceFileType({
+        originalFileName: file.name,
+        fileType: file.type,
+      });
+      const validation = validateEvidenceFile({
+        originalFileName: file.name,
+        fileType: normalizedFileType,
+        fileSize: file.size,
+      });
+      if (!validation.ok) throw new Error(`${file.name}: ${validation.error}`);
+
+      const id = createId("evidence");
+      const uploaded =
+        recordsStorageMode === "supabase" ? await uploadImportEvidenceFile(file, id) : undefined;
+
+      evidenceRecords.push({
+        id,
+        userId,
+        caseId,
+        originalFileName: file.name,
+        storedFileName:
+          uploaded?.storedFileName || buildStoredEvidenceName({ id, originalFileName: file.name }),
+        fileType: uploaded?.fileType || normalizedFileType,
+        fileSize: file.size,
+        storageBucket: uploaded?.storageBucket,
+        storagePath: uploaded?.storagePath,
+        storageUploadedAt: uploaded?.storageUploadedAt,
+        storageSha256: uploaded?.storageSha256,
+        uploadedAt: now,
+        evidenceDate: input.evidenceDate || now.slice(0, 10),
+        description: input.description || `Imported file: ${file.name}`,
+        tags: input.tags,
+        includeInReports: input.includeInReports,
+        reviewStatus: "reviewed",
+        reviewedAt: now,
+        malwareScanStatus: uploaded?.malwareScanStatus || "pending",
+        createdAt: now,
+        updatedAt: now,
+      });
     }
 
-    const sourceLabel = text(formData, "sourceLabel") || "Pasted notes";
-
-    if (useAiAssist) setAssistBusy(true);
-    try {
-      const nextDrafts = useAiAssist
-        ? await requestAiImportDrafts({
-            content,
-            sourceLabel,
-            importKind: "pasted_notes",
-          })
-        : buildPastedNoteDrafts({
-            content,
-            sourceLabel,
-            defaultYear: new Date().getFullYear(),
-            defaultOrderedTime: "17:00",
-          });
-      queueDrafts(nextDrafts, "pasted notes");
-      form.reset();
-    } catch (error) {
-      flash(error instanceof Error ? error.message : "Pasted-note import failed.");
-    } finally {
-      if (useAiAssist) setAssistBusy(false);
-    }
+    await updateDataset((current) =>
+      withAudit(
+        {
+          ...current,
+          evidenceItems: [...evidenceRecords, ...current.evidenceItems],
+        },
+        {
+          userId,
+          caseId,
+          action: "uploaded",
+          entityType: "evidenceItem",
+          entityId: evidenceRecords.length === 1 ? evidenceRecords[0].id : createId("evidence-batch"),
+          metadataSummary: input.auditSummary,
+        }
+      )
+    );
+    await verifyCloudEvidenceRecords(evidenceRecords);
+    return evidenceRecords.length;
   }
 
   async function saveDocumentFiles(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    const formData = new FormData(event.currentTarget);
-    const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File && entry.size > 0);
+    const formData = new FormData(form);
+    const files = formData
+      .getAll("files")
+      .filter((entry): entry is File => entry instanceof File && entry.size > 0);
     if (files.length === 0) {
       flash("Choose one or more files.");
       return;
     }
 
-    const evidenceDate = text(formData, "evidenceDate");
-    const description = text(formData, "description");
-    const tags = parseTags(text(formData, "tags") || "document");
-    const includeInReports = formData.get("includeInReports") === "on";
-    const evidenceRecords: RecordsDataset["evidenceItems"] = [];
-    const now = nowIso();
-
     setDocumentSaving(true);
     try {
-      for (const file of files) {
-        const validation = validateEvidenceFile({
-          originalFileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-        });
-        if (!validation.ok) throw new Error(`${file.name}: ${validation.error}`);
-
-        const id = createId("evidence");
-        const uploaded =
-          recordsStorageMode === "supabase" ? await uploadImportEvidenceFile(file, id) : undefined;
-
-        evidenceRecords.push({
-          id,
-          userId,
-          caseId,
-          originalFileName: file.name,
-          storedFileName:
-            uploaded?.storedFileName || buildStoredEvidenceName({ id, originalFileName: file.name }),
-          fileType: file.type,
-          fileSize: file.size,
-          storageBucket: uploaded?.storageBucket,
-          storagePath: uploaded?.storagePath,
-          storageUploadedAt: uploaded?.storageUploadedAt,
-          storageSha256: uploaded?.storageSha256,
-          uploadedAt: now,
-          evidenceDate: evidenceDate || now.slice(0, 10),
-          description: description || `Imported document: ${file.name}`,
-          tags,
-          includeInReports,
-          reviewStatus: "needs_review",
-          malwareScanStatus: uploaded?.malwareScanStatus || "pending",
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
-
-      await updateDataset((current) =>
-        withAudit(
-          {
-            ...current,
-            evidenceItems: [...evidenceRecords, ...current.evidenceItems],
-          },
-          {
-            userId,
-            caseId,
-            action: "uploaded",
-            entityType: "evidenceItem",
-            entityId: evidenceRecords.length === 1 ? evidenceRecords[0].id : createId("evidence-batch"),
-            metadataSummary:
-              evidenceRecords.length === 1
-                ? "Document imported into the private file index."
-                : `${evidenceRecords.length} documents imported into the private file index.`,
-          }
-        )
-      );
+      const saved = await saveImportedEvidenceFiles({
+        files,
+        evidenceDate: text(formData, "evidenceDate") || setupToday,
+        description: text(formData, "description"),
+        tags: parseTags(text(formData, "tags") || "document"),
+        includeInReports: formData.get("includeInReports") === "on",
+        auditSummary:
+          files.length === 1
+            ? "Document uploaded directly into the private file index."
+            : `${files.length} documents uploaded directly into the private file index.`,
+      });
       form.reset();
       flash(
-        `${evidenceRecords.length} file record${evidenceRecords.length === 1 ? "" : "s"} saved to Files.`
+        recordsStorageMode === "supabase"
+          ? `${saved} file${saved === 1 ? "" : "s"} uploaded to Files and confirmed.`
+          : `${saved} file record${saved === 1 ? "" : "s"} saved to Files.`
       );
     } catch (error) {
       flash(error instanceof Error ? error.message : "Document import failed.");
@@ -4386,7 +4324,7 @@ function ImportView({
     const yourColor = text(formData, "yourColor") || custodyDayColors[0];
     const otherParentColor = text(formData, "otherParentColor") || custodyDayColors[1];
     const startOwner = text(formData, "startOwner") === "other" ? "other" : "you";
-    const sourceLabel = text(formData, "sourceLabel") || "Custody order setup";
+    const sourceLabel = text(formData, "sourceLabel") || "Calendar schedule setup";
     const exchangeLocation = text(formData, "exchangeLocation");
     const orderNotes = text(formData, "orderNotes");
     const replaceExisting = formData.get("replaceExisting") === "on";
@@ -4465,49 +4403,6 @@ function ImportView({
     }
   }
 
-  async function reviewCustodyCalendarRows(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const useAiAssist = importSubmitterValue(event) === "ai";
-    const formData = new FormData(form);
-    const content = text(formData, "calendarRows");
-    if (!content) {
-      flash("Paste calendar rows before reviewing.");
-      return;
-    }
-
-    const sourceLabel = text(formData, "sourceLabel") || "Custody calendar rows";
-
-    if (useAiAssist) setAssistBusy(true);
-    try {
-      const nextDrafts = useAiAssist
-        ? await requestAiImportDrafts({
-            content,
-            sourceLabel,
-            defaultYear: new Date().getFullYear(),
-            defaultOrderedTime: "17:00",
-            importKind: "custody_calendar",
-          })
-        : buildCustodyCalendarDrafts({ content, sourceLabel });
-      queueDrafts(nextDrafts, "custody calendar rows");
-      form.reset();
-    } catch (error) {
-      flash(error instanceof Error ? error.message : "Calendar import failed.");
-    } finally {
-      if (useAiAssist) setAssistBusy(false);
-    }
-  }
-
-  function updateDraft(draftId: string, patch: Partial<ImportDraft>) {
-    setDrafts((current) =>
-      current.map((draft) => (draft.id === draftId ? { ...draft, ...patch } : draft))
-    );
-  }
-
-  function removeDraft(draftId: string) {
-    setDrafts((current) => current.filter((draft) => draft.id !== draftId));
-  }
-
   async function uploadImportEvidenceFile(file: File, evidenceId: string) {
     const body = new FormData();
     body.append("file", file);
@@ -4528,187 +4423,37 @@ function ImportView({
       throw new Error(parsed.error || "File upload failed.");
     }
 
-    if (!parsed.evidence?.storagePath || parsed.evidence.malwareScanStatus !== "clean") {
+    const uploadAccess =
+      parsed.evidence?.id &&
+      parsed.evidence.userId &&
+      parsed.evidence.caseId &&
+      parsed.evidence.storagePath
+        ? assertEvidenceItemAccess(
+            {
+              id: parsed.evidence.id,
+              userId: parsed.evidence.userId,
+              caseId: parsed.evidence.caseId,
+              storagePath: parsed.evidence.storagePath,
+              malwareScanStatus: parsed.evidence.malwareScanStatus,
+            },
+            { userId, caseId }
+          )
+        : null;
+    if (
+      parsed.evidence?.malwareScanStatus !== "clean" ||
+      parsed.evidence.id !== evidenceId ||
+      !uploadAccess?.ok ||
+      !isEvidenceStoragePathOwnedByUser(parsed.evidence.storagePath || "", userId)
+    ) {
       throw new Error("File upload response was incomplete.");
     }
 
     return parsed.evidence;
   }
 
-  async function saveApprovedDrafts() {
-    const approved = drafts.filter((draft) => draft.selected);
-    if (approved.length === 0) {
-      flash("Select at least one draft to save.");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const savedDraftIds = new Set<string>();
-      const now = nowIso();
-      const noteRecords: RecordsDataset["dateNotes"] = [];
-      const exchangeRecords: RecordsDataset["exchangeLogs"] = [];
-      const custodyDayRecords: RecordsDataset["custodyDayAssignments"] = [];
-      const evidenceRecords: RecordsDataset["evidenceItems"] = [];
-
-      for (const draft of approved) {
-        if (draft.kind === "note") {
-          const parsed = dateNoteSchema.safeParse({
-            noteDate: draft.date,
-            noteTime: draft.time || "",
-            category: draft.category,
-            title: draft.title,
-            body: draft.body,
-            tags: draft.tags,
-            includeInReports: draft.includeInReports,
-          });
-          if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "Check note drafts.");
-
-          noteRecords.push({
-            id: createId("note"),
-            userId,
-            caseId,
-            createdAt: now,
-            updatedAt: now,
-            ...emptyToUndefined(parsed.data),
-          });
-          savedDraftIds.add(draft.id);
-        }
-
-        if (draft.kind === "exchange") {
-          const parsed = exchangeLogSchema.safeParse({
-            orderedExchangeAt: `${draft.date}T${draft.orderedTime || "17:00"}:00.000Z`,
-            actualExchangeAt: draft.actualTime ? `${draft.date}T${draft.actualTime}:00.000Z` : null,
-            direction: draft.direction || "other_parent_to_me",
-            status: draft.status || "other",
-            location: "",
-            reasonGiven: "",
-            notes: draft.body,
-            tags: draft.tags,
-            witnesses: "",
-          });
-          if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "Check exchange drafts.");
-
-          exchangeRecords.push({
-            id: createId("exchange"),
-            userId,
-            caseId,
-            createdAt: now,
-            updatedAt: now,
-            ...emptyToUndefined(parsed.data),
-          });
-          savedDraftIds.add(draft.id);
-        }
-
-        if (draft.kind === "custody_day") {
-          const parsed = custodyDayAssignmentSchema.safeParse({
-            date: draft.date,
-            caregiverLabel: draft.caregiverLabel || "Parent A",
-            color: draft.color || custodyDayColors[0],
-            startsAt: "",
-            endsAt: "",
-            exchangeTime: "",
-            exchangeDirection: "",
-            exchangeLocation: "",
-            notes: draft.body,
-          });
-          if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || "Check calendar drafts.");
-          const parsedCustodyDay = emptyToUndefined(parsed.data);
-
-          custodyDayRecords.push({
-            id: createId("custody-day"),
-            userId,
-            caseId,
-            createdAt: now,
-            updatedAt: now,
-            ...parsedCustodyDay,
-            exchangeDirection: parsedCustodyDay.exchangeDirection || undefined,
-          });
-          savedDraftIds.add(draft.id);
-        }
-
-        if (draft.kind === "file") {
-          if (!draft.file) throw new Error(`Missing file for ${draft.title}.`);
-          const validation = validateEvidenceFile({
-            originalFileName: draft.file.name,
-            fileType: draft.file.type,
-            fileSize: draft.file.size,
-          });
-          if (!validation.ok) throw new Error(`${draft.file.name}: ${validation.error}`);
-
-          const id = createId("evidence");
-          const uploaded =
-            recordsStorageMode === "supabase" ? await uploadImportEvidenceFile(draft.file, id) : undefined;
-
-          evidenceRecords.push({
-            id,
-            userId,
-            caseId,
-            originalFileName: draft.file.name,
-            storedFileName:
-              uploaded?.storedFileName || buildStoredEvidenceName({ id, originalFileName: draft.file.name }),
-            fileType: draft.file.type,
-            fileSize: draft.file.size,
-            storageBucket: uploaded?.storageBucket,
-            storagePath: uploaded?.storagePath,
-            storageUploadedAt: uploaded?.storageUploadedAt,
-            storageSha256: uploaded?.storageSha256,
-            uploadedAt: now,
-            evidenceDate: draft.date,
-            description: draft.body,
-            tags: draft.tags,
-            includeInReports: draft.includeInReports,
-            reviewStatus: "needs_review",
-            malwareScanStatus: uploaded?.malwareScanStatus || "pending",
-            createdAt: now,
-            updatedAt: now,
-          });
-          savedDraftIds.add(draft.id);
-        }
-      }
-
-      await updateDataset((current) =>
-        withAudit(
-          {
-            ...current,
-            dateNotes: [...noteRecords, ...current.dateNotes],
-            exchangeLogs: [...exchangeRecords, ...current.exchangeLogs],
-            custodyDayAssignments: [
-              ...custodyDayRecords,
-              ...current.custodyDayAssignments.filter(
-                (item) =>
-                  !custodyDayRecords.some(
-                    (record) =>
-                      record.userId === item.userId &&
-                      record.caseId === item.caseId &&
-                      record.date === item.date
-                  )
-              ),
-            ],
-            evidenceItems: [...evidenceRecords, ...current.evidenceItems],
-          },
-          {
-            userId,
-            caseId,
-            action: "created",
-            entityType: "importBatch",
-            entityId: createId("import-batch"),
-            metadataSummary: `${savedDraftIds.size} approved import draft records saved to this case.`,
-          }
-        )
-      );
-      setDrafts((current) => current.filter((draft) => !savedDraftIds.has(draft.id)));
-      flash(`${savedDraftIds.size} import draft${savedDraftIds.size === 1 ? "" : "s"} saved.`);
-    } catch (error) {
-      flash(error instanceof Error ? error.message : "Import save failed.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
-    <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
-      <div className="space-y-4">
+    <div className="space-y-4">
+      <div className="grid items-start gap-4 xl:grid-cols-2">
         <Panel title="Quick issue" action="Save now, add detail later">
           <div className="mb-3 rounded-md border border-teal-200 bg-teal-50 p-3 text-xs leading-5 text-teal-950">
             Record an issue before you forget it. Only the issue description is required. It saves directly to Notes, where you can edit or delete it later.
@@ -4745,17 +4490,16 @@ function ImportView({
               </select>
             </Field>
             <Field label="Short title (optional)">
-              <input name="title" className="input" placeholder="A title will be created from the issue if left blank" />
+              <input name="title" className="input" />
             </Field>
             <Field label="What happened or needs attention?">
               <textarea
                 name="body"
                 className="input min-h-28"
-                placeholder="Add as much or as little as you know right now."
               />
             </Field>
             <Field label="Tags (optional)">
-              <input name="tags" className="input" placeholder="missed call, schedule, follow up" />
+              <input name="tags" className="input" />
             </Field>
             <label className="flex items-start gap-2 rounded-md border border-slate-200 bg-white p-3 text-sm text-slate-700">
               <input name="includeInReports" type="checkbox" defaultChecked />
@@ -4767,48 +4511,49 @@ function ImportView({
           </form>
         </Panel>
 
-        <Panel title="Message archive" action="CSV, TXT, HTML">
-          <form onSubmit={reviewMessageArchive} className="grid gap-3">
-            <Field label="Archive file">
+        <Panel title="Upload message archive" action="CSV, TXT, or HTML">
+          <p className="mb-3 text-xs leading-5 text-slate-500">
+            Store the original message file directly in Files without parsing or rewriting it.
+          </p>
+          <form data-testid="message-archive-upload-form" onSubmit={saveMessageArchive} className="grid gap-3">
+            <Field label="Message file">
               <input name="archive" type="file" className="input" accept=".csv,.txt,.html,text/csv,text/plain,text/html" />
             </Field>
-            <button className="btn-primary" type="submit" value="rules" disabled={parsing || assistBusy}>
-              {parsing ? "Reviewing..." : "Review message file"}
+            <Field label="Record date">
+              <input name="evidenceDate" type="date" className="input" defaultValue={setupToday} />
+            </Field>
+            <Field label="Description (optional)">
+              <textarea
+                name="description"
+                className="input min-h-20"
+              />
+            </Field>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input name="includeInReports" type="checkbox" defaultChecked />
+              Include in report file index
+            </label>
+            <button className="btn-primary" type="submit" disabled={messageSaving}>
+              {messageSaving
+                ? "Uploading message file..."
+                : recordsStorageMode === "supabase"
+                  ? "Upload message file"
+                  : "Save message file"}
             </button>
           </form>
         </Panel>
 
-        <Panel title="Import dated notes" action="Review multiple entries">
+        <Panel title="Upload documents" action={recordsStorageMode === "supabase" ? "Private storage" : "Metadata only"}>
           <p className="mb-3 text-xs leading-5 text-slate-500">
-            Use this for a batch of existing notes. For one new concern, use Quick issue above.
+            Upload reviewed documents directly to Files. Supported types: DOCX, PDF, PNG, JPEG, HEIC/HEIF, TXT, and CSV.
           </p>
-          <form onSubmit={reviewPastedNotes} className="grid gap-3">
-            <Field label="Source label">
-              <input name="sourceLabel" className="input" defaultValue="Pasted notes" />
-            </Field>
-            <Field label="Notes">
-              <textarea name="notes" className="input min-h-44" />
-            </Field>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <button className="btn-primary" type="submit" value="rules" disabled={assistBusy}>
-                Review pasted notes
-              </button>
-              <button className="btn-secondary" type="submit" value="ai" disabled={assistBusy}>
-                {assistBusy ? "AI reviewing..." : "AI review notes"}
-              </button>
-            </div>
-          </form>
-        </Panel>
-
-        <Panel title="Document intake" action={recordsStorageMode === "supabase" ? "Private storage" : "Metadata only"}>
-          <form onSubmit={saveDocumentFiles} className="grid gap-3">
+          <form data-testid="document-upload-form" onSubmit={saveDocumentFiles} className="grid gap-3">
             <Field label="Files">
               <input
                 name="files"
                 type="file"
                 multiple
                 className="input"
-                accept=".docx,.pdf,.png,.jpg,.jpeg,.heic,.txt,.csv"
+                accept=".docx,.pdf,.png,.jpg,.jpeg,.heic,.heif,.txt,.csv"
               />
             </Field>
             <Field label="Record date">
@@ -4826,19 +4571,26 @@ function ImportView({
             </label>
             <button className="btn-primary" type="submit" disabled={documentSaving}>
               {documentSaving
-                ? "Saving files..."
+                ? "Uploading files..."
                 : recordsStorageMode === "supabase"
-                  ? "Upload files to Files"
+                  ? "Upload documents"
                   : "Save files to Files"}
             </button>
           </form>
         </Panel>
 
-        <Panel title="Custody order setup" action="Schedule templates">
-          <div className="space-y-5">
+        <details className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_5px_18px_rgba(15,23,42,0.07)] xl:col-span-2">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 text-sm font-semibold text-slate-900 marker:content-none sm:px-5">
+            <span>Optional calendar schedule setup</span>
+            <span className="text-xs font-medium text-slate-500">Open only when needed</span>
+          </summary>
+          <div className="space-y-5 border-t border-slate-200 p-4 sm:p-5">
+            <p className="text-xs leading-5 text-slate-500">
+              This starts blank and creates calendar colors only from information you enter here. No order language or account data is prefilled.
+            </p>
             <form onSubmit={saveCustodyScheduleSetup} className="grid gap-3">
-              <Field label="Order/source label">
-                <input name="sourceLabel" className="input" defaultValue="Custody order" />
+              <Field label="Source label (optional)">
+                <input name="sourceLabel" className="input" />
               </Field>
               <Field label="Schedule pattern">
                 <select
@@ -4892,15 +4644,13 @@ function ImportView({
                   <input name="exchangeTime" type="time" className="input" defaultValue="17:00" />
                 </Field>
                 <Field label="Exchange location">
-                  <input name="exchangeLocation" className="input" placeholder="Optional" />
+                  <input name="exchangeLocation" className="input" />
                 </Field>
               </div>
-              <Field label="Order notes">
+              <Field label="Schedule notes (optional)">
                 <textarea
                   name="orderNotes"
                   className="input min-h-20"
-                  placeholder="Vacation, holiday, communication, and order specific notes."
-                  defaultValue="Vacation schedule: each parent may exercise two uninterrupted weeks with notice. Holidays: alternate annually unless the order states otherwise."
                 />
               </Field>
               <div className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
@@ -4920,10 +4670,10 @@ function ImportView({
 
             <form onSubmit={saveExchangeRule} className="grid gap-3 border-t border-slate-200 pt-5">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Manual exchange rule
+                Optional manual exchange rule
               </p>
               <Field label="Rule name">
-                <input name="ruleName" className="input" placeholder="Standing exchange rule" />
+                <input name="ruleName" className="input" />
               </Field>
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Day">
@@ -4956,7 +4706,7 @@ function ImportView({
               <Field label="Location">
                 <input name="location" className="input" />
               </Field>
-              <Field label="Order notes">
+              <Field label="Schedule notes">
                 <textarea name="orderProvisionNotes" className="input min-h-20" />
               </Field>
               <button className="btn-secondary" type="submit">
@@ -4964,244 +4714,16 @@ function ImportView({
               </button>
             </form>
 
-            <form onSubmit={reviewCustodyCalendarRows} className="grid gap-3 border-t border-slate-200 pt-5">
-              <Field label="Source label">
-                <input name="sourceLabel" className="input" defaultValue="Custody calendar" />
-              </Field>
-              <Field label="Calendar rows">
-                <textarea
-                  name="calendarRows"
-                  className="input min-h-32"
-                  placeholder="2026-07-05, Parent A, #0f766e"
-                />
-              </Field>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button className="btn-secondary" type="submit" value="rules" disabled={assistBusy}>
-                  Review calendar rows
-                </button>
-                <button className="btn-secondary" type="submit" value="ai" disabled={assistBusy}>
-                  {assistBusy ? "AI reviewing..." : "AI review calendar"}
-                </button>
-              </div>
-            </form>
           </div>
-        </Panel>
+        </details>
       </div>
 
-      <Panel title="Assisted review queue" action={`${drafts.length} drafts`}>
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50 p-3">
-            <p className="text-sm font-medium text-slate-700">
-              {selectedCount} selected for save
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setDrafts((current) => current.map((draft) => ({ ...draft, selected: true })))}
-                disabled={drafts.length === 0}
-              >
-                Select all
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setDrafts((current) => current.map((draft) => ({ ...draft, selected: false })))}
-                disabled={drafts.length === 0}
-              >
-                Select none
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => void saveApprovedDrafts()}
-                disabled={saving || selectedCount === 0}
-              >
-                {saving ? "Saving..." : "Save approved records"}
-              </button>
-            </div>
-          </div>
-
-          {drafts.length === 0 ? (
-            <Empty label="No import drafts are queued." />
-          ) : (
-            <div className="space-y-3">
-              {drafts.map((draft) => (
-                <div key={draft.id} className="rounded-md border border-slate-200 bg-white p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <label className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                      <input
-                        type="checkbox"
-                        checked={draft.selected}
-                        onChange={(event) => updateDraft(draft.id, { selected: event.target.checked })}
-                      />
-                      {importDraftKindLabels[draft.kind]}
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      <StatusPill label={draft.confidence} />
-                      <StatusPill label={draft.sourceLabel} />
-                      <DeleteButton
-                        label="Remove"
-                        ariaLabel={`Remove import draft ${draft.title}`}
-                        onClick={() => removeDraft(draft.id)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    <Field label="Date">
-                      <input
-                        type="date"
-                        className="input"
-                        value={draft.date}
-                        onChange={(event) => updateDraft(draft.id, { date: event.target.value })}
-                      />
-                    </Field>
-                    <Field label="Time">
-                      <input
-                        type="time"
-                        className="input"
-                        value={draft.time || ""}
-                        onChange={(event) => updateDraft(draft.id, { time: event.target.value })}
-                        disabled={draft.kind === "file" || draft.kind === "custody_day"}
-                      />
-                    </Field>
-                  </div>
-
-                  {draft.kind === "exchange" && (
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      <Field label="Ordered time">
-                        <input
-                          type="time"
-                          className="input"
-                          value={draft.orderedTime || "17:00"}
-                          onChange={(event) => updateDraft(draft.id, { orderedTime: event.target.value })}
-                        />
-                      </Field>
-                      <Field label="Actual time">
-                        <input
-                          type="time"
-                          className="input"
-                          value={draft.actualTime || ""}
-                          onChange={(event) => updateDraft(draft.id, { actualTime: event.target.value })}
-                        />
-                      </Field>
-                      <Field label="Status">
-                        <select
-                          className="input"
-                          value={draft.status || "other"}
-                          onChange={(event) => updateDraft(draft.id, { status: event.target.value as ExchangeStatus })}
-                        >
-                          {exchangeStatuses.map((status) => (
-                            <option key={status} value={status}>
-                              {labelExchangeStatus(status)}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field label="Direction">
-                        <select
-                          className="input"
-                          value={draft.direction || "other_parent_to_me"}
-                          onChange={(event) => updateDraft(draft.id, { direction: event.target.value as ExchangeDirection })}
-                        >
-                          <option value="other_parent_to_me">Other Parent to Me</option>
-                          <option value="me_to_other_parent">Me to Other Parent</option>
-                        </select>
-                      </Field>
-                    </div>
-                  )}
-
-                  {draft.kind === "custody_day" && (
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      <Field label="Caregiver label">
-                        <input
-                          className="input"
-                          value={draft.caregiverLabel || "Parent A"}
-                          onChange={(event) => updateDraft(draft.id, { caregiverLabel: event.target.value })}
-                        />
-                      </Field>
-                      <Field label="Color">
-                        <input
-                          type="color"
-                          className="input h-10"
-                          value={draft.color || custodyDayColors[0]}
-                          onChange={(event) => updateDraft(draft.id, { color: event.target.value })}
-                        />
-                      </Field>
-                    </div>
-                  )}
-
-                  <div className="mt-3 grid gap-3">
-                    <Field label="Title">
-                      <input
-                        className="input"
-                        value={draft.title}
-                        onChange={(event) => updateDraft(draft.id, { title: event.target.value })}
-                      />
-                    </Field>
-                    {draft.kind === "note" && (
-                      <Field label="Category">
-                        <select
-                          className="input"
-                          value={draft.category}
-                          onChange={(event) => updateDraft(draft.id, { category: event.target.value as NoteCategory })}
-                        >
-                          {[
-                            "exchange",
-                            "communication",
-                            "school",
-                            "medical",
-                            "expense",
-                            "child_support",
-                            "safety",
-                            "schedule_change",
-                            "child_item",
-                            "attorney",
-                            "court",
-                            "other",
-                          ].map((category) => (
-                            <option key={category} value={category}>
-                              {labelNoteCategory(category as NoteCategory)}
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                    )}
-                    <Field label={draft.kind === "file" ? "Description" : "Record text"}>
-                      <textarea
-                        className="input min-h-24"
-                        value={draft.body}
-                        onChange={(event) => updateDraft(draft.id, { body: event.target.value })}
-                      />
-                    </Field>
-                    <Field label="Tags">
-                      <input
-                        className="input"
-                        value={draft.tags.join(", ")}
-                        onChange={(event) => updateDraft(draft.id, { tags: parseTags(event.target.value) })}
-                      />
-                    </Field>
-                    <label className="flex items-center gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={draft.includeInReports}
-                        onChange={(event) => updateDraft(draft.id, { includeInReports: event.target.checked })}
-                      />
-                      Include in reports
-                    </label>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Panel>
     </div>
   );
 }
 
 function EvidenceView({
+  mode,
   updateDataset,
   reloadDataset,
   userId,
@@ -5213,6 +4735,7 @@ function EvidenceView({
   onExportSection,
   flash,
 }: {
+  mode: "files" | "screenshots";
   updateDataset: ReturnType<typeof useRecordsStore>["updateDataset"];
   reloadDataset: ReturnType<typeof useRecordsStore>["reloadDataset"];
   userId: string;
@@ -5248,7 +4771,27 @@ function EvidenceView({
       throw new Error(parsed.error || "File upload failed.");
     }
 
-    if (!parsed.evidence?.storagePath || parsed.evidence.malwareScanStatus !== "clean") {
+    const uploadAccess =
+      parsed.evidence?.id &&
+      parsed.evidence.userId &&
+      parsed.evidence.caseId &&
+      parsed.evidence.storagePath
+        ? assertEvidenceItemAccess(
+            {
+              id: parsed.evidence.id,
+              userId: parsed.evidence.userId,
+              caseId: parsed.evidence.caseId,
+              storagePath: parsed.evidence.storagePath,
+              malwareScanStatus: parsed.evidence.malwareScanStatus,
+            },
+            { userId, caseId }
+          )
+        : null;
+    if (
+      parsed.evidence?.malwareScanStatus !== "clean" ||
+      parsed.evidence.id !== evidenceId ||
+      !uploadAccess?.ok
+    ) {
       throw new Error("File upload response was incomplete.");
     }
 
@@ -5273,9 +4816,13 @@ function EvidenceView({
     const file = formData.get("file");
     if (!(file instanceof File)) return flash("Choose a file to attach.");
 
-    const validation = validateEvidenceFile({
+    const normalizedFileType = normalizeEvidenceFileType({
       originalFileName: file.name,
       fileType: file.type,
+    });
+    const validation = validateEvidenceFile({
+      originalFileName: file.name,
+      fileType: normalizedFileType,
       fileSize: file.size,
     });
     if (!validation.ok) return flash(validation.error);
@@ -5301,7 +4848,7 @@ function EvidenceView({
                 originalFileName: file.name,
                 storedFileName:
                   uploaded?.storedFileName || buildStoredEvidenceName({ id, originalFileName: file.name }),
-                fileType: file.type,
+                fileType: uploaded?.fileType || normalizedFileType,
                 fileSize: file.size,
                 storageBucket: uploaded?.storageBucket,
                 storagePath: uploaded?.storagePath,
@@ -5551,13 +5098,24 @@ function EvidenceView({
     flash(recordsStorageMode === "supabase" ? "File and metadata deleted." : "File metadata deleted.");
   }
 
+  if (mode === "screenshots") {
+    return (
+      <div className="min-w-0 max-w-full space-y-4">
+        <ExhibitBuilder
+          cloudStorageEnabled={recordsStorageMode === "supabase"}
+          onSave={saveScreenshotExhibit}
+        />
+        <div className="rounded-lg border border-teal-200 bg-teal-50 px-4 py-3 text-sm leading-6 text-teal-950">
+          Generated screenshot PDFs are saved in Files, where they can be reviewed, downloaded, or
+          included in reports.
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      <ExhibitBuilder
-        cloudStorageEnabled={recordsStorageMode === "supabase"}
-        onSave={saveScreenshotExhibit}
-      />
-      <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
+    <div className="min-w-0 max-w-full space-y-4">
+      <div className="grid min-w-0 max-w-full gap-4 xl:grid-cols-[420px_1fr]">
       <Panel
         title="Private file attachment"
         action={recordsStorageMode === "supabase" ? "Private storage" : "Private drafting"}
@@ -5584,7 +5142,7 @@ function EvidenceView({
             <textarea name="description" className="input min-h-20" />
           </Field>
           <Field label="Tags">
-            <input name="tags" className="input" placeholder="exchange, receipt" />
+            <input name="tags" className="input" />
           </Field>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input name="includeInReports" type="checkbox" defaultChecked />
@@ -5993,10 +5551,10 @@ function ChildSupportView({
                 </Field>
               </div>
               <Field label="Expected method">
-                <input name="paymentMethodExpected" className="input" defaultValue={editingOrder?.paymentMethodExpected || ""} placeholder="State agency, wage withholding" />
+                <input name="paymentMethodExpected" className="input" defaultValue={editingOrder?.paymentMethodExpected || ""} />
               </Field>
               <Field label="Agency or case number">
-                <input name="agencyOrCaseNumber" className="input" defaultValue={editingOrder?.agencyOrCaseNumber || ""} placeholder="Treat as sensitive" />
+                <input name="agencyOrCaseNumber" className="input" defaultValue={editingOrder?.agencyOrCaseNumber || ""} />
               </Field>
               <Field label="Notes">
                 <textarea name="notes" className="input min-h-20" defaultValue={editingOrder?.notes || ""} />
@@ -6084,7 +5642,7 @@ function ChildSupportView({
                 </select>
               </Field>
               <Field label="Reference number">
-                <input name="referenceNumber" className="input" defaultValue={editingPayment?.referenceNumber || ""} placeholder="Do not enter full bank/card numbers" />
+                <input name="referenceNumber" className="input" defaultValue={editingPayment?.referenceNumber || ""} />
               </Field>
               <Field label="Notes">
                 <textarea name="notes" className="input min-h-20" defaultValue={editingPayment?.notes || ""} />
@@ -7021,7 +6579,7 @@ function SettingsView({
         <Panel title="Create custody matter" action="Privacy minded labels">
           <form onSubmit={createMatter} className="grid gap-3">
             <Field label="Case name">
-              <input name="caseName" className="input" placeholder="Parenting Plan Records" />
+              <input name="caseName" className="input" />
             </Field>
             <Field label="Order nickname">
               <input name="courtOrOrderNickname" className="input" />
@@ -7225,6 +6783,7 @@ function WorkspaceHeader({
   setRange,
   timezone,
   onExport,
+  onOpenSettings,
   onLogout,
 }: {
   activeView: ActiveView;
@@ -7235,16 +6794,18 @@ function WorkspaceHeader({
   setRange: (range: DateRange) => void;
   timezone: string;
   onExport: () => void;
+  onOpenSettings: () => void;
   onLogout: () => void;
 }) {
   const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
-  const selectedCaseName = matters.find((matter) => matter.id === selectedCaseId)?.caseName || "Records workspace";
+  const selectedMatter = matters.find((matter) => matter.id === selectedCaseId);
+  const selectedCaseName = selectedMatter?.caseName || "No case selected";
   const mobileOptionsId = "mobile-workspace-options";
 
   return (
     <header
       data-testid="workspace-header"
-      className="sticky top-0 z-10 border-b border-slate-200 bg-[#f4f7f6]/95 px-3 py-2 backdrop-blur lg:px-6 lg:py-3"
+      className="sticky top-0 z-10 border-b border-teal-200 bg-white/95 px-3 py-2 shadow-[0_1px_4px_rgba(15,118,110,0.08)] backdrop-blur lg:px-6 lg:py-3"
     >
       {mobileOptionsOpen && (
         <button
@@ -7288,9 +6849,6 @@ function WorkspaceHeader({
           </div>
 
           <div className="hidden lg:block">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">
-              {recordsTagline}
-            </p>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
               {activeView}
             </h1>
@@ -7299,28 +6857,50 @@ function WorkspaceHeader({
 
         <div
           id={mobileOptionsId}
-          className={`${mobileOptionsOpen ? "grid" : "hidden"} absolute left-3 right-3 top-[calc(100%+0.5rem)] z-20 max-h-[calc(100vh-6rem)] min-w-0 gap-3 overflow-y-auto rounded-lg border border-slate-200 bg-white p-4 shadow-xl lg:static lg:z-auto lg:flex lg:w-full lg:flex-wrap lg:items-center lg:gap-2 lg:overflow-visible lg:p-1 lg:shadow-sm xl:flex-nowrap 2xl:w-auto`}
+          className={`${mobileOptionsOpen ? "grid" : "hidden"} absolute left-3 right-3 top-[calc(100%+0.5rem)] z-20 max-h-[calc(100vh-6rem)] min-w-0 gap-3 overflow-y-auto rounded-lg border border-teal-200 bg-white p-4 shadow-xl lg:static lg:z-auto lg:flex lg:w-full lg:flex-wrap lg:items-center lg:gap-2 lg:overflow-visible lg:bg-[#e8f3f0] lg:p-1.5 lg:shadow-inner xl:flex-nowrap 2xl:w-auto`}
         >
           <div className="lg:hidden">
             <h2 className="text-sm font-semibold text-slate-950">Workspace options</h2>
             <p className="mt-0.5 text-xs text-slate-500">Change the case or reporting dates.</p>
           </div>
 
-          <label className="grid gap-1 text-xs font-semibold text-slate-600 lg:block">
-            <span className="lg:sr-only">Case</span>
-            <select
-              aria-label="Case"
-              value={selectedCaseId}
-              onChange={(event) => onSelectCase(event.target.value)}
-              className="h-10 min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 lg:w-auto xl:w-60"
+          {matters.length > 1 ? (
+            <label className="grid gap-1 text-xs font-semibold text-slate-600 lg:block">
+              <span className="lg:sr-only">Case</span>
+              <select
+                aria-label="Case"
+                value={selectedCaseId}
+                onChange={(event) => onSelectCase(event.target.value)}
+                className="h-10 min-w-0 max-w-full rounded-md border border-slate-200 bg-white px-3 text-sm font-normal text-slate-900 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100 lg:w-auto xl:w-60"
+              >
+                {matters.map((matter) => (
+                  <option key={matter.id} value={matter.id}>
+                    {matter.caseName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : selectedMatter ? (
+            <div
+              data-testid="case-summary"
+              aria-label={`Current case: ${selectedMatter.caseName}`}
+              className="flex h-10 min-w-0 max-w-full items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm lg:w-auto xl:max-w-60"
             >
-              {matters.map((matter) => (
-                <option key={matter.id} value={matter.id}>
-                  {matter.caseName}
-                </option>
-              ))}
-            </select>
-          </label>
+              <span className="shrink-0 text-xs font-semibold text-slate-500">Case</span>
+              <span className="truncate font-medium text-slate-800">{selectedMatter.caseName}</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setMobileOptionsOpen(false);
+                onOpenSettings();
+              }}
+              className="h-10 min-w-0 max-w-full rounded-md border border-teal-300 bg-teal-50 px-3 text-sm font-semibold text-teal-900 transition hover:border-teal-500 hover:bg-teal-100 focus:outline-none focus:ring-2 focus:ring-teal-100"
+            >
+              Create case
+            </button>
+          )}
 
           <div className="grid gap-1">
             <span className="text-xs font-semibold text-slate-600 lg:sr-only">Date range</span>
@@ -7428,7 +7008,7 @@ function Panel({
   className?: string;
 }) {
   return (
-    <section className={`min-w-0 rounded-lg border border-slate-200/90 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5 ${className}`}>
+    <section className={`min-w-0 rounded-lg border border-slate-200/90 bg-white p-4 shadow-[0_5px_18px_rgba(15,23,42,0.07)] sm:p-5 ${className}`}>
       <div className="mb-4 flex min-w-0 flex-wrap items-start justify-between gap-2">
         <h2 className="min-w-0 text-base font-semibold text-slate-950 [overflow-wrap:anywhere]">{title}</h2>
         {action && <span className="min-w-0 max-w-full text-xs font-medium text-slate-500 [overflow-wrap:anywhere]">{action}</span>}
@@ -7465,7 +7045,7 @@ function StatCard({
         ? "border-l-slate-500 bg-white text-slate-700"
         : "border-l-teal-600 bg-teal-50/30 text-teal-700";
   return (
-    <div className={`rounded-lg border border-l-4 border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${toneClasses}`}>
+    <div className={`min-w-0 max-w-full rounded-lg border border-l-4 border-slate-200 bg-white p-4 shadow-[0_5px_18px_rgba(15,23,42,0.07)] ${toneClasses}`}>
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{detail}</p>
@@ -7475,7 +7055,7 @@ function StatCard({
 
 function StatMini({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50/80 p-3">
+    <div className="min-w-0 max-w-full rounded-md border border-slate-200 bg-slate-50/80 p-3">
       <p className="text-xs font-medium text-slate-500">{label}</p>
       <p className="mt-1 text-lg font-semibold text-slate-950">{value}</p>
     </div>
@@ -7867,7 +7447,7 @@ function TimelineEventRow({
 
   return (
     <details
-      className={`group rounded-lg border bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition hover:shadow-md ${timelineSeverityBorderClass(severity)}`}
+      className={`group rounded-lg border bg-white shadow-[0_5px_18px_rgba(15,23,42,0.07)] transition hover:shadow-md ${timelineSeverityBorderClass(severity)}`}
     >
       <summary className={summaryClassName}>
         <div className="flex min-w-0 gap-3">
@@ -7951,7 +7531,7 @@ function Table({
   if (headers.length === 0 || rows.length === 0) return <Empty label="No rows to show." />;
 
   return (
-    <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-slate-200">
+    <div className="records-table-scroll min-w-0 max-w-full overflow-x-auto rounded-md border border-slate-200">
       <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
         <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
           <tr>
@@ -8124,676 +7704,6 @@ function Empty({ label }: { label: string }) {
       {label}
     </div>
   );
-}
-
-function buildMessageImportDrafts({
-  content,
-  sourceLabel,
-  defaultYear,
-  defaultOrderedTime,
-}: {
-  content: string;
-  sourceLabel: string;
-  defaultYear: number;
-  defaultOrderedTime: string;
-}) {
-  const normalizedContent = stripImportHtml(content);
-  const rows = parseDelimitedRows(normalizedContent);
-  const records = delimitedRowsToRecords(rows);
-  const drafts: ImportDraft[] = [];
-
-  if (records.length > 0) {
-    for (const record of records) {
-      const body = pickImportField(record, ["message", "text", "body", "content", "sms", "imessage"]);
-      if (!body) continue;
-
-      const sender = pickImportField(record, ["sender", "from", "contact", "name", "handle", "phone"]);
-      const dateRaw = pickImportField(record, ["date", "datetime", "timestamp", "sent_at", "created_at"]);
-      const timeRaw = pickImportField(record, ["time"]);
-      const date = parseImportDate(dateRaw || body, defaultYear);
-      if (!date) continue;
-
-      const time =
-        extractImportTime(`${dateRaw} ${timeRaw}`, defaultOrderedTime) ||
-        extractImportTime(body, defaultOrderedTime);
-      const draft = inferImportDraft({
-        rawText: sender ? `Sender: ${sender}\n${body}` : body,
-        date,
-        time,
-        sourceLabel,
-        defaultOrderedTime,
-        includeGeneric: false,
-      });
-      if (draft) drafts.push(draft);
-    }
-  }
-
-  if (drafts.length > 0) return drafts;
-
-  return splitTextIntoDatedEntries(normalizedContent, defaultYear, defaultOrderedTime)
-    .map((entry) =>
-      inferImportDraft({
-        rawText: entry.text,
-        date: entry.date,
-        time: entry.time,
-        sourceLabel,
-        defaultOrderedTime,
-        includeGeneric: false,
-      })
-    )
-    .filter((draft): draft is ImportDraft => Boolean(draft));
-}
-
-function buildPastedNoteDrafts({
-  content,
-  sourceLabel,
-  defaultYear,
-  defaultOrderedTime,
-}: {
-  content: string;
-  sourceLabel: string;
-  defaultYear: number;
-  defaultOrderedTime: string;
-}) {
-  return splitTextIntoDatedEntries(content, defaultYear, defaultOrderedTime)
-    .map((entry) =>
-      inferImportDraft({
-        rawText: entry.text,
-        date: entry.date,
-        time: entry.time,
-        sourceLabel,
-        defaultOrderedTime,
-        includeGeneric: true,
-      })
-    )
-    .filter((draft): draft is ImportDraft => Boolean(draft));
-}
-
-function buildCustodyCalendarDrafts({
-  content,
-  sourceLabel,
-}: {
-  content: string;
-  sourceLabel: string;
-}) {
-  const rows = parseDelimitedRows(content);
-  const records = delimitedRowsToRecords(rows);
-  const defaultYear = new Date().getFullYear();
-  const drafts: ImportDraft[] = [];
-
-  if (records.length > 0) {
-    for (const record of records) {
-      const date = parseImportDate(pickImportField(record, ["date", "day"]), defaultYear);
-      if (!date) continue;
-      const caregiverLabel = pickImportField(record, ["caregiver", "parent", "label", "owner"]) || "Parent A";
-      const color = normalizeImportColor(pickImportField(record, ["color", "hex"])) || custodyDayColors[0];
-      const notes = pickImportField(record, ["notes", "note", "description"]);
-      drafts.push(createCustodyDayDraft({ date, caregiverLabel, color, notes, sourceLabel }));
-    }
-
-    return drafts;
-  }
-
-  for (const row of rows) {
-    const date = parseImportDate(row[0] || "", defaultYear);
-    if (!date) continue;
-    drafts.push(
-      createCustodyDayDraft({
-        date,
-        caregiverLabel: row[1]?.trim() || "Parent A",
-        color: normalizeImportColor(row[2] || "") || custodyDayColors[0],
-        notes: row.slice(3).join(", ").trim(),
-        sourceLabel,
-      })
-    );
-  }
-
-  return drafts;
-}
-
-function createCustodyDayDraft({
-  date,
-  caregiverLabel,
-  color,
-  notes,
-  sourceLabel,
-}: {
-  date: string;
-  caregiverLabel: string;
-  color: string;
-  notes?: string;
-  sourceLabel: string;
-}): ImportDraft {
-  return {
-    id: createId("import-day"),
-    kind: "custody_day",
-    date,
-    title: `${caregiverLabel} custody day`,
-    body: notes || "",
-    category: "schedule_change",
-    tags: ["calendar", "custody_day"],
-    includeInReports: false,
-    confidence: "high",
-    sourceLabel,
-    selected: true,
-    caregiverLabel,
-    color,
-  };
-}
-
-function inferImportDraft({
-  rawText,
-  date,
-  time,
-  sourceLabel,
-  defaultOrderedTime,
-  includeGeneric,
-}: {
-  rawText: string;
-  date: string;
-  time?: string;
-  sourceLabel: string;
-  defaultOrderedTime: string;
-  includeGeneric: boolean;
-}): ImportDraft | null {
-  const cleanText = truncateImportText(normalizeImportWhitespace(rawText), 4_900);
-  if (!date || !cleanText) return null;
-  const lower = cleanText.toLowerCase();
-
-  if (hasNoFaceTimeSignal(lower)) {
-    const postCallNotice = hasPostCallNoticeSignal(lower);
-    return {
-      id: createId("import-note"),
-      kind: "note",
-      date,
-      time,
-      title: "No FaceTime conducted",
-      body: postCallNotice
-        ? `No FaceTime conducted. The source indicates the notice was provided after a call or FaceTime attempt was not answered.\n\nSource note: ${cleanText}`
-        : `No FaceTime conducted. The source states that FaceTime did not occur or was not available.\n\nSource note: ${cleanText}`,
-      category: "communication",
-      tags: postCallNotice ? ["facetime", "no_facetime", "post_call_notice"] : ["facetime", "no_facetime"],
-      includeInReports: true,
-      confidence: postCallNotice ? "high" : "medium",
-      sourceLabel,
-      selected: true,
-    };
-  }
-
-  const actualTime = extractActualExchangeTime(cleanText, defaultOrderedTime);
-  const orderedTime = extractOrderedExchangeTime(cleanText, defaultOrderedTime);
-  const minutesLate = actualTime ? minutesBetweenImportTimes(orderedTime, actualTime) : 0;
-  if (hasExchangeSignal(lower) && actualTime && (minutesLate > 0 || hasLateExchangeSignal(lower))) {
-    return {
-      id: createId("import-exchange"),
-      kind: "exchange",
-      date,
-      time: actualTime,
-      title: minutesLate > 0 ? `Late exchange recorded (${minutesLate} min)` : "Exchange issue recorded",
-      body: `Source note: ${cleanText}`,
-      category: "exchange",
-      tags: minutesLate > 0 ? ["exchange", "late_exchange"] : ["exchange", "needs_review"],
-      includeInReports: true,
-      confidence: minutesLate > 0 ? "high" : "medium",
-      sourceLabel,
-      selected: true,
-      orderedTime,
-      actualTime,
-      direction: "other_parent_to_me",
-      status: minutesLate > 0 ? "completed_late" : "other",
-    };
-  }
-
-  if (hasCourtOrFilingSignal(lower)) {
-    return createNoteImportDraft({
-      date,
-      time,
-      title: "Court or filing note",
-      body: cleanText,
-      category: "court",
-      tags: ["court", "filing"],
-      sourceLabel,
-      confidence: "medium",
-    });
-  }
-
-  if (!includeGeneric) return null;
-
-  const category = inferGenericNoteCategory(lower);
-  return createNoteImportDraft({
-    date,
-    time,
-    title: buildGenericImportTitle(cleanText, category),
-    body: cleanText,
-    category,
-    tags: [category.replaceAll("_", "-"), "imported"],
-    sourceLabel,
-    confidence: "low",
-  });
-}
-
-function createNoteImportDraft({
-  date,
-  time,
-  title,
-  body,
-  category,
-  tags,
-  sourceLabel,
-  confidence,
-}: {
-  date: string;
-  time?: string;
-  title: string;
-  body: string;
-  category: NoteCategory;
-  tags: string[];
-  sourceLabel: string;
-  confidence: ImportDraftConfidence;
-}): ImportDraft {
-  return {
-    id: createId("import-note"),
-    kind: "note",
-    date,
-    time,
-    title: truncateImportText(title, 120),
-    body: truncateImportText(body, 4_900),
-    category,
-    tags,
-    includeInReports: true,
-    confidence,
-    sourceLabel,
-    selected: true,
-  };
-}
-
-function splitTextIntoDatedEntries(content: string, defaultYear: number, defaultOrderedTime: string) {
-  const lines = stripImportHtml(content)
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const entries: Array<{ date: string; time?: string; text: string }> = [];
-  let current: { date: string; time?: string; text: string } | null = null;
-
-  for (const line of lines) {
-    const date = parseImportDate(line, defaultYear);
-    if (date) {
-      if (current) entries.push(current);
-      current = {
-        date,
-        time: extractImportTime(line, defaultOrderedTime),
-        text: line,
-      };
-      continue;
-    }
-
-    if (current) {
-      current.text = `${current.text}\n${line}`;
-    }
-  }
-
-  if (current) entries.push(current);
-  return entries;
-}
-
-function stripImportHtml(content: string) {
-  return content
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'");
-}
-
-function parseDelimitedRows(input: string) {
-  const sample = input.slice(0, 1_000);
-  const delimiter = (sample.match(/\t/g) || []).length > (sample.match(/,/g) || []).length ? "\t" : ",";
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let field = "";
-  let quoted = false;
-
-  for (let index = 0; index < input.length; index += 1) {
-    const char = input[index];
-    const next = input[index + 1];
-
-    if (char === '"' && quoted && next === '"') {
-      field += '"';
-      index += 1;
-      continue;
-    }
-
-    if (char === '"') {
-      quoted = !quoted;
-      continue;
-    }
-
-    if (char === delimiter && !quoted) {
-      row.push(field.trim());
-      field = "";
-      continue;
-    }
-
-    if ((char === "\n" || char === "\r") && !quoted) {
-      if (char === "\r" && next === "\n") index += 1;
-      row.push(field.trim());
-      if (row.some(Boolean)) rows.push(row);
-      row = [];
-      field = "";
-      continue;
-    }
-
-    field += char;
-  }
-
-  row.push(field.trim());
-  if (row.some(Boolean)) rows.push(row);
-  return rows;
-}
-
-function delimitedRowsToRecords(rows: string[][]) {
-  if (rows.length < 2) return [];
-  const headers = rows[0].map(normalizeImportHeader);
-  const recognized = new Set([
-    "date",
-    "datetime",
-    "timestamp",
-    "sent_at",
-    "created_at",
-    "time",
-    "message",
-    "text",
-    "body",
-    "content",
-    "sender",
-    "from",
-    "contact",
-    "name",
-    "caregiver",
-    "parent",
-    "label",
-    "color",
-    "hex",
-    "notes",
-    "description",
-  ]);
-  if (!headers.some((header) => recognized.has(header))) return [];
-
-  return rows.slice(1).map((row) =>
-    Object.fromEntries(headers.map((header, index) => [header, row[index] || ""]))
-  );
-}
-
-function normalizeImportHeader(value: string) {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-}
-
-function pickImportField(record: Record<string, string>, keys: string[]) {
-  for (const key of keys) {
-    if (record[key]) return record[key].trim();
-  }
-
-  for (const [field, value] of Object.entries(record)) {
-    if (keys.some((key) => field.includes(key)) && value.trim()) return value.trim();
-  }
-
-  return "";
-}
-
-const importMonthLookup: Map<string, number> = new Map(
-  [
-    ["jan", 1],
-    ["january", 1],
-    ["feb", 2],
-    ["february", 2],
-    ["mar", 3],
-    ["march", 3],
-    ["apr", 4],
-    ["april", 4],
-    ["may", 5],
-    ["jun", 6],
-    ["june", 6],
-    ["jul", 7],
-    ["july", 7],
-    ["aug", 8],
-    ["august", 8],
-    ["sep", 9],
-    ["sept", 9],
-    ["september", 9],
-    ["oct", 10],
-    ["october", 10],
-    ["nov", 11],
-    ["november", 11],
-    ["dec", 12],
-    ["december", 12],
-  ] as const
-);
-
-function parseImportDate(value: string, defaultYear: number) {
-  const clean = value.trim();
-  if (!clean) return "";
-
-  const ymd = clean.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
-  if (ymd) return isoDateFromParts(Number(ymd[1]), Number(ymd[2]), Number(ymd[3]));
-
-  const slash = clean.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
-  if (slash) {
-    return isoDateFromParts(
-      normalizeImportYear(slash[3], defaultYear),
-      Number(slash[1]),
-      Number(slash[2])
-    );
-  }
-
-  const monthPattern = Array.from(importMonthLookup.keys()).join("|");
-  const month = clean.match(
-    new RegExp(`\\b(?:sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)?\\s*(${monthPattern})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:,?\\s*(\\d{2,4}))?\\b`, "i")
-  );
-  if (month) {
-    return isoDateFromParts(
-      normalizeImportYear(month[3], defaultYear),
-      importMonthLookup.get(month[1].toLowerCase()) || 1,
-      Number(month[2])
-    );
-  }
-
-  const parsed = new Date(clean);
-  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
-  return "";
-}
-
-function normalizeImportYear(value: string | undefined, defaultYear: number) {
-  const year = Number(value || defaultYear);
-  if (!Number.isFinite(year)) return defaultYear;
-  if (year < 100) return year >= 70 ? 1900 + year : 2000 + year;
-  return year;
-}
-
-function isoDateFromParts(year: number, month: number, day: number) {
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
-    return "";
-  }
-  return date.toISOString().slice(0, 10);
-}
-
-function extractImportTime(value: string, defaultOrderedTime: string) {
-  return collectImportTimes(value, defaultOrderedTime)[0]?.time || "";
-}
-
-function extractActualExchangeTime(value: string, defaultOrderedTime: string) {
-  const times = collectImportTimes(value, defaultOrderedTime);
-  if (times.length === 0) return "";
-  const lower = value.toLowerCase();
-  const anchors = [
-    "showed up",
-    "dropped off",
-    "dropped",
-    "drops kids",
-    "drops children",
-    "drops",
-    "drop",
-    "drop off",
-    "arrived",
-    "pulling into",
-    "here",
-    "got to",
-  ];
-
-  for (const anchor of anchors) {
-    const anchorIndex = lower.indexOf(anchor);
-    if (anchorIndex >= 0) {
-      const afterAnchor = times.find((time) => time.index >= anchorIndex);
-      if (afterAnchor) return afterAnchor.time;
-    }
-  }
-
-  return times.at(-1)?.time || "";
-}
-
-function extractOrderedExchangeTime(value: string, defaultOrderedTime: string) {
-  const lower = value.toLowerCase();
-  const phrases = [
-    "court order",
-    "ordered",
-    "refused to bring",
-    "refused",
-    "exchange time",
-    "drop off time",
-    "bring kids at",
-    "agreed to bring",
-  ];
-
-  for (const phrase of phrases) {
-    const index = lower.indexOf(phrase);
-    if (index < 0) continue;
-    const segment = value.slice(index, index + 90);
-    const explicitTime = extractImportTime(segment, defaultOrderedTime);
-    if (explicitTime) return explicitTime;
-    const bareHour = segment.match(/\b(?:is|at|by|for|before)\s+(1[0-2]|0?[1-9])\b/i);
-    if (bareHour) return normalizeImportTime(bareHour[1], "00", undefined, defaultOrderedTime);
-  }
-
-  return defaultOrderedTime;
-}
-
-function collectImportTimes(value: string, defaultOrderedTime: string) {
-  const times: Array<{ time: string; index: number }> = [];
-  const colonRegex = /\b([01]?\d|2[0-3]):([0-5]\d)\s*([ap]\.?m\.?)?\b/gi;
-  for (const match of value.matchAll(colonRegex)) {
-    times.push({
-      time: normalizeImportTime(match[1], match[2], match[3], defaultOrderedTime),
-      index: match.index || 0,
-    });
-  }
-
-  const ampmRegex = /\b(1[0-2]|0?[1-9])\s*([ap]\.?m\.?)\b/gi;
-  for (const match of value.matchAll(ampmRegex)) {
-    const index = match.index || 0;
-    const alreadyCaptured = times.some((time) => Math.abs(time.index - index) < 4);
-    if (alreadyCaptured) continue;
-    times.push({
-      time: normalizeImportTime(match[1], "00", match[2], defaultOrderedTime),
-      index,
-    });
-  }
-
-  return times.sort((left, right) => left.index - right.index);
-}
-
-function normalizeImportTime(
-  hourValue: string,
-  minuteValue: string,
-  meridiem: string | undefined,
-  defaultOrderedTime: string
-) {
-  let hour = Number(hourValue);
-  const minute = Number(minuteValue);
-  const defaultHour = Number(defaultOrderedTime.slice(0, 2));
-  const normalizedMeridiem = meridiem?.toLowerCase().replaceAll(".", "");
-
-  if (normalizedMeridiem === "pm" && hour < 12) hour += 12;
-  if (normalizedMeridiem === "am" && hour === 12) hour = 0;
-  if (!normalizedMeridiem && defaultHour >= 12 && hour >= 1 && hour <= 7) hour += 12;
-
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
-function minutesBetweenImportTimes(start: string, end: string) {
-  const startMinutes = minutesFromImportTime(start);
-  const endMinutes = minutesFromImportTime(end);
-  return endMinutes - startMinutes;
-}
-
-function minutesFromImportTime(time: string) {
-  const [hour, minute] = time.split(":").map(Number);
-  return hour * 60 + minute;
-}
-
-function hasNoFaceTimeSignal(lower: string) {
-  return (
-    /\b(no|not|unable|cannot|can't|won't|will not)\b.{0,55}\bfacetime\b/i.test(lower) ||
-    /\bfacetime\b.{0,55}\b(no|not|unable|cannot|can't|asleep|tonight|available)\b/i.test(lower) ||
-    /\basleep\b.{0,55}\bfacetime\b/i.test(lower)
-  );
-}
-
-function hasPostCallNoticeSignal(lower: string) {
-  return /\b(call|called|calling|rang|no answer|did not answer|didn't answer|after i)\b/i.test(lower);
-}
-
-function hasExchangeSignal(lower: string) {
-  return (
-    /\b(exchange|transition|showed up|arrived|here|pick up|pickup)\b/i.test(lower) ||
-    /\bdrop(?:s|ped)?(?:\s+\w+){0,4}\s+off\b/i.test(lower)
-  );
-}
-
-function hasLateExchangeSignal(lower: string) {
-  return /\b(late|court order|refused|unannounced|wait for|showed up|dropped off)\b/i.test(lower);
-}
-
-function hasCourtOrFilingSignal(lower: string) {
-  return /\b(court|motion|response|filed|filing|order|hearing|testified|attorney)\b/i.test(lower);
-}
-
-function inferGenericNoteCategory(lower: string): NoteCategory {
-  if (hasExchangeSignal(lower)) return "exchange";
-  if (hasCourtOrFilingSignal(lower)) return "court";
-  if (/\b(daycare|child care|childcare|schedule)\b/i.test(lower)) return "schedule_change";
-  if (/\b(sick|doctor|medical|appointment)\b/i.test(lower)) return "medical";
-  if (/\b(school|teacher|daycare)\b/i.test(lower)) return "school";
-  if (/\b(safety|unsafe|danger)\b/i.test(lower)) return "safety";
-  return "other";
-}
-
-function buildGenericImportTitle(body: string, category: NoteCategory) {
-  const firstSentence = body.split(/[.!?\n]/)[0]?.trim() || labelNoteCategory(category);
-  return truncateImportText(firstSentence, 90) || "Imported note";
-}
-
-function normalizeImportColor(value: string) {
-  const color = value.trim();
-  return /^#[0-9a-fA-F]{6}$/.test(color) ? color : "";
-}
-
-function normalizeImportWhitespace(value: string) {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function truncateImportText(value: string, maxLength: number) {
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength - 1).trim()}...`;
 }
 
 function text(formData: FormData, key: string) {

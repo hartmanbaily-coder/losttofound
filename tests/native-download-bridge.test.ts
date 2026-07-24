@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   downloadBlobFile,
   downloadTextFile,
+  notifyNativeNavigationChanged,
   notifyNativeSessionInvalidated,
   shareHtmlAsPdf,
 } from "@/lib/records/clientStore";
@@ -11,6 +12,28 @@ afterEach(() => {
 });
 
 describe("native text export bridge", () => {
+  it("tells the iOS shell when browser history changes", () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal("window", {
+      webkit: {
+        messageHandlers: {
+          lostToFoundNavigation: { postMessage },
+        },
+      },
+    });
+
+    notifyNativeNavigationChanged({
+      canGoBack: true,
+      canGoForward: false,
+    });
+
+    expect(postMessage).toHaveBeenCalledWith({
+      action: "historyChanged",
+      canGoBack: true,
+      canGoForward: false,
+    });
+  });
+
   it("tells the iOS shell to clear its local WebKit and Keychain session", () => {
     const postMessage = vi.fn();
     vi.stubGlobal("window", {

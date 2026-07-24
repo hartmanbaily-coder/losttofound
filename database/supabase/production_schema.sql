@@ -517,7 +517,17 @@ values (
   'records-evidence',
   false,
   10485760,
-  array['application/pdf','image/png','image/jpeg','image/heic','image/heif','text/plain','text/csv']
+  array[
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'image/png',
+    'image/jpeg',
+    'image/heic',
+    'image/heif',
+    'text/plain',
+    'text/csv',
+    'text/html'
+  ]
 )
 on conflict (id) do update
 set public = false,

@@ -13,21 +13,54 @@ body {
     "SF Pro Display", ui-sans-serif, sans-serif;
 }
 
+.records-workspace,
+.records-workspace-content {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+.records-workspace-content {
+  overflow-x: clip;
+}
+
+.records-workspace-content > *,
+.records-workspace-content :where(section, form, label, .grid, .flex) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.records-workspace-content :where(.grid, .flex) > * {
+  min-width: 0;
+}
+
+.records-workspace-content :where(input, select, textarea, button) {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.records-table-scroll {
+  width: 100%;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 .print-only {
   display: none;
 }
 
 @layer components {
   .input {
-    @apply min-h-10 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100;
+    @apply box-border min-h-10 min-w-0 w-full max-w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100;
   }
 
   .btn-primary {
-    @apply inline-flex min-h-10 items-center justify-center rounded-md bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:hover:bg-slate-300;
+    @apply inline-flex min-h-10 min-w-0 max-w-full items-center justify-center whitespace-normal rounded-md bg-teal-700 px-4 py-2 text-center text-sm font-semibold text-white transition [overflow-wrap:anywhere] hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-200 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:hover:bg-slate-300;
   }
 
   .btn-secondary {
-    @apply inline-flex min-h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-teal-500 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-teal-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:hover:border-slate-200 disabled:hover:text-slate-400;
+    @apply inline-flex min-h-10 min-w-0 max-w-full items-center justify-center whitespace-normal rounded-md border border-slate-300 bg-white px-4 py-2 text-center text-sm font-semibold text-slate-700 transition [overflow-wrap:anywhere] hover:border-teal-500 hover:text-slate-950 focus:outline-none focus:ring-2 focus:ring-teal-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:hover:border-slate-200 disabled:hover:text-slate-400;
   }
 }
 

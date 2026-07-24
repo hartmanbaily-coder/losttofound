@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { evaluateEvidenceIntakeReadiness } from "@/lib/records/evidenceSecurity";
-import { validateEvidenceFileSignature } from "@/lib/records/validation";
+import {
+  normalizeEvidenceFileType,
+  validateEvidenceFile,
+  validateEvidenceFileSignature,
+} from "@/lib/records/validation";
 
 describe("evidence intake readiness", () => {
   it("blocks placeholder malware providers", () => {
@@ -72,5 +76,35 @@ describe("evidence intake readiness", () => {
         Buffer.from([0x68, 0x69, 0x00])
       )
     ).toMatchObject({ ok: false });
+  });
+
+  it("normalizes browser file types for advertised document and message imports", () => {
+    const docxType = normalizeEvidenceFileType({
+      originalFileName: "custody-order.docx",
+      fileType: "application/octet-stream",
+    });
+    const htmlType = normalizeEvidenceFileType({
+      originalFileName: "message-archive.html",
+      fileType: "",
+    });
+
+    expect(docxType).toBe(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
+    expect(htmlType).toBe("text/html");
+    expect(
+      validateEvidenceFile({
+        originalFileName: "custody-order.docx",
+        fileType: docxType,
+        fileSize: 100,
+      })
+    ).toEqual({ ok: true });
+    expect(
+      validateEvidenceFile({
+        originalFileName: "message-archive.html",
+        fileType: htmlType,
+        fileSize: 100,
+      })
+    ).toEqual({ ok: true });
   });
 });

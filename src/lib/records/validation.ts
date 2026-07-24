@@ -229,8 +229,10 @@ export const allowedEvidenceExtensions = [
   "jpg",
   "jpeg",
   "heic",
+  "heif",
   "txt",
   "csv",
+  "html",
 ] as const;
 
 export const allowedEvidenceMimeTypes = new Set([
@@ -243,6 +245,7 @@ export const allowedEvidenceMimeTypes = new Set([
   "text/plain",
   "text/csv",
   "application/csv",
+  "text/html",
 ]);
 
 const blockedExtensions = new Set([
@@ -276,8 +279,41 @@ export function getFileExtension(fileName: string) {
   return parts.length > 1 ? parts.at(-1) || "" : "";
 }
 
+const evidenceMimeTypeByExtension: Record<string, string> = {
+  csv: "text/csv",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  heic: "image/heic",
+  heif: "image/heif",
+  html: "text/html",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  pdf: "application/pdf",
+  png: "image/png",
+  txt: "text/plain",
+};
+
+export function normalizeEvidenceFileType(
+  candidate: Pick<EvidenceFileCandidate, "originalFileName" | "fileType">
+) {
+  const extension = getFileExtension(candidate.originalFileName);
+  const suppliedType = candidate.fileType.trim().toLowerCase();
+  const extensionType = evidenceMimeTypeByExtension[extension];
+
+  if (
+    !suppliedType ||
+    suppliedType === "application/octet-stream" ||
+    (extension === "csv" &&
+      ["application/csv", "application/vnd.ms-excel"].includes(suppliedType))
+  ) {
+    return extensionType || suppliedType || "application/octet-stream";
+  }
+
+  return suppliedType;
+}
+
 export function validateEvidenceFile(candidate: EvidenceFileCandidate) {
   const extension = getFileExtension(candidate.originalFileName);
+  const fileType = normalizeEvidenceFileType(candidate);
 
   if (blockedExtensions.has(extension)) {
     return { ok: false as const, error: "Executable or script files are blocked." };
@@ -287,7 +323,7 @@ export function validateEvidenceFile(candidate: EvidenceFileCandidate) {
     return { ok: false as const, error: "File type is not on the evidence allow list." };
   }
 
-  if (!allowedEvidenceMimeTypes.has(candidate.fileType)) {
+  if (!allowedEvidenceMimeTypes.has(fileType)) {
     return { ok: false as const, error: "File MIME type is not allowed." };
   }
 
@@ -300,25 +336,26 @@ export function validateEvidenceFile(candidate: EvidenceFileCandidate) {
 
 export function validateEvidenceFileSignature(candidate: EvidenceFileCandidate, bytes: Uint8Array) {
   const extension = getFileExtension(candidate.originalFileName);
+  const fileType = normalizeEvidenceFileType(candidate);
   const startsWith = (signature: number[]) =>
     signature.every((value, index) => bytes[index] === value);
   const asciiAt = (offset: number, length: number) =>
     String.fromCharCode(...bytes.slice(offset, offset + length));
   const hasNullByte = bytes.some((value) => value === 0);
 
-  if (extension === "pdf" || candidate.fileType === "application/pdf") {
+  if (extension === "pdf" || fileType === "application/pdf") {
     return startsWith([0x25, 0x50, 0x44, 0x46, 0x2d])
       ? { ok: true as const }
       : { ok: false as const, error: "PDF file signature does not match the selected file." };
   }
 
-  if (extension === "png" || candidate.fileType === "image/png") {
+  if (extension === "png" || fileType === "image/png") {
     return startsWith([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
       ? { ok: true as const }
       : { ok: false as const, error: "PNG file signature does not match the selected file." };
   }
 
-  if (["jpg", "jpeg"].includes(extension) || candidate.fileType === "image/jpeg") {
+  if (["jpg", "jpeg"].includes(extension) || fileType === "image/jpeg") {
     return startsWith([0xff, 0xd8, 0xff])
       ? { ok: true as const }
       : { ok: false as const, error: "JPEG file signature does not match the selected file." };
@@ -326,8 +363,8 @@ export function validateEvidenceFileSignature(candidate: EvidenceFileCandidate, 
 
   if (
     ["heic", "heif"].includes(extension) ||
-    candidate.fileType === "image/heic" ||
-    candidate.fileType === "image/heif"
+    fileType === "image/heic" ||
+    fileType === "image/heif"
   ) {
     const brand = asciiAt(4, 8);
     return brand.startsWith("ftypheic") ||
@@ -341,14 +378,14 @@ export function validateEvidenceFileSignature(candidate: EvidenceFileCandidate, 
 
   if (
     extension === "docx" ||
-    candidate.fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   ) {
     return startsWith([0x50, 0x4b])
       ? { ok: true as const }
       : { ok: false as const, error: "DOCX file signature does not match the selected file." };
   }
 
-  if (["txt", "csv"].includes(extension) || candidate.fileType.startsWith("text/")) {
+  if (["txt", "csv", "html"].includes(extension) || fileType.startsWith("text/")) {
     return hasNullByte
       ? { ok: false as const, error: "Text evidence files cannot contain binary null bytes." }
       : { ok: true as const };

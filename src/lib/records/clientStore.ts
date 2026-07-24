@@ -703,11 +703,20 @@ type NativeSessionHandler = {
   postMessage: (message: { action: "clearLocalSession" }) => void;
 };
 
+type NativeNavigationHandler = {
+  postMessage: (message: {
+    action: "historyChanged";
+    canGoBack: boolean;
+    canGoForward: boolean;
+  }) => void;
+};
+
 declare global {
   interface Window {
     webkit?: {
       messageHandlers?: {
         lostToFoundDownload?: NativeDownloadHandler;
+        lostToFoundNavigation?: NativeNavigationHandler;
         lostToFoundSession?: NativeSessionHandler;
       };
     };
@@ -723,6 +732,21 @@ export function notifyNativeSessionInvalidated() {
   if (typeof window === "undefined") return;
   window.webkit?.messageHandlers?.lostToFoundSession?.postMessage({
     action: "clearLocalSession",
+  });
+}
+
+export function notifyNativeNavigationChanged({
+  canGoBack,
+  canGoForward,
+}: {
+  canGoBack: boolean;
+  canGoForward: boolean;
+}) {
+  if (typeof window === "undefined") return;
+  window.webkit?.messageHandlers?.lostToFoundNavigation?.postMessage({
+    action: "historyChanged",
+    canGoBack,
+    canGoForward,
   });
 }
 

@@ -121,7 +121,7 @@ Native authentication note:
 
 - Face ID, Touch ID, and passcode checks are performed on device through LocalAuthentication.
 - The app should not claim to collect biometric data unless another feature or vendor actually collects it.
-- Keep App Store Connect privacy answers aligned with the live web workspace, support tooling, logging/monitoring, and any enabled AI import or malware scanning vendors.
+- Keep App Store Connect privacy answers aligned with the live web workspace, support tooling, logging/monitoring, and malware scanning vendors.
 
 Review the final privacy labels against the live implementation before submission.
 

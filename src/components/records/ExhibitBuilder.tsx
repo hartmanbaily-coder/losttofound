@@ -221,10 +221,10 @@ export default function ExhibitBuilder({
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="exhibit-builder-heading">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 id="exhibit-builder-heading" className="text-base font-semibold text-slate-950">
+    <section className="min-w-0 max-w-full rounded-lg border border-slate-200 bg-white p-4 shadow-sm" aria-labelledby="exhibit-builder-heading">
+      <div className="flex min-w-0 max-w-full flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 max-w-full">
+          <h2 id="exhibit-builder-heading" className="text-base font-semibold text-slate-950 [overflow-wrap:anywhere]">
             Screenshot exhibit builder
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
@@ -239,7 +239,7 @@ export default function ExhibitBuilder({
 
       <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[360px_1fr]">
         <div className="min-w-0 space-y-3">
-          <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+          <label className="grid min-w-0 max-w-full gap-1.5 text-sm font-medium text-slate-700">
             Screenshots
             <input
               type="file"
@@ -259,26 +259,26 @@ export default function ExhibitBuilder({
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+            <label className="grid min-w-0 max-w-full gap-1.5 text-sm font-medium text-slate-700">
               Exhibit label
               <input className="input" value={label} maxLength={60} onChange={(event) => { setLabel(event.target.value); invalidateOutput(); }} />
             </label>
-            <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+            <label className="grid min-w-0 max-w-full gap-1.5 text-sm font-medium text-slate-700">
               Neutral title
               <input className="input" value={title} maxLength={140} onChange={(event) => { setTitle(event.target.value); invalidateOutput(); }} />
             </label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+            <label className="grid min-w-0 max-w-full gap-1.5 text-sm font-medium text-slate-700">
               Start date
               <input type="date" className="input" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); invalidateOutput(); }} />
             </label>
-            <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+            <label className="grid min-w-0 max-w-full gap-1.5 text-sm font-medium text-slate-700">
               End date
               <input type="date" className="input" value={dateTo} onChange={(event) => { setDateTo(event.target.value); invalidateOutput(); }} />
             </label>
           </div>
-          <label className="grid gap-1.5 text-sm font-medium text-slate-700">
+          <label className="grid min-w-0 max-w-full gap-1.5 text-sm font-medium text-slate-700">
             Short description
             <textarea className="input min-h-20" value={description} maxLength={500} onChange={(event) => { setDescription(event.target.value); invalidateOutput(); }} />
           </label>

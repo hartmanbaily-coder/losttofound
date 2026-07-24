@@ -205,7 +205,6 @@ export function evaluateProductionReadiness(
   const securityEventSink = (env.SECURITY_EVENT_SINK || "").trim().toLowerCase();
   const configuredSupabaseRef = supabaseProjectRef(env.NEXT_PUBLIC_SUPABASE_URL);
   const expectedSupabaseRef = (env.EXPECTED_SUPABASE_PROJECT_REF || "").trim();
-  const aiImportEnabled = isEnabled(env.RECORDS_AI_IMPORT_ENABLED);
   const recordsSignupsEnabled = isEnabled(env.RECORDS_SIGNUPS_ENABLED);
   const publicRecordsSignupsEnabled = isEnabled(env.NEXT_PUBLIC_RECORDS_SIGNUPS_ENABLED);
 
@@ -493,24 +492,8 @@ export function evaluateProductionReadiness(
       "vendor-security-review",
       "Vendor security review is complete",
       isEnabled(env.VENDOR_SECURITY_REVIEW_APPROVED),
-      aiImportEnabled ? "blocker" : "warning",
-      aiImportEnabled
-        ? "Vendor/security review must be complete before enabling AI import for production user data."
-        : "Review Supabase, hosting, malware scanning, email, logging, and monitoring vendors."
-    ),
-    check(
-      "ai-import-openai-key",
-      "AI import OpenAI key is server only",
-      !aiImportEnabled || hasValue(env.OPENAI_API_KEY),
-      "blocker",
-      "Set OPENAI_API_KEY only in server side secret storage when RECORDS_AI_IMPORT_ENABLED=true."
-    ),
-    check(
-      "ai-import-model",
-      "AI import model is configured",
-      !aiImportEnabled || hasValue(env.OPENAI_IMPORT_MODEL),
-      "blocker",
-      "Set OPENAI_IMPORT_MODEL when RECORDS_AI_IMPORT_ENABLED=true."
+      "warning",
+      "Review Supabase, hosting, malware scanning, email, logging, and monitoring vendors."
     ),
     check(
       "security-contact",

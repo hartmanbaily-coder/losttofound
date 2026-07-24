@@ -10,6 +10,7 @@ import {
 
 type PolicyFooterProps = {
   className?: string;
+  compact?: boolean;
   notice?: string;
   recordsNote?: string;
 };
@@ -66,7 +67,79 @@ function PolicyDetails({ notice, recordsNote }: Pick<PolicyFooterProps, "notice"
   );
 }
 
-export default function PolicyFooter({ className = "", notice, recordsNote }: PolicyFooterProps) {
+function CompactPolicyFooter({
+  className,
+  notice,
+  recordsNote,
+}: Pick<PolicyFooterProps, "className" | "notice" | "recordsNote">) {
+  return (
+    <footer
+      data-testid="workspace-policy-footer"
+      className={`border-t border-slate-200 bg-white/80 ${className || ""}`}
+    >
+      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-700">
+            Policies &amp; support
+          </p>
+          <nav
+            aria-label="Policy and support links"
+            className="flex min-w-0 flex-wrap gap-x-4 gap-y-2 text-xs font-semibold"
+          >
+            {publicPolicyLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="text-slate-600 underline decoration-slate-300 underline-offset-4 transition hover:text-teal-800"
+              >
+                {item.label}
+              </Link>
+            ))}
+            <a
+              href={supportMailto}
+              className="text-teal-700 underline decoration-teal-200 underline-offset-4 hover:text-teal-900"
+            >
+              Support
+            </a>
+          </nav>
+        </div>
+
+        <div className="mt-3 grid min-w-0 gap-2 rounded-md border border-slate-200 bg-slate-50/80 px-3 py-2.5 text-xs leading-5 text-slate-600 sm:grid-cols-2 sm:gap-4">
+          {notice && (
+            <p className="[overflow-wrap:anywhere]">
+              <span className="font-semibold text-slate-800">Page:</span> {notice}
+            </p>
+          )}
+          {recordsNote && (
+            <p className="[overflow-wrap:anywhere]">
+              <span className="font-semibold text-slate-800">Records:</span> {recordsNote}
+            </p>
+          )}
+          <p className="[overflow-wrap:anywhere]">
+            <span className="font-semibold text-slate-800">Legal:</span> {legalDisclaimer}
+          </p>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+export default function PolicyFooter({
+  className = "",
+  compact = false,
+  notice,
+  recordsNote,
+}: PolicyFooterProps) {
+  if (compact) {
+    return (
+      <CompactPolicyFooter
+        className={className}
+        notice={notice}
+        recordsNote={recordsNote}
+      />
+    );
+  }
+
   return (
     <footer className={`border-t border-slate-200 bg-white/75 ${className}`}>
       <details data-testid="mobile-policy-menu" className="group mx-auto max-w-7xl lg:hidden">

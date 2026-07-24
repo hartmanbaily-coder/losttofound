@@ -1,7 +1,11 @@
 import { getRecordsCsrfToken } from "./attorneyClient";
 import { createId, nowIso, withAudit } from "./clientStore";
 import type { EvidenceItem, RecordsDataset } from "./types";
-import { buildStoredEvidenceName, validateEvidenceFile } from "./validation";
+import {
+  buildStoredEvidenceName,
+  normalizeEvidenceFileType,
+  validateEvidenceFile,
+} from "./validation";
 
 export interface ExhibitSaveRequest {
   pdfFile: File;
@@ -31,9 +35,13 @@ export async function saveScreenshotExhibitToFiles(input: {
     request.pdfFile,
   ];
   for (const file of filesToSave) {
-    const validation = validateEvidenceFile({
+    const normalizedFileType = normalizeEvidenceFileType({
       originalFileName: file.name,
       fileType: file.type,
+    });
+    const validation = validateEvidenceFile({
+      originalFileName: file.name,
+      fileType: normalizedFileType,
       fileSize: file.size,
     });
     if (!validation.ok) throw new Error(validation.error);
@@ -84,7 +92,12 @@ export async function saveScreenshotExhibitToFiles(input: {
       userId,
       originalFileName: record.file.name,
       storedFileName: record.uploaded.storedFileName || buildStoredEvidenceName({ id: record.id, originalFileName: record.file.name }),
-      fileType: record.file.type,
+      fileType:
+        record.uploaded.fileType ||
+        normalizeEvidenceFileType({
+          originalFileName: record.file.name,
+          fileType: record.file.type,
+        }),
       fileSize: record.file.size,
       storageBucket: record.uploaded.storageBucket,
       storagePath: record.uploaded.storagePath,

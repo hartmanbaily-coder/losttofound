@@ -125,7 +125,21 @@ test("records login and report workflow", async ({ page }) => {
 
   await page.getByRole("button", { name: "Import", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Import", exact: true })).toBeVisible();
-  const documentImportForm = page.locator("form").filter({ has: page.locator("input[name=files]") });
+  await expect(page.getByText("Assisted review queue")).toHaveCount(0);
+  await expect(page.getByText(/Vacation schedule:/)).toHaveCount(0);
+  const scheduleSetup = page.locator("details").filter({ hasText: "Optional calendar schedule setup" });
+  await expect(scheduleSetup).not.toHaveAttribute("open", "");
+
+  const messageImportForm = page.getByTestId("message-archive-upload-form");
+  await messageImportForm.locator("input[name=archive]").setInputFiles({
+    name: "message-archive.html",
+    mimeType: "text/html",
+    buffer: Buffer.from("<html><body>Synthetic reviewed message archive</body></html>"),
+  });
+  await messageImportForm.getByRole("button", { name: "Save message file" }).click();
+  await expect(page.getByText("1 message file record saved to Files.")).toBeVisible();
+
+  const documentImportForm = page.getByTestId("document-upload-form");
   await documentImportForm.locator("input[name=files]").setInputFiles({
     name: "imported-document.txt",
     mimeType: "text/plain",
@@ -137,7 +151,8 @@ test("records login and report workflow", async ({ page }) => {
 
   await page.locator("nav").getByRole("button", { name: /^Files/ }).click();
   await expect(page.getByRole("heading", { name: "Files", exact: true })).toBeVisible();
-  await expect(page.getByText("imported-document.txt")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "message-archive.html", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "imported-document.txt", exact: true })).toBeVisible();
   await page.locator("input[name=file]").setInputFiles({
     name: "files-tab-document.txt",
     mimeType: "text/plain",
@@ -754,9 +769,9 @@ test("mobile notes and file actions contain long synthetic labels without horizo
   await expect(page.getByRole("status")).toContainText("Date based note deleted");
 });
 
-test("iPhone record tabs keep data-entry controls inside their panels and notes readable", async ({ page }) => {
+test("iPhone record tabs keep every tile and data-entry control inside the workspace", async ({ page }) => {
   test.setTimeout(60_000);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 320, height: 844 });
   await page.goto("/records");
   await page.getByRole("button", { name: "Enter records workspace" }).click();
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
@@ -777,30 +792,83 @@ test("iPhone record tabs keep data-entry controls inside their panels and notes 
     "Settings",
   ];
   const nav = page.locator("aside nav");
+  const workspace = page.locator(".records-workspace-content");
 
-  for (const tab of tabs) {
-    await nav.getByRole("button").filter({ hasText: tab }).click();
-    await expect(page.getByRole("heading", { name: tab, exact: true }).first()).toBeVisible();
+  for (const width of [320, 375, 390]) {
+    await page.setViewportSize({ width, height: 844 });
 
-    const controlOverflow = await page.locator(".records-workspace-content .input:visible").evaluateAll((controls) =>
-      controls.flatMap((control) => {
-        const panel = control.closest("section");
-        if (!panel) return [];
-        const controlRect = control.getBoundingClientRect();
-        const panelRect = panel.getBoundingClientRect();
-        return controlRect.left < panelRect.left - 1 || controlRect.right > panelRect.right + 1
-          ? [{
-              control: control.getAttribute("name") || control.getAttribute("aria-label") || control.tagName,
-              controlLeft: controlRect.left,
-              controlRight: controlRect.right,
-              panelLeft: panelRect.left,
-              panelRight: panelRect.right,
-            }]
-          : [];
-      })
-    );
-    expect(controlOverflow, `${tab} has a form control outside its panel`).toEqual([]);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth), `${tab} widens the page`).toBe(390);
+    for (const tab of tabs) {
+      await nav.getByRole("button").filter({ hasText: tab }).click();
+      await expect(page.getByRole("heading", { name: tab, exact: true }).first()).toBeVisible();
+      await expect(
+        workspace.locator("[placeholder]"),
+        `${tab} still contains placeholder copy at ${width}px`
+      ).toHaveCount(0);
+
+      if (tab === "Files") {
+        await expect(
+          workspace.getByRole("heading", { name: "Private file attachment", exact: true })
+        ).toBeVisible();
+        await expect(
+          workspace.getByRole("heading", { name: "Screenshot exhibit builder", exact: true })
+        ).toHaveCount(0);
+      }
+
+      if (tab === "Screenshot PDFs") {
+        await expect(
+          workspace.getByRole("heading", { name: "Screenshot exhibit builder", exact: true })
+        ).toBeVisible();
+        await expect(
+          workspace.getByRole("heading", { name: "Private file attachment", exact: true })
+        ).toHaveCount(0);
+      }
+
+      const layoutOverflow = await workspace.evaluate((workspace) => {
+        const workspaceRect = workspace.getBoundingClientRect();
+        const visible = (element: Element) => {
+          const rect = element.getBoundingClientRect();
+          const style = window.getComputedStyle(element);
+          return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+        };
+        const describe = (element: Element) =>
+          element.getAttribute("name") ||
+          element.getAttribute("aria-label") ||
+          element.querySelector("h2,h3")?.textContent?.trim() ||
+          element.tagName;
+
+        const tiles = Array.from(workspace.querySelectorAll("section")).filter(visible);
+        const controls = Array.from(
+          workspace.querySelectorAll("input,select,textarea,button")
+        ).filter((element) => visible(element) && !element.closest(".records-table-scroll"));
+        const candidates = [...tiles, ...controls];
+
+        return candidates.flatMap((element) => {
+          const rect = element.getBoundingClientRect();
+          const panel = element.matches("section") ? workspace : element.closest("section") || workspace;
+          const bounds = panel.getBoundingClientRect();
+          const outsideWorkspace =
+            rect.left < workspaceRect.left - 1 || rect.right > workspaceRect.right + 1;
+          const outsidePanel = rect.left < bounds.left - 1 || rect.right > bounds.right + 1;
+          if (!outsideWorkspace && !outsidePanel) return [];
+
+          return [{
+            element: describe(element),
+            elementLeft: rect.left,
+            elementRight: rect.right,
+            panelLeft: bounds.left,
+            panelRight: bounds.right,
+            workspaceLeft: workspaceRect.left,
+            workspaceRight: workspaceRect.right,
+          }];
+        });
+      });
+
+      expect(layoutOverflow, `${tab} has a tile or control outside its panel at ${width}px`).toEqual([]);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+        `${tab} widens the page at ${width}px`
+      ).toBe(width);
+    }
   }
 
   await nav.getByRole("button").filter({ hasText: "Notes" }).click();
@@ -812,6 +880,22 @@ test("iPhone record tabs keep data-entry controls inside their panels and notes 
   expect(titleBox).not.toBeNull();
   expect(editBox).not.toBeNull();
   expect(editBox!.y).toBeGreaterThanOrEqual(titleBox!.y + titleBox!.height);
+});
+
+test("workspace tab changes support native and browser back navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/records");
+  await page.getByRole("button", { name: "Enter records workspace" }).click();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Notes", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Notes", exact: true }).first()).toBeVisible();
+
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
+
+  await page.goForward();
+  await expect(page.getByRole("heading", { name: "Notes", exact: true }).first()).toBeVisible();
 });
 
 test("saved information records expose working edit and delete controls", async ({ page }) => {
@@ -958,7 +1042,9 @@ test("records account recovery and deletion paths are reachable", async ({ page 
 
   await page.reload();
   await expect(page.getByRole("heading", { name: "Dashboard", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.locator('select[aria-label="Case"]')).toHaveCount(0);
+  await page.getByRole("button", { name: "Create case", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Settings", exact: true })).toBeVisible();
   await expect(page.getByText("Create or select a custody matter before setting a case timezone.")).toBeVisible();
 });
 
@@ -985,7 +1071,9 @@ test("mobile workspace header stays compact and exposes its full controls", asyn
 
   await page.getByRole("button", { name: "Options", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Workspace options", exact: true })).toBeVisible();
-  await expect(page.getByLabel("Case")).toBeVisible();
+  await expect(page.locator('select[aria-label="Case"]')).toHaveCount(0);
+  await expect(page.getByTestId("case-summary")).toBeVisible();
+  await expect(page.getByTestId("case-summary")).toContainText("Parenting Plan Records");
   await expect(page.getByLabel("Date range preset")).toBeVisible();
   await expect(page.getByLabel("From date")).toBeVisible();
   await expect(page.getByLabel("To date")).toBeVisible();
@@ -1089,12 +1177,13 @@ test("mobile calendar, policy menu, and timeline labels remain usable", async ({
   await expect(page.getByRole("button", { name: "Multi-day paint: Off" })).toHaveAttribute("aria-pressed", "false");
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 
-  const policyMenu = page.getByTestId("mobile-policy-menu");
-  await expect(policyMenu).not.toHaveAttribute("open", "");
-  await expect(page.getByRole("link", { name: "Privacy", exact: true })).not.toBeVisible();
-  await policyMenu.locator("summary").click();
-  await expect(policyMenu).toHaveAttribute("open", "");
+  const policyFooter = page.getByTestId("workspace-policy-footer");
+  await expect(policyFooter).toBeVisible();
   await expect(page.getByRole("link", { name: "Privacy", exact: true })).toBeVisible();
+  await expect(policyFooter).toContainText("Records are private by default");
+  await expect(policyFooter).toContainText("This tool helps organize records and does not provide legal advice");
+  const policyFooterBox = await policyFooter.boundingBox();
+  expect(policyFooterBox?.height).toBeLessThanOrEqual(220);
 
   const timelineNavButton = page.locator("aside nav button").filter({ hasText: "Timeline" });
   await expect(timelineNavButton).toHaveCount(1);

@@ -13,13 +13,15 @@ final class WebViewModel {
 
     fileprivate weak var webView: WKWebView?
     private var initialRequest: URLRequest?
+    private var workspaceCanGoBack = false
+    private var workspaceCanGoForward = false
 
     func goBack() {
-        webView?.goBack()
+        webView?.evaluateJavaScript("window.history.back()")
     }
 
     func goForward() {
-        webView?.goForward()
+        webView?.evaluateJavaScript("window.history.forward()")
     }
 
     func reload() {
@@ -45,6 +47,8 @@ final class WebViewModel {
 
     fileprivate func navigationStarted() {
         loadErrorMessage = nil
+        workspaceCanGoBack = false
+        workspaceCanGoForward = false
     }
 
     fileprivate func navigationFailed(with error: Error) {
@@ -78,9 +82,16 @@ final class WebViewModel {
     }
 
     fileprivate func updateNavigationState(from webView: WKWebView) {
-        canGoBack = webView.canGoBack
-        canGoForward = webView.canGoForward
+        canGoBack = webView.canGoBack || workspaceCanGoBack
+        canGoForward = webView.canGoForward || workspaceCanGoForward
         isLoading = webView.isLoading
+    }
+
+    func workspaceHistoryChanged(canGoBack: Bool, canGoForward: Bool) {
+        workspaceCanGoBack = canGoBack
+        workspaceCanGoForward = canGoForward
+        self.canGoBack = (webView?.canGoBack ?? false) || canGoBack
+        self.canGoForward = (webView?.canGoForward ?? false) || canGoForward
     }
 }
 
@@ -197,6 +208,10 @@ struct WorkspaceWebView: UIViewRepresentable {
             WeakScriptMessageHandler(delegate: context.coordinator),
             name: Coordinator.nativeSessionHandlerName
         )
+        configuration.userContentController.add(
+            WeakScriptMessageHandler(delegate: context.coordinator),
+            name: Coordinator.nativeNavigationHandlerName
+        )
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.allowsBackForwardNavigationGestures = true
@@ -222,9 +237,22 @@ struct WorkspaceWebView: UIViewRepresentable {
         model.updateNavigationState(from: webView)
     }
 
+    static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        webView.configuration.userContentController.removeScriptMessageHandler(
+            forName: Coordinator.nativeDownloadHandlerName
+        )
+        webView.configuration.userContentController.removeScriptMessageHandler(
+            forName: Coordinator.nativeSessionHandlerName
+        )
+        webView.configuration.userContentController.removeScriptMessageHandler(
+            forName: Coordinator.nativeNavigationHandlerName
+        )
+    }
+
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         static let nativeDownloadHandlerName = "lostToFoundDownload"
         static let nativeSessionHandlerName = "lostToFoundSession"
+        static let nativeNavigationHandlerName = "lostToFoundNavigation"
 
         private let allowedTextExportContentTypes = Set(["text/csv", "application/json"])
         private let model: WebViewModel
@@ -252,6 +280,21 @@ struct WorkspaceWebView: UIViewRepresentable {
                 Task { @MainActor in
                     await SecureSessionCookieStore.shared.clearLocalSession(cookieStore)
                 }
+                return
+            }
+
+            if message.name == Self.nativeNavigationHandlerName {
+                let payload = message.body as? [String: Any]
+                guard payload?["action"] as? String == "historyChanged",
+                      let canGoBack = payload?["canGoBack"] as? Bool,
+                      let canGoForward = payload?["canGoForward"] as? Bool
+                else {
+                    return
+                }
+                model.workspaceHistoryChanged(
+                    canGoBack: canGoBack,
+                    canGoForward: canGoForward
+                )
                 return
             }
 

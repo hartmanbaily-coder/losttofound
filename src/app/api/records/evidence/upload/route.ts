@@ -11,7 +11,11 @@ import {
   getEvidenceBucket,
 } from "@/lib/records/evidenceStorage";
 import { scanEvidenceFile } from "@/lib/records/malwareScanner";
-import { buildStoredEvidenceName, validateEvidenceFileSignature } from "@/lib/records/validation";
+import {
+  buildStoredEvidenceName,
+  normalizeEvidenceFileType,
+  validateEvidenceFileSignature,
+} from "@/lib/records/validation";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
 import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
@@ -79,9 +83,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Choose a file to upload." }, { status: 400 });
   }
 
-  const validation = validateEvidencePreflight({
+  const normalizedFileType = normalizeEvidenceFileType({
     originalFileName: file.name,
     fileType: file.type,
+  });
+  const validation = validateEvidencePreflight({
+    originalFileName: file.name,
+    fileType: normalizedFileType,
     fileSize: file.size,
   });
 
@@ -93,7 +101,7 @@ export async function POST(request: NextRequest) {
   const signatureValidation = validateEvidenceFileSignature(
     {
       originalFileName: file.name,
-      fileType: file.type,
+      fileType: normalizedFileType,
       fileSize: file.size,
     },
     buffer
@@ -105,7 +113,7 @@ export async function POST(request: NextRequest) {
   const scan = await scanEvidenceFile({
     buffer,
     fileName: file.name,
-    fileType: file.type,
+    fileType: normalizedFileType,
   });
 
   if (scan.status === "blocked") {
@@ -163,7 +171,7 @@ export async function POST(request: NextRequest) {
     buffer,
     {
       cacheControl: "0",
-      contentType: file.type,
+      contentType: normalizedFileType,
       upsert: false,
     }
   );
@@ -189,7 +197,7 @@ export async function POST(request: NextRequest) {
         caseId,
         originalFileName: file.name,
         storedFileName,
-        fileType: file.type,
+        fileType: normalizedFileType,
         fileSize: file.size,
         storageBucket,
         storagePath,

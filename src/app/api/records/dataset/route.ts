@@ -6,31 +6,18 @@ import {
   isSupabaseRecordsMode,
 } from "@/lib/records/authServer";
 import type { RecordsDataset } from "@/lib/records/types";
+import {
+  datasetContainsForeignRecords,
+  isRecordsDataset,
+  sanitizeRecordsDatasetForUser,
+} from "@/lib/records/datasetIsolation";
 import { invalidateAttorneyAccessForCases } from "@/lib/records/attorneyAccess";
 import { checkRateLimit, rateLimitExceededResponse } from "@/lib/security/rateLimit";
+import { recordSecurityEvent } from "@/lib/security/securityEvents";
 
 export const dynamic = "force-dynamic";
 
 const maxDatasetBytes = Number(process.env.RECORDS_DATASET_MAX_BYTES || 2_000_000);
-
-function isRecordsDataset(input: unknown): input is RecordsDataset {
-  if (!input || typeof input !== "object") return false;
-  const candidate = input as Partial<Record<keyof RecordsDataset, unknown>>;
-  return [
-    candidate.users,
-    candidate.matters,
-    candidate.exchangeRules,
-    candidate.scheduleExceptions,
-    candidate.custodyDayAssignments,
-    candidate.exchangeLogs,
-    candidate.dateNotes,
-    candidate.evidenceItems,
-    candidate.childSupportOrders,
-    candidate.childSupportPayments,
-    candidate.expenseItems,
-    candidate.auditLogs,
-  ].every(Array.isArray);
-}
 
 function disabledResponse() {
   return NextResponse.json(
@@ -68,9 +55,28 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unable to load records dataset." }, { status: 500 });
   }
 
+  if (data?.dataset && !isRecordsDataset(data.dataset)) {
+    return NextResponse.json({ error: "Stored records dataset is invalid." }, { status: 500 });
+  }
+
+  const storedDataset = data?.dataset || null;
+  const dataset = storedDataset
+    ? sanitizeRecordsDatasetForUser(storedDataset, userId)
+    : null;
+  if (storedDataset && datasetContainsForeignRecords(storedDataset, userId)) {
+    await recordSecurityEvent({
+      type: "records_dataset_foreign_data_removed",
+      severity: "critical",
+      request,
+      userId,
+      status: 200,
+      detail: "Foreign-owned records were removed from an account snapshot response.",
+    });
+  }
+
   const response = NextResponse.json(
     {
-      dataset: data?.dataset || null,
+      dataset,
       updatedAt: data?.updated_at || null,
     },
     { headers: { "Cache-Control": "no-store" } }
@@ -109,6 +115,21 @@ export async function PUT(request: NextRequest) {
   }
 
   const { supabase, userId } = context;
+  if (datasetContainsForeignRecords(body.dataset, userId)) {
+    await recordSecurityEvent({
+      type: "records_dataset_foreign_data_blocked",
+      severity: "critical",
+      request,
+      userId,
+      status: 403,
+      detail: "A snapshot write attempted to include records owned by another account.",
+    });
+    return NextResponse.json(
+      { error: "Records dataset contains data that does not belong to this account." },
+      { status: 403 }
+    );
+  }
+
   const caseKey = getRecordsCaseKey(request);
   const { data: currentRow, error: currentError } = await supabase
     .from("records_case_snapshots")
